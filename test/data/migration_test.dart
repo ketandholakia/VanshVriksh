@@ -483,6 +483,9 @@ void main() {
       expect(person.marriedSurname, 'Patel');
       expect(person.treeId, 'default-tree');
       expect(person.isDeleted, isFalse);
+      // The legacy row id becomes the stable uuid, so pre-migration
+      // references stay resolvable after the upgrade.
+      expect(person.uuid, 'p1');
       expect(surnames.map((s) => s.surnameType).toSet(), {'birth', 'marriage'});
     });
   });

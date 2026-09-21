@@ -2,15 +2,25 @@ import 'package:drift/drift.dart';
 
 /// Canonical person record.
 ///
-/// Identity and lifecycle rules:
-/// * [id] is the immutable database identity, assigned once at insert.
-/// * [uuid] is a stable external identity (survives export/import and merges).
+/// Identity model (Phase 2 decision: exactly one intentional model):
+/// * [id] is the immutable database identity, assigned once at insert. It is
+///   the internal, application, navigation and import/export identity: every
+///   repository method, route, provider and UI lookup keys on [id].
+/// * [uuid] is a stable identity assigned once at insert (a UUID v4 distinct
+///   from [id]) and never rewritten — not by updates, soft deletion, restore
+///   or merge. It is currently INTERNAL: no application code looks a person up
+///   by [uuid]. It exists so a future exporter, sync engine or deep-link
+///   scheme has a stable identifier that survives database recreation,
+///   backup/restore and merges. Do not add `getPersonByUuid`-style APIs until
+///   such a consumer exists.
 /// * [treeId] is mandatory ownership: a person can never exist outside a tree,
 ///   and the tree cannot be deleted while it still holds people.
 /// * Deletion is a **soft delete** ([isDeleted]); hard deletes are rejected by
 ///   the `RESTRICT` actions on every table that references a person.
 /// * [mergedIntoId] records a merge (this person was folded into another one)
-///   and is an integrity-checked self reference.
+///   and is an integrity-checked self reference. A merge never changes either
+///   person's [uuid]: the survivor keeps its own, the retired duplicate keeps
+///   its own, so an external reference to either identity stays resolvable.
 ///
 /// There are deliberately no `sync_status` / `version` / `last_synced_at`
 /// columns: no sync engine exists, so they would be write-only fields that

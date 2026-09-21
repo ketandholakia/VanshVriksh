@@ -570,17 +570,14 @@ void main() {
       },
     );
 
-    test('a family needs a tree and a uuid', () async {
+    test('a family needs a tree', () async {
       await expectLater(
-        db.customStatement('INSERT INTO families_v2 (id, uuid) VALUES (?, ?)', [
-          'f1',
-          'uf1',
-        ]),
+        db.customStatement('INSERT INTO families_v2 (id) VALUES (?)', ['f1']),
         isRejected,
       );
     });
 
-    test('a child link needs a family, a child and a uuid', () async {
+    test('a child link needs a family and a child', () async {
       final parent = await addPerson(firstName: 'Parent');
       final kid = await addPerson(firstName: 'Kid');
       final familyId = await people.createFamily(
@@ -590,8 +587,8 @@ void main() {
 
       await expectLater(
         db.customStatement(
-          'INSERT INTO family_children_v2 (id, family_id, uuid) VALUES (?, ?, ?)',
-          ['l1', familyId, 'ul1'],
+          'INSERT INTO family_children_v2 (id, family_id) VALUES (?, ?)',
+          ['l1', familyId],
         ),
         isRejected,
         reason: 'child_id is NOT NULL',
