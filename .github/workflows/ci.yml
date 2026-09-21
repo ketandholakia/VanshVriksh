@@ -1,0 +1,50 @@
+# VanshVriksh CI — reproducible project verification (Phase 5).
+#
+# Runs the same gates as local development on every pull request and every
+# push to the primary branch:
+#   format check -> analyzer -> full test suite -> web build
+#
+# Toolchain: Flutter 3.44.0 (stable) — the SDK that produced all verified
+# baselines through Phase 4. Do not bump it here; SDK upgrades are a separate
+# decision.
+#
+# Analyzer note: `flutter analyze` currently reports 0 errors plus 3
+# intentionally deferred diagnostics (Drift web deprecation, Drift indexedDb
+# experimental, one settings mounted-check). Those are documented follow-ups,
+# not failures: the step fails only on analyzer errors, same as locally.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.0"
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - run: dart format --output=none --set-exit-if-changed .
+
+      - run: flutter analyze
+
+      - run: flutter test
+
+      - run: flutter build web --debug

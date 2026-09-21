@@ -15,3 +15,21 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
+
+## Verification / CI
+
+Supported toolchain: **Flutter 3.44.0 (stable) / Dart 3.12.0**.
+
+Run the same gates locally as CI (`.github/workflows/ci.yml`):
+
+```bash
+flutter pub get
+dart format --output=none --set-exit-if-changed .
+flutter analyze
+flutter test
+flutter build web --debug
+```
+
+`flutter analyze` reports 0 errors; 3 diagnostics (Drift web
+deprecation, Drift indexedDb experimental, one settings mounted-check) are
+intentionally deferred follow-ups, not failures.
