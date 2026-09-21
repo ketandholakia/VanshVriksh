@@ -164,5 +164,6 @@ by this phase.
 
 ## Commit hash
 
-`<filled in after the commit>` — see the commit message
-`refactor(data): Phase 1 — keyed writes, transactional soft delete, typed relationship removal`.
+Phase 1 = **`fa0c90aba62c9dfae3984694f60cd4fbbdd76e50`**
+(`refactor(data): Phase 1 — keyed writes, transactional soft delete, typed relationship removal`),
+on `main`, preceded by the Phase 0 baseline commit `0aa3216`.
