@@ -166,8 +166,11 @@ void main() {
 
         // Remove the survivor's link, then merge the duplicate (which still has
         // a live link in the same family) into the survivor.
-        final survivorLink = links.firstWhere((l) => l.childId == survivor);
-        await relationships.removeParentChildLink(survivorLink.id);
+        await relationships.removeParentChildRelationship(
+          treeId: treeId,
+          parentId: parent,
+          childId: survivor,
+        );
 
         await repository.mergePeople(
           survivorId: survivor,

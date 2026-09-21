@@ -274,7 +274,7 @@ void main() {
 
   // ---------------------------------------------------------------------------
   group('family deletion (dissolve)', () {
-    test('a childless family dissolves', () async {
+    test('a childless partnership ends, and only the partnership', () async {
       final dad = await addPerson(firstName: 'Dad');
       final mom = await addPerson(firstName: 'Mom', gender: 'F');
       await relationships.addSpouseRelationship(
@@ -282,38 +282,72 @@ void main() {
         personAId: dad,
         personBId: mom,
       );
-      final familyId = (await people.getFamiliesForPerson(dad)).single.id;
 
-      expect(await relationships.dissolveFamily(familyId), 1);
+      expect(
+        await relationships.removeSpouseRelationship(
+          treeId: treeId,
+          personAId: dad,
+          personBId: mom,
+        ),
+        1,
+      );
       expect((await db.select(db.familiesV2).get()).single.isDeleted, isTrue);
       expect(await relationships.getSpouses(dad), isEmpty);
       // People are untouched.
       expect((await people.getPeopleByTree(treeId)), hasLength(2));
     });
 
-    test('dissolving twice is idempotent', () async {
+    test('ending a partnership is idempotent', () async {
       final dad = await addPerson(firstName: 'Dad');
-      final familyId = await people.createFamily(
+      final mom = await addPerson(firstName: 'Mom', gender: 'F');
+      await relationships.addSpouseRelationship(
         treeId: treeId,
-        husbandId: dad,
+        personAId: dad,
+        personBId: mom,
       );
 
-      expect(await relationships.dissolveFamily(familyId), 1);
-      expect(await relationships.dissolveFamily(familyId), 0);
-    });
-
-    test('an unknown family is reported', () async {
-      await expectLater(
-        relationships.dissolveFamily('ghost'),
-        throwsArgumentError,
+      expect(
+        await relationships.removeSpouseRelationship(
+          treeId: treeId,
+          personAId: dad,
+          personBId: mom,
+        ),
+        1,
+      );
+      expect(
+        await relationships.removeSpouseRelationship(
+          treeId: treeId,
+          personAId: dad,
+          personBId: mom,
+        ),
+        0,
       );
     });
 
-    test('a family with children is refused, and nothing changes', () async {
+    test('people who are not partners report nothing to remove', () async {
+      final dad = await addPerson(firstName: 'Dad');
+      final stranger = await addPerson(firstName: 'Stranger');
+
+      expect(
+        await relationships.removeSpouseRelationship(
+          treeId: treeId,
+          personAId: dad,
+          personBId: stranger,
+        ),
+        0,
+      );
+    });
+
+    test('a partnership with children is refused, and nothing changes',
+        () async {
       final family = await coupleWithChild();
 
       await expectLater(
-        relationships.dissolveFamily(family.familyId),
+        relationships.removeSpouseRelationship(
+          treeId: treeId,
+          personAId: family.dad,
+          personBId: family.mom,
+        ),
         throwsStateError,
       );
 
@@ -325,14 +359,16 @@ void main() {
       expect(await relationships.getChildren(family.dad), hasLength(1));
     });
 
-    test('a family with children dissolves only with an explicit instruction, '
+    test('a partnership with children ends only with an explicit instruction, '
         'and still never deletes a person', () async {
       final family = await coupleWithChild();
 
       expect(
-        await relationships.dissolveFamily(
-          family.familyId,
-          removeChildLinks: true,
+        await relationships.removeSpouseRelationship(
+          treeId: treeId,
+          personAId: family.dad,
+          personBId: family.mom,
+          removeChildRelationships: true,
         ),
         1,
       );
@@ -348,7 +384,7 @@ void main() {
       expect((await people.getPersonById(family.mom))!.isDeleted, isFalse);
     });
 
-    test('a single-parent family with children is refused like any other',
+    test('removing the only parent leaves the partnership family live',
         () async {
       final dad = await addPerson(firstName: 'Dad');
       final kid = await addPerson(firstName: 'Kid');
@@ -357,22 +393,36 @@ void main() {
         parentId: dad,
         childId: kid,
       );
-      final familyId = (await people.getFamiliesForPerson(dad)).single.id;
 
-      await expectLater(
-        relationships.dissolveFamily(familyId),
-        throwsStateError,
+      // No co-parent, so this needs no acknowledgement.
+      expect(
+        await relationships.removeParentChildRelationship(
+          treeId: treeId,
+          parentId: dad,
+          childId: kid,
+        ),
+        1,
       );
+      expect((await relationships.getChildren(dad)), isEmpty);
       expect((await db.select(db.familiesV2).get()).single.isDeleted, isFalse);
+      expect((await people.getPersonById(kid))!.isDeleted, isFalse);
     });
   });
 
   // ---------------------------------------------------------------------------
   group('child-link deletion', () {
-    test('removing a link touches nothing but the link', () async {
+    test('removing a relationship touches nothing but the link', () async {
       final family = await coupleWithChild();
 
-      expect(await relationships.removeParentChildLink(family.linkId), 1);
+      expect(
+        await relationships.removeParentChildRelationship(
+          treeId: treeId,
+          parentId: family.dad,
+          childId: family.kid,
+          removeCoParent: true,
+        ),
+        1,
+      );
 
       final link = (await db.select(db.familyChildrenV2).get()).single;
       expect(link.isDeleted, isTrue);
@@ -382,20 +432,52 @@ void main() {
       expect(await relationships.getChildren(family.dad), isEmpty);
     });
 
-    test('removing twice reports nothing removed', () async {
+    test('removing the same relationship twice reports nothing removed',
+        () async {
       final family = await coupleWithChild();
 
-      expect(await relationships.removeParentChildLink(family.linkId), 1);
-      expect(await relationships.removeParentChildLink(family.linkId), 0);
+      expect(
+        await relationships.removeParentChildRelationship(
+          treeId: treeId,
+          parentId: family.dad,
+          childId: family.kid,
+          removeCoParent: true,
+        ),
+        1,
+      );
+      expect(
+        await relationships.removeParentChildRelationship(
+          treeId: treeId,
+          parentId: family.dad,
+          childId: family.kid,
+          removeCoParent: true,
+        ),
+        0,
+      );
     });
 
-    test('an unknown link reports 0', () async {
-      expect(await relationships.removeParentChildLink('ghost'), 0);
+    test('an unrelated pair reports 0', () async {
+      final dad = await addPerson(firstName: 'Dad');
+      final stranger = await addPerson(firstName: 'Stranger');
+
+      expect(
+        await relationships.removeParentChildRelationship(
+          treeId: treeId,
+          parentId: dad,
+          childId: stranger,
+        ),
+        0,
+      );
     });
 
     test('re-adding restores the same row instead of duplicating it', () async {
       final family = await coupleWithChild();
-      await relationships.removeParentChildLink(family.linkId);
+      await relationships.removeParentChildRelationship(
+        treeId: treeId,
+        parentId: family.dad,
+        childId: family.kid,
+        removeCoParent: true,
+      );
 
       await relationships.addParentChildRelationship(
         treeId: treeId,

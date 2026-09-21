@@ -7,6 +7,45 @@
 /// parent-child link or a partnership, and which identifier each carries.
 library;
 
+/// True when [gender] is recorded as female.
+///
+/// Used only to choose a display slot or a single-parent slot. Nothing in the
+/// model requires a partnership to have one male and one female partner.
+bool isFemaleGender(String gender) {
+  final normalised = gender.trim().toLowerCase();
+  return normalised == 'f' || normalised == 'female';
+}
+
+/// The partner slots a couple occupies, **independent of argument order**.
+///
+/// `husband`/`wife` are display slot names used by the tree views, not a claim
+/// about the people:
+///  * when the two recorded genders differ, the person recorded as female takes
+///    the `wife` slot;
+///  * when they match (same-sex couple, or either gender unknown) the pair is
+///    ordered by id.
+///
+/// Canonical ordering is what makes `UNIQUE(husband_id, wife_id)` mean "this
+/// couple exists once": the same two people always map to the same pair of
+/// slots, whichever order the caller passed them in.
+({String husbandId, String wifeId}) canonicalPartnerSlots({
+  required String firstId,
+  required String firstGender,
+  required String secondId,
+  required String secondGender,
+}) {
+  final firstIsFemale = isFemaleGender(firstGender);
+  final secondIsFemale = isFemaleGender(secondGender);
+  if (firstIsFemale != secondIsFemale) {
+    return firstIsFemale
+        ? (husbandId: secondId, wifeId: firstId)
+        : (husbandId: firstId, wifeId: secondId);
+  }
+  return firstId.compareTo(secondId) <= 0
+      ? (husbandId: firstId, wifeId: secondId)
+      : (husbandId: secondId, wifeId: firstId);
+}
+
 /// One parent → child edge.
 ///
 /// [linkId] identifies the `family_children_v2` row (the row you delete to

@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../models/relationship_edges.dart';
 import 'tables/citation_links_table.dart';
 import 'tables/citations_table.dart';
 import 'tables/duplicate_markers_table.dart';
@@ -358,17 +359,6 @@ class AppDatabase extends _$AppDatabase {
           (person.data['gender'] as String? ?? '').toLowerCase();
     }
 
-    bool isFemale(String personId) =>
-        genderById[personId] == 'female' || genderById[personId] == 'f';
-
-    /// Fills the partner slots in a deterministic order so the same couple is
-    /// never stored twice (the table has UNIQUE(husband_id, wife_id)).
-    ({String husband, String wife}) slotsFor(String a, String b) {
-      return isFemale(a)
-          ? (husband: b, wife: a)
-          : (husband: a, wife: b);
-    }
-
     Future<void> insertFamily({
       required String id,
       required String husband,
@@ -424,11 +414,18 @@ class AppDatabase extends _$AppDatabase {
       final b = row.data['related_person_id'] as String;
       if (a == b) continue;
       if (!genderById.containsKey(a) || !genderById.containsKey(b)) continue;
-      final slots = slotsFor(a, b);
+      // The partner slots are decided by the shared canonical rule, so the
+      // migration and the repository order couples identically.
+      final slots = canonicalPartnerSlots(
+        firstId: a,
+        firstGender: genderById[a] ?? '',
+        secondId: b,
+        secondGender: genderById[b] ?? '',
+      );
       await insertFamily(
         id: 'family-${row.data['id']}',
-        husband: slots.husband,
-        wife: slots.wife,
+        husband: slots.husbandId,
+        wife: slots.wifeId,
         createdAt: (row.data['created_at'] as int?) ?? 0,
       );
     }
@@ -461,9 +458,14 @@ class AppDatabase extends _$AppDatabase {
         husband = parents.single;
         wife = null;
       } else {
-        final slots = slotsFor(parents[0], parents[1]);
-        husband = slots.husband;
-        wife = slots.wife;
+        final slots = canonicalPartnerSlots(
+          firstId: parents[0],
+          firstGender: genderById[parents[0]] ?? '',
+          secondId: parents[1],
+          secondGender: genderById[parents[1]] ?? '',
+        );
+        husband = slots.husbandId;
+        wife = slots.wifeId;
       }
 
       var familyId = await findFamily(husband, wife);
