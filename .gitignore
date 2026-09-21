@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Nested build outputs (the root /build/ rule does not cover platform dirs)
+/android/build/
+
