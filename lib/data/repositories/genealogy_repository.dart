@@ -99,87 +99,89 @@ class GenealogyRepository {
     return id;
   }
 
-  Future<void> updatePerson({
-    required String id,
-    required String treeId,
-    required String firstName,
-    String? middleName,
-    String? lastName,
-    String? birthSurname,
-    String? marriedSurname,
-    String? prefix,
-    String? suffix,
-    String? nickname,
-    required String gender,
-    DateTime? birthDate,
-    String? birthDateQualifier,
-    String? birthPlace,
-    double? birthPlaceLat,
-    double? birthPlaceLng,
-    String? currentPlace,
-    DateTime? deathDate,
-    String? deathDateQualifier,
-    String? deathPlace,
-    double? deathPlaceLat,
-    double? deathPlaceLng,
-    bool isLiving = true,
-    String? biography,
-    String? notes,
-    String? occupation,
-    String? religion,
-    String? ethnicity,
-    bool isPrivate = false,
-    int privacyLevel = 0,
-    String displayNameFormat = 'birth_married',
-    String? customDisplayName,
-    String? mergedIntoId,
-    String? profilePhotoPath,
-  }) async {
-    final now = DateTime.now();
+  /// Applies a **partial** update to a person.
+  ///
+  /// [changes] must carry the person id; only the columns present in the
+  /// companion are written. Callers supply every field they intend to change —
+  /// there is no "copy the rest from the current row" fallback, because that is
+  /// exactly the behaviour that made an edit silently reset unrelated columns.
+  ///
+  /// `updated_at` is set here so no caller can forget it.
+  Future<bool> updatePerson(GenealogyPersonsCompanion changes) async {
+    final id = changes.id.present ? changes.id.value : null;
+    if (id == null || id.isEmpty) {
+      throw ArgumentError(
+        'updatePerson requires a companion carrying the person id.',
+      );
+    }
 
-    await _personDao.updatePerson(
-      GenealogyPersonsCompanion(
-        id: Value(id),
-        firstName: Value(firstName.trim()),
-        treeId: Value(treeId),
-        gender: Value(gender),
-        updatedAt: Value(now),
-        middleName: Value(middleName?.trim()),
-        lastName: Value(lastName?.trim()),
-        birthSurname: Value(birthSurname?.trim()),
-        marriedSurname: Value(marriedSurname?.trim()),
-        prefix: Value(prefix?.trim()),
-        suffix: Value(suffix?.trim()),
-        nickname: Value(nickname?.trim()),
-        birthDate: Value(birthDate),
-        birthDateQualifier: Value(birthDateQualifier?.trim()),
-        birthPlace: Value(birthPlace?.trim()),
-        birthPlaceLat: Value(birthPlaceLat),
-        birthPlaceLng: Value(birthPlaceLng),
-        currentPlace: Value(currentPlace?.trim()),
-        profilePhotoPath: Value(profilePhotoPath?.trim()),
-        deathDate: Value(deathDate),
-        deathDateQualifier: Value(deathDateQualifier?.trim()),
-        deathPlace: Value(deathPlace?.trim()),
-        deathPlaceLat: Value(deathPlaceLat),
-        deathPlaceLng: Value(deathPlaceLng),
-        isLiving: Value(isLiving),
-        biography: Value(biography?.trim()),
-        notes: Value(notes?.trim()),
-        occupation: Value(occupation?.trim()),
-        religion: Value(religion?.trim()),
-        ethnicity: Value(ethnicity?.trim()),
-        isPrivate: Value(isPrivate),
-        privacyLevel: Value(privacyLevel),
-        displayNameFormat: Value(displayNameFormat),
-        customDisplayName: Value(customDisplayName?.trim()),
-        mergedIntoId: Value(mergedIntoId),
-      ),
+    final rows = await _personDao.updatePersonFields(
+      id,
+      changes.copyWith(updatedAt: Value(DateTime.now())),
     );
+    return rows > 0;
   }
 
-  Future<int> deletePerson(String personId) {
-    return _personDao.deletePerson(personId);
+  /// Removes [personId] from the tree (soft delete), in one transaction.
+  ///
+  /// Rules:
+  ///  * the person row is flagged `is_deleted`;
+  ///  * child links where the person is the child are flagged `is_deleted`;
+  ///  * a family that exists only for this person (its other partner slot is
+  ///    empty) is soft-deleted together with its remaining child links;
+  ///  * a family shared with a partner is KEPT, so the surviving spouse's
+  ///    marriage and the children's place in the tree survive. The deleted
+  ///    person is filtered out of every read path instead.
+  ///
+  /// Person-scoped rows (events, media, notes, todos) are intentionally left
+  /// alone: they are unreachable while the person is deleted, and they come
+  /// back if the delete is reverted.
+  Future<void> deletePerson(String personId) async {
+    final person = await _personDao.getPersonById(personId);
+    if (person == null) {
+      throw ArgumentError('Person not found: $personId');
+    }
+    if (person.isDeleted) return;
+
+    final now = DateTime.now();
+    await _database.transaction(() async {
+      final childLinks = await (_database.select(_database.familyChildrenV2)
+            ..where(
+              (t) =>
+                  t.childId.equals(personId) & t.isDeleted.equals(false),
+            ))
+          .get();
+      for (final link in childLinks) {
+        await _personDao.markFamilyChildDeleted(link.id, now);
+      }
+
+      for (final family in await _personDao.getFamiliesForPerson(personId)) {
+        final partnerId =
+            family.husbandId == personId ? family.wifeId : family.husbandId;
+        if (partnerId != null) continue; // shared family survives
+
+        for (final link in await _personDao.getChildrenForFamily(family.id)) {
+          await _personDao.markFamilyChildDeleted(link.id, now);
+        }
+        await _personDao.markFamilyDeleted(family.id, now);
+      }
+
+      await _personDao.markPersonDeleted(personId, now);
+    });
+  }
+
+  /// Reverts a soft delete of the person row itself.
+  ///
+  /// Family links that [deletePerson] removed are not restored here: without an
+  /// audit trail there is no way to tell a link that was deleted by the cascade
+  /// from one the user removed deliberately. Restoring links is a Phase 5
+  /// concern (restore/purge semantics).
+  Future<void> restorePerson(String personId) async {
+    final person = await _personDao.getPersonById(personId);
+    if (person == null) {
+      throw ArgumentError('Person not found: $personId');
+    }
+    await _personDao.restorePerson(personId, DateTime.now());
   }
 
   Future<GenealogyPerson?> getPersonById(String id) => _personDao.getPersonById(id);
@@ -197,8 +199,23 @@ class GenealogyRepository {
 
   Future<List<GenealogyPerson>> getPeopleByTree(String treeId) => _personDao.getPeopleByTree(treeId);
 
+  /// Duplicate markers for [treeId], excluding markers whose people have been
+  /// deleted (or merged away).
   Future<List<DuplicateMarker>> getDuplicateMarkers(String treeId) async {
-    return _database.select(_database.duplicateMarkers).get();
+    final markers = await (_database.select(_database.duplicateMarkers)
+          ..where((t) => t.treeId.equals(treeId)))
+        .get();
+    if (markers.isEmpty) return const [];
+
+    final live = (await _personDao.getLivePeopleByIds([
+      for (final m in markers) ...[m.personAId, m.personBId],
+    ]))
+        .map((p) => p.id)
+        .toSet();
+
+    return markers
+        .where((m) => live.contains(m.personAId) && live.contains(m.personBId))
+        .toList();
   }
 
   Future<void> markAsDuplicate({
@@ -282,25 +299,36 @@ class GenealogyRepository {
     if (survivor == null || duplicate == null) {
       throw ArgumentError('Both people must exist to merge them.');
     }
+    if (survivor.isDeleted) {
+      throw ArgumentError('The survivor has been deleted: $survivorId');
+    }
+    if (duplicate.isDeleted) {
+      throw ArgumentError(
+        'The duplicate has already been deleted: $duplicateId',
+      );
+    }
 
     final now = DateTime.now();
 
-    // Merge the duplicate's relationships onto the survivor.
-    final duplicateFamilies = await _personDao.getFamiliesForPerson(duplicateId);
-    for (final family in duplicateFamilies) {
-      final survivorIsPartner =
-          family.husbandId == survivorId || family.wifeId == survivorId;
-      final reassignedSlot = survivorIsPartner ? null : survivorId;
-      if (family.husbandId == duplicateId) {
-        await (_database.update(_database.familiesV2)
-              ..where((t) => t.id.equals(family.id)))
-            .write(FamiliesV2Companion(husbandId: Value(reassignedSlot)));
-      } else {
-        await (_database.update(_database.familiesV2)
-              ..where((t) => t.id.equals(family.id)))
-            .write(FamiliesV2Companion(wifeId: Value(reassignedSlot)));
+    // A merge rewrites families, child links, person-scoped rows and both
+    // person rows. It has to be all-or-nothing: a half-applied merge cannot be
+    // repaired by the user.
+    await _database.transaction(() async {
+      // 1. Move the duplicate's partner slots onto the survivor. A family that
+      //    already contains the survivor keeps the survivor's existing slot.
+      final duplicateFamilies =
+          await _personDao.getFamiliesForPerson(duplicateId);
+      for (final family in duplicateFamilies) {
+        final survivorIsPartner =
+            family.husbandId == survivorId || family.wifeId == survivorId;
+        final reassignedSlot = survivorIsPartner ? null : survivorId;
+        await _personDao.updateFamilyFields(
+          family.id,
+          family.husbandId == duplicateId
+              ? FamiliesV2Companion(husbandId: Value(reassignedSlot))
+              : FamiliesV2Companion(wifeId: Value(reassignedSlot)),
+        );
       }
-    }
 
     final duplicateChildLinks = await (_database.select(_database.familyChildrenV2)
           ..where(
@@ -309,152 +337,233 @@ class GenealogyRepository {
           ))
         .get();
     for (final link in duplicateChildLinks) {
-      final survivorAlreadyChild =
-          await (_database.select(_database.familyChildrenV2)
-                ..where(
-                  (t) =>
-                      t.familyId.equals(link.familyId) &
-                      t.childId.equals(survivorId) &
-                      t.isDeleted.equals(false),
-                ))
-              .getSingleOrNull();
-      if (survivorAlreadyChild != null) {
-        await (_database.delete(_database.familyChildrenV2)
-              ..where((t) => t.id.equals(link.id)))
-            .go();
+      // `UNIQUE(family_id, child_id)` ignores soft delete, so this clash check
+      // must consider ALL rows for (family, survivor), not just live ones.
+      final existing =
+          await _personDao.getFamilyChildLink(link.familyId, survivorId);
+      if (existing != null) {
+        if (existing.isDeleted) {
+          // A live link is about to exist for this pair again, so un-delete it.
+          await _personDao.restoreFamilyChild(existing.id, now);
+        }
+        await _personDao.removeFamilyChildLinkRow(link.id);
       } else {
-        await (_database.update(_database.familyChildrenV2)
-              ..where((t) => t.id.equals(link.id)))
-            .write(FamilyChildrenV2Companion(childId: Value(survivorId)));
+        await _personDao.updateFamilyChildFields(
+          link.id,
+          FamilyChildrenV2Companion(
+            childId: Value(survivorId),
+            updatedAt: Value(now),
+          ),
+        );
       }
     }
 
-    // Repoint all person-scoped records from the duplicate to the survivor.
-    await (_database.update(_database.surnameEvents)
-          ..where((t) => t.personId.equals(duplicateId)))
-        .write(SurnameEventsCompanion(
+      // 3. Repoint every row that references the duplicate.
+      await (_database.update(_database.surnameEvents)
+            ..where((t) => t.personId.equals(duplicateId)))
+          .write(
+        SurnameEventsCompanion(
           personId: Value(survivorId),
           updatedAt: Value(now),
-        ));
-    await (_database.update(_database.events)
-          ..where((t) => t.personId.equals(duplicateId)))
-        .write(EventsCompanion(
-          personId: Value(survivorId),
+        ),
+      );
+      await (_database.update(_database.surnameEvents)
+            ..where((t) => t.relatedPersonId.equals(duplicateId)))
+          .write(
+        SurnameEventsCompanion(
+          relatedPersonId: Value(survivorId),
           updatedAt: Value(now),
-        ));
-    await (_database.update(_database.mediaItems)
-          ..where((t) => t.personId.equals(duplicateId)))
-        .write(MediaItemsCompanion(personId: Value(survivorId)));
-    await (_database.update(_database.researchNotes)
-          ..where((t) => t.personId.equals(duplicateId)))
-        .write(ResearchNotesCompanion(personId: Value(survivorId)));
+        ),
+      );
+      await (_database.update(_database.events)
+            ..where((t) => t.personId.equals(duplicateId)))
+          .write(
+        EventsCompanion(personId: Value(survivorId), updatedAt: Value(now)),
+      );
+      await (_database.update(_database.mediaItems)
+            ..where((t) => t.personId.equals(duplicateId)))
+          .write(MediaItemsCompanion(personId: Value(survivorId)));
+      await (_database.update(_database.researchNotes)
+            ..where((t) => t.personId.equals(duplicateId)))
+          .write(ResearchNotesCompanion(personId: Value(survivorId)));
+      await _repointCitationLinks(duplicateId, survivorId);
 
-    // Merge data fields into the survivor, then soft-delete the duplicate.
-    final gender = _pickGender(survivor.gender, duplicate.gender);
-    await (_database.update(_database.genealogyPersons)
-          ..where((t) => t.id.equals(survivorId)))
-        .write(
-      GenealogyPersonsCompanion(
-        firstName: Value(
-          _keep(survivor.firstName, duplicate.firstName) ?? survivor.firstName,
-        ),
-        middleName: Value(_keep(survivor.middleName, duplicate.middleName)),
-        lastName: Value(_keep(survivor.lastName, duplicate.lastName)),
-        birthSurname: Value(_keep(survivor.birthSurname, duplicate.birthSurname)),
-        marriedSurname: Value(
-          _keep(survivor.marriedSurname, duplicate.marriedSurname),
-        ),
-        prefix: Value(_keep(survivor.prefix, duplicate.prefix)),
-        suffix: Value(_keep(survivor.suffix, duplicate.suffix)),
-        nickname: Value(_keep(survivor.nickname, duplicate.nickname)),
-        gender: Value(gender),
-        birthDate: Value(
-          _preferDate(
-            survivor.birthDate,
-            duplicate.birthDate,
-            preferredBirthDateSource,
-          ),
-        ),
-        birthDateQualifier: Value(
-          _keep(survivor.birthDateQualifier, duplicate.birthDateQualifier),
-        ),
-        birthPlace: Value(
-          _preferString(
-            survivor.birthPlace,
-            duplicate.birthPlace,
-            preferredBirthPlaceSource,
-          ),
-        ),
-        birthPlaceLat: Value(
-          survivor.birthPlaceLat ?? duplicate.birthPlaceLat,
-        ),
-        birthPlaceLng: Value(
-          survivor.birthPlaceLng ?? duplicate.birthPlaceLng,
-        ),
-        deathDate: Value(
-          _preferDate(
-            survivor.deathDate,
-            duplicate.deathDate,
-            preferredDeathDateSource,
-          ),
-        ),
-        deathDateQualifier: Value(
-          _keep(survivor.deathDateQualifier, duplicate.deathDateQualifier),
-        ),
-        deathPlace: Value(_keep(survivor.deathPlace, duplicate.deathPlace)),
-        deathPlaceLat: Value(survivor.deathPlaceLat ?? duplicate.deathPlaceLat),
-        deathPlaceLng: Value(survivor.deathPlaceLng ?? duplicate.deathPlaceLng),
-        currentPlace: Value(
-          _preferString(
-            survivor.currentPlace,
-            duplicate.currentPlace,
-            preferredCurrentPlaceSource,
-          ),
-        ),
-        biography: Value(
-          _preferString(
-            survivor.biography,
-            duplicate.biography,
-            preferredBioSource,
-          ),
-        ),
-        notes: Value(
-          _preferString(
-            survivor.notes,
-            duplicate.notes,
-            preferredNotesSource,
-          ),
-        ),
-        profilePhotoPath: Value(
-          _keep(survivor.profilePhotoPath, duplicate.profilePhotoPath),
-        ),
-        isLiving: Value(survivor.isLiving),
-        isPrivate: Value(survivor.isPrivate),
-        privacyLevel: Value(survivor.privacyLevel),
-        updatedAt: Value(now),
-      ),
-    );
+      // 4. Merge the duplicate's data into the survivor. Every field the model
+      //    carries is considered, so nothing is dropped silently.
+      final mergedBirthDate = _preferDate(
+        survivor.birthDate,
+        duplicate.birthDate,
+        preferredBirthDateSource,
+      );
+      final mergedDeathDate = _preferDate(
+        survivor.deathDate,
+        duplicate.deathDate,
+        preferredDeathDateSource,
+      );
+      final mergedGender = _pickGender(survivor.gender, duplicate.gender);
 
-    await (_database.update(_database.genealogyPersons)
-          ..where((t) => t.id.equals(duplicateId)))
-        .write(
-      GenealogyPersonsCompanion(
-        isDeleted: const Value(true),
-        mergedIntoId: Value(survivorId),
-        updatedAt: Value(now),
-      ),
-    );
+      await _personDao.updatePersonFields(
+        survivorId,
+        GenealogyPersonsCompanion(
+          firstName: Value(
+            _keep(survivor.firstName, duplicate.firstName) ??
+                survivor.firstName,
+          ),
+          middleName: Value(_keep(survivor.middleName, duplicate.middleName)),
+          lastName: Value(_keep(survivor.lastName, duplicate.lastName)),
+          birthSurname: Value(
+            _keep(survivor.birthSurname, duplicate.birthSurname),
+          ),
+          marriedSurname: Value(
+            _keep(survivor.marriedSurname, duplicate.marriedSurname),
+          ),
+          prefix: Value(_keep(survivor.prefix, duplicate.prefix)),
+          suffix: Value(_keep(survivor.suffix, duplicate.suffix)),
+          nickname: Value(_keep(survivor.nickname, duplicate.nickname)),
+          customDisplayName: Value(
+            _keep(survivor.customDisplayName, duplicate.customDisplayName),
+          ),
+          gender: Value(mergedGender),
+          birthDate: Value(mergedBirthDate),
+          birthDateQualifier: Value(
+            _keep(survivor.birthDateQualifier, duplicate.birthDateQualifier),
+          ),
+          birthPlace: Value(
+            _preferString(
+              survivor.birthPlace,
+              duplicate.birthPlace,
+              preferredBirthPlaceSource,
+            ),
+          ),
+          birthPlaceLat: Value(
+            survivor.birthPlaceLat ?? duplicate.birthPlaceLat,
+          ),
+          birthPlaceLng: Value(
+            survivor.birthPlaceLng ?? duplicate.birthPlaceLng,
+          ),
+          deathDate: Value(mergedDeathDate),
+          deathDateQualifier: Value(
+            _keep(survivor.deathDateQualifier, duplicate.deathDateQualifier),
+          ),
+          deathPlace: Value(_keep(survivor.deathPlace, duplicate.deathPlace)),
+          deathPlaceLat: Value(
+            survivor.deathPlaceLat ?? duplicate.deathPlaceLat,
+          ),
+          deathPlaceLng: Value(
+            survivor.deathPlaceLng ?? duplicate.deathPlaceLng,
+          ),
+          currentPlace: Value(
+            _preferString(
+              survivor.currentPlace,
+              duplicate.currentPlace,
+              preferredCurrentPlaceSource,
+            ),
+          ),
+          biography: Value(
+            _preferString(
+              survivor.biography,
+              duplicate.biography,
+              preferredBioSource,
+            ),
+          ),
+          notes: Value(
+            _preferString(
+              survivor.notes,
+              duplicate.notes,
+              preferredNotesSource,
+            ),
+          ),
+          occupation: Value(_keep(survivor.occupation, duplicate.occupation)),
+          religion: Value(_keep(survivor.religion, duplicate.religion)),
+          ethnicity: Value(_keep(survivor.ethnicity, duplicate.ethnicity)),
+          profilePhotoPath: Value(
+            _keep(survivor.profilePhotoPath, duplicate.profilePhotoPath),
+          ),
+          // Life status follows the merged death date rather than keeping the
+          // survivor's flag regardless of the data.
+          isLiving: Value(mergedDeathDate == null),
+          // Privacy is the union of both records, and the stricter level wins.
+          isPrivate: Value(survivor.isPrivate || duplicate.isPrivate),
+          privacyLevel: Value(
+            survivor.privacyLevel >= duplicate.privacyLevel
+                ? survivor.privacyLevel
+                : duplicate.privacyLevel,
+          ),
+          updatedAt: Value(now),
+        ),
+      );
 
-    // Clear duplicate markers involving either person.
-    await (_database.delete(_database.duplicateMarkers)
+      // 5. Retire the duplicate and clear the markers that mentioned it.
+      await _personDao.updatePersonFields(
+        duplicateId,
+        GenealogyPersonsCompanion(
+          isDeleted: const Value(true),
+          mergedIntoId: Value(survivorId),
+          updatedAt: Value(now),
+        ),
+      );
+
+      await (_database.delete(_database.duplicateMarkers)
+            ..where(
+              (t) =>
+                  t.personAId.equals(survivorId) |
+                  t.personBId.equals(survivorId) |
+                  t.personAId.equals(duplicateId) |
+                  t.personBId.equals(duplicateId),
+            ))
+          .go();
+    });
+  }
+
+  /// Moves `citation_links` rows from [fromPersonId] to [toPersonId].
+  ///
+  /// `citation_links` has the composite primary key
+  /// `(citation_id, entity_type, entity_id)`, so a plain UPDATE collides when
+  /// the survivor already cites the same source. In that case the duplicate's
+  /// link is dropped instead of overwriting the survivor's.
+  Future<void> _repointCitationLinks(
+    String fromPersonId,
+    String toPersonId,
+  ) async {
+    final links = await (_database.select(_database.citationLinks)
           ..where(
             (t) =>
-                t.personAId.equals(survivorId) |
-                t.personBId.equals(survivorId) |
-                t.personAId.equals(duplicateId) |
-                t.personBId.equals(duplicateId),
+                t.entityType.equals('person') &
+                t.entityId.equals(fromPersonId),
           ))
-        .go();
+        .get();
+
+    for (final link in links) {
+      final existing = await (_database.select(_database.citationLinks)
+            ..where(
+              (t) =>
+                  t.citationId.equals(link.citationId) &
+                  t.entityType.equals(link.entityType) &
+                  t.entityId.equals(toPersonId),
+            ))
+          .getSingleOrNull();
+
+      final deleteDuplicate = _database.delete(_database.citationLinks)
+        ..where(
+          (t) =>
+              t.citationId.equals(link.citationId) &
+              t.entityType.equals(link.entityType) &
+              t.entityId.equals(fromPersonId),
+        );
+
+      if (existing != null) {
+        await deleteDuplicate.go();
+      } else {
+        await (_database.update(_database.citationLinks)
+              ..where(
+                (t) =>
+                    t.citationId.equals(link.citationId) &
+                    t.entityType.equals(link.entityType) &
+                    t.entityId.equals(fromPersonId),
+              ))
+            .write(CitationLinksCompanion(entityId: Value(toPersonId)));
+      }
+    }
   }
 
   static String? _keep(String? survivor, String? duplicate) {

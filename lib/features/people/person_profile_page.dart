@@ -194,10 +194,13 @@ class PersonProfilePage extends ConsumerWidget {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Delete Person?'),
+          title: const Text('Remove person from tree?'),
           content: const Text(
-            'This will delete this person profile and all family relationship links connected to this person. '
-            'This action cannot be undone. Create a backup before deleting important family data.',
+            'This removes the person from the tree. Their children and the '
+            'people they were married to stay in the tree, and a family that '
+            'exists only for this person is removed with them.\n\n'
+            'The record is kept recoverably rather than erased, but it will no '
+            'longer appear anywhere in the app.',
           ),
           actions: [
             TextButton(
@@ -209,7 +212,7 @@ class PersonProfilePage extends ConsumerWidget {
               style: FilledButton.styleFrom(
                 backgroundColor: Theme.of(context).colorScheme.error,
               ),
-              child: const Text('Delete'),
+              child: const Text('Remove'),
             ),
           ],
         );
@@ -225,7 +228,7 @@ class PersonProfilePage extends ConsumerWidget {
       if (!context.mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Person deleted successfully.')),
+        const SnackBar(content: Text('Person removed from the tree.')),
       );
 
       context.pop();

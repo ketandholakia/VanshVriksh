@@ -17,41 +17,79 @@ class RelationshipRepository {
   RelationshipDao get _relationshipDao => RelationshipDao(_database);
   GenealogyPersonDao get _personDao => _database.genealogyPersonDao;
 
-  /// Creates a parent-child link via the V2 family model. If the parent
-  /// already has a family (e.g. a marriage family) the child is attached to it;
-  /// otherwise a single-parent family is created for the parent.
+  /// Creates a parent-child link via the V2 family model.
+  ///
+  /// When [parentId] already belongs to exactly one family, the child is
+  /// attached to it; when the parent has no family, a single-parent family is
+  /// created. A parent with **several** families is ambiguous, so the caller
+  /// must name the family explicitly with [familyId] instead of the code
+  /// picking one arbitrarily.
   Future<void> addParentChildRelationship({
     required String treeId,
     required String parentId,
     required String childId,
+    String? familyId,
   }) async {
-    final parent = await _personDao.getPersonById(parentId);
-    if (parent == null) {
-      throw ArgumentError('Parent person not found: $parentId');
+    if (parentId == childId) {
+      throw ArgumentError('A person cannot be their own parent.');
     }
 
-    final families = await _personDao.getFamiliesForPerson(parentId);
-    final String familyId;
-    if (families.isNotEmpty) {
-      familyId = families.first.id;
-    } else {
-      familyId = await _createSingleParentFamily(treeId, parent);
+    await _database.transaction(() async {
+      final parent = await _personDao.getPersonById(parentId);
+      if (parent == null || parent.isDeleted) {
+        throw ArgumentError('Parent person not found: $parentId');
+      }
+      final child = await _personDao.getPersonById(childId);
+      if (child == null || child.isDeleted) {
+        throw ArgumentError('Child person not found: $childId');
+      }
+
+      final targetFamilyId =
+          familyId ?? await _familyForNewChild(treeId, parent);
+
+      final existing =
+          await _personDao.getFamilyChildLink(targetFamilyId, childId);
+      if (existing != null) {
+        if (existing.isDeleted) {
+          // Re-adding a previously removed link restores it rather than
+          // violating UNIQUE(family_id, child_id).
+          await _personDao.restoreFamilyChild(
+            existing.id,
+            DateTime.now(),
+          );
+        }
+        return;
+      }
+
+      await _personDao.createFamilyChild(
+        FamilyChildrenV2Companion.insert(
+          id: IdGenerator.newId(),
+          familyId: targetFamilyId,
+          childId: childId,
+          relationshipType: const Value('biological'),
+          uuid: IdGenerator.newId(),
+          createdAt: Value(DateTime.now()),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+    });
+  }
+
+  /// Resolves which family a new child of [parent] belongs to.
+  Future<String> _familyForNewChild(
+    String treeId,
+    GenealogyPerson parent,
+  ) async {
+    final families = await _personDao.getFamiliesForPerson(parent.id);
+    if (families.isEmpty) {
+      return _createSingleParentFamily(treeId, parent);
     }
-
-    final children = await _personDao.getChildrenForFamily(familyId);
-    final alreadyLinked = children.any((c) => c.childId == childId);
-    if (alreadyLinked) return;
-
-    await _personDao.createFamilyChild(
-      FamilyChildrenV2Companion.insert(
-        id: IdGenerator.newId(),
-        familyId: familyId,
-        childId: childId,
-        relationshipType: const Value('biological'),
-        uuid: IdGenerator.newId(),
-        createdAt: Value(DateTime.now()),
-        updatedAt: Value(DateTime.now()),
-      ),
+    if (families.length == 1) {
+      return families.single.id;
+    }
+    throw StateError(
+      '${parent.firstName} belongs to ${families.length} families, so the '
+      'child cannot be attached unambiguously. Pass familyId explicitly.',
     );
   }
 
@@ -68,62 +106,101 @@ class RelationshipRepository {
       throw ArgumentError('A person cannot be their own spouse.');
     }
 
-    final a = await _personDao.getPersonById(personAId);
-    final b = await _personDao.getPersonById(personBId);
-    if (a == null || b == null) {
-      throw ArgumentError(
-        'Both people must exist to create a spouse relationship.',
-      );
-    }
-
-    final aFamilies = await _personDao.getFamiliesForPerson(personAId);
-    for (final family in aFamilies) {
-      if (family.husbandId == personBId || family.wifeId == personBId) {
-        return;
+    await _database.transaction(() async {
+      final a = await _personDao.getPersonById(personAId);
+      final b = await _personDao.getPersonById(personBId);
+      if (a == null || a.isDeleted || b == null || b.isDeleted) {
+        throw ArgumentError(
+          'Both people must exist to create a spouse relationship.',
+        );
       }
-    }
 
-    final isAFemale = _isFemale(a.gender);
-    final isBFemale = _isFemale(b.gender);
-    final String husbandId;
-    final String wifeId;
-    if (isAFemale == isBFemale) {
-      // Same sex (or both unknown): keep both partners in slots for rendering.
-      husbandId = a.id;
-      wifeId = b.id;
-    } else if (isAFemale) {
-      husbandId = b.id;
-      wifeId = a.id;
-    } else {
-      husbandId = a.id;
-      wifeId = b.id;
-    }
+      final aFamilies = await _personDao.getFamiliesForPerson(personAId);
+      for (final family in aFamilies) {
+        if (family.husbandId == personBId || family.wifeId == personBId) {
+          return; // already partners
+        }
+      }
 
-    final now = DateTime.now();
-    await _personDao.createFamily(
-      FamiliesV2Companion.insert(
-        id: IdGenerator.newId(),
-        husbandId: Value(husbandId),
-        wifeId: Value(wifeId),
-        isPrimaryMarriage: const Value(false),
-        uuid: IdGenerator.newId(),
-        createdAt: Value(now),
-        updatedAt: Value(now),
-      ),
-    );
+      final isAFemale = _isFemale(a.gender);
+      final isBFemale = _isFemale(b.gender);
+      final String husbandId;
+      final String wifeId;
+      if (isAFemale == isBFemale) {
+        // Same sex (or both unknown): keep both partners in slots for
+        // rendering.
+        husbandId = a.id;
+        wifeId = b.id;
+      } else if (isAFemale) {
+        husbandId = b.id;
+        wifeId = a.id;
+      } else {
+        husbandId = a.id;
+        wifeId = b.id;
+      }
+
+      final now = DateTime.now();
+      await _personDao.createFamily(
+        FamiliesV2Companion.insert(
+          id: IdGenerator.newId(),
+          husbandId: Value(husbandId),
+          wifeId: Value(wifeId),
+          isPrimaryMarriage: const Value(false),
+          uuid: IdGenerator.newId(),
+          createdAt: Value(now),
+          updatedAt: Value(now),
+        ),
+      );
+    });
   }
 
-  /// Removes a relationship by id. The id may reference either a
-  /// `family_children_v2` link (parent/child) or a `families_v2` row (spouse).
-  Future<int> deleteRelationship(String relationshipId) async {
-    final linkCount = await (_database.delete(_database.familyChildrenV2)
-          ..where((t) => t.id.equals(relationshipId)))
-        .go();
-    if (linkCount > 0) return linkCount;
+  /// Removes a parent/child link (soft delete).
+  ///
+  /// Returns 1 when a live link was removed, 0 when the link does not exist or
+  /// has already been removed.
+  Future<int> removeParentChildLink(String linkId) async {
+    final link = await (_database.select(_database.familyChildrenV2)
+          ..where((t) => t.id.equals(linkId)))
+        .getSingleOrNull();
+    if (link == null || link.isDeleted) return 0;
+    return _personDao.markFamilyChildDeleted(linkId, DateTime.now());
+  }
 
-    return (_database.delete(_database.familiesV2)
-          ..where((t) => t.id.equals(relationshipId)))
-        .go();
+  /// Dissolves a spousal/partnership family (soft delete) in one transaction.
+  ///
+  /// Child links keep the family alive, so the caller has to state what happens
+  /// to the children:
+  ///  * [removeChildLinks] false (default) — refuse while the family still has
+  ///    live child links, so parentage is never deleted by accident;
+  ///  * [removeChildLinks] true — soft-delete the child links first, then the
+  ///    family.
+  ///
+  /// Returns 1 when the family was dissolved, 0 when it was already gone.
+  Future<int> dissolveFamily(
+    String familyId, {
+    bool removeChildLinks = false,
+  }) async {
+    return _database.transaction(() async {
+      final family = await _personDao.getFamilyById(familyId);
+      if (family == null) {
+        throw ArgumentError('Family not found: $familyId');
+      }
+      if (family.isDeleted) return 0;
+
+      final links = await _personDao.getChildrenForFamily(familyId);
+      if (links.isNotEmpty && !removeChildLinks) {
+        throw StateError(
+          'Family $familyId still has ${links.length} child link(s). Pass '
+          'removeChildLinks: true to dissolve it and remove them too.',
+        );
+      }
+
+      final now = DateTime.now();
+      for (final link in links) {
+        await _personDao.markFamilyChildDeleted(link.id, now);
+      }
+      return _personDao.markFamilyDeleted(familyId, now);
+    });
   }
 
   Future<String> _createSingleParentFamily(

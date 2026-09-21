@@ -10,6 +10,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
+// Only `Value` is needed from drift here; importing it wholesale would clash
+// with Flutter's own `Column`/`Table` widgets.
+import 'package:drift/drift.dart' show Value;
 
 import '../../core/constants/app_constants.dart';
 import '../../core/extensions/genealogy_person_extensions.dart';
@@ -631,25 +634,35 @@ class _PersonFormPageState extends ConsumerState<PersonFormPage> {
         }
 
         await repository.updatePerson(
-          id: existingPerson.id,
-          treeId: existingPerson.treeId,
-          firstName: _firstNameController.text.trim().isEmpty ? 'Unknown' : _firstNameController.text.trim(),
-          middleName: _emptyToNull(_middleNameController.text),
-          lastName: _emptyToNull(_birthSurnameController.text),
-          birthSurname: _emptyToNull(_birthSurnameController.text),
-          marriedSurname: _emptyToNull(_marriedSurnameController.text),
-          prefix: _emptyToNull(_prefixController.text),
-          suffix: _emptyToNull(_suffixController.text),
-          nickname: _emptyToNull(_nicknameController.text),
-          gender: _gender,
-          birthDate: _birthDate,
-          deathDate: _deathDate,
-          birthPlace: _emptyToNull(_birthPlaceController.text),
-          currentPlace: _emptyToNull(_currentPlaceController.text),
-          biography: _emptyToNull(_bioController.text),
-          notes: _emptyToNull(_notesController.text),
-          isPrivate: _isPrivate,
-          profilePhotoPath: photoPath,
+          GenealogyPersonsCompanion(
+            id: Value(existingPerson.id),
+            firstName: Value(
+              _firstNameController.text.trim().isEmpty
+                  ? 'Unknown'
+                  : _firstNameController.text.trim(),
+            ),
+            middleName: Value(_emptyToNull(_middleNameController.text)),
+            // The form has one surname field; it feeds both the plain surname
+            // and the birth surname.
+            lastName: Value(_emptyToNull(_birthSurnameController.text)),
+            birthSurname: Value(_emptyToNull(_birthSurnameController.text)),
+            marriedSurname: Value(_emptyToNull(_marriedSurnameController.text)),
+            prefix: Value(_emptyToNull(_prefixController.text)),
+            suffix: Value(_emptyToNull(_suffixController.text)),
+            nickname: Value(_emptyToNull(_nicknameController.text)),
+            gender: Value(_gender),
+            birthDate: Value(_birthDate),
+            deathDate: Value(_deathDate),
+            // Derived from the death date the user just entered, so it is
+            // written explicitly rather than defaulting to "alive".
+            isLiving: Value(_deathDate == null),
+            birthPlace: Value(_emptyToNull(_birthPlaceController.text)),
+            currentPlace: Value(_emptyToNull(_currentPlaceController.text)),
+            biography: Value(_emptyToNull(_bioController.text)),
+            notes: Value(_emptyToNull(_notesController.text)),
+            isPrivate: Value(_isPrivate),
+            profilePhotoPath: Value(photoPath),
+          ),
         );
       } else {
         final personId = await repository.addPerson(
@@ -681,27 +694,13 @@ class _PersonFormPageState extends ConsumerState<PersonFormPage> {
 
           final createdPerson = await repository.getPersonById(personId);
           if (createdPerson != null) {
+            // Attaching a photo touches one column: send only that column
+            // instead of echoing the whole row back to the database.
             await repository.updatePerson(
-              id: createdPerson.id,
-              treeId: createdPerson.treeId,
-              firstName: createdPerson.firstName,
-              middleName: createdPerson.middleName,
-              lastName: createdPerson.lastName,
-              birthSurname: createdPerson.birthSurname,
-              marriedSurname: createdPerson.marriedSurname,
-              prefix: createdPerson.prefix,
-              suffix: createdPerson.suffix,
-              nickname: createdPerson.nickname,
-              gender: createdPerson.gender,
-              birthDate: createdPerson.birthDate,
-              deathDate: createdPerson.deathDate,
-              birthPlace: createdPerson.birthPlace,
-              currentPlace: createdPerson.currentPlace,
-              biography: createdPerson.biography,
-              notes: createdPerson.notes,
-              isPrivate: createdPerson.isPrivate,
-              isLiving: createdPerson.isLiving,
-              profilePhotoPath: savedPhotoPath,
+              GenealogyPersonsCompanion(
+                id: Value(createdPerson.id),
+                profilePhotoPath: Value(savedPhotoPath),
+              ),
             );
           }
         }

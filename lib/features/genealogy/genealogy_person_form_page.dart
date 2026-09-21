@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+// Only `Value` is needed from drift here; importing it wholesale would clash
+// with Flutter's own `Column`/`Table` widgets.
+import 'package:drift/drift.dart' show Value;
 
 import '../../core/constants/app_constants.dart';
+import '../../data/database/app_database.dart';
 import '../../data/providers/genealogy_repository_provider.dart';
 
 class GenealogyPersonFormPage extends ConsumerStatefulWidget {
@@ -119,15 +123,16 @@ class _GenealogyPersonFormPageState extends ConsumerState<GenealogyPersonFormPag
       );
     } else {
       await repo.updatePerson(
-        id: _loadedPersonId!,
-        treeId: AppConstants.defaultTreeId,
-        firstName: firstName,
-        middleName: middleName,
-        lastName: lastName,
-        birthSurname: birthSurname,
-        marriedSurname: marriedSurname,
-        gender: _gender,
-        customDisplayName: customDisplayName,
+        GenealogyPersonsCompanion(
+          id: Value(_loadedPersonId!),
+          firstName: Value(firstName),
+          middleName: Value(middleName),
+          lastName: Value(lastName),
+          birthSurname: Value(birthSurname),
+          marriedSurname: Value(marriedSurname),
+          gender: Value(_gender),
+          customDisplayName: Value(customDisplayName),
+        ),
       );
       savedId = _loadedPersonId!;
     }
