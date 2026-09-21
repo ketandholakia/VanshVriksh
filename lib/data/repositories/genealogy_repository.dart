@@ -69,10 +69,10 @@ class GenealogyRepository {
     await _personDao.createPerson(
       GenealogyPersonsCompanion.insert(
         id: id,
+        uuid: uuid,
         firstName: firstName.trim(),
         treeId: treeId,
         gender: gender,
-        uuid: uuid,
         createdAt: Value(now),
         updatedAt: Value(now),
         middleName: Value(middleName?.trim()),
@@ -819,7 +819,6 @@ class GenealogyRepository {
         treeId: person.treeId,
         husbandId: Value(isFemale ? null : personId),
         wifeId: Value(isFemale ? personId : null),
-        uuid: IdGenerator.newId(),
         createdAt: Value(now),
         updatedAt: Value(now),
       ),
@@ -984,8 +983,6 @@ class GenealogyRepository {
   }) async {
     final id = IdGenerator.newId();
     final now = DateTime.now();
-    final uuid = IdGenerator.newId();
-
     await _personDao.createFamily(
       FamiliesV2Companion.insert(
         id: id,
@@ -1009,7 +1006,6 @@ class GenealogyRepository {
         isPrimaryMarriage: Value(isPrimaryMarriage),
         notes: Value(notes?.trim()),
         privateNotes: Value(privateNotes?.trim()),
-        uuid: uuid,
         createdAt: Value(now),
         updatedAt: Value(now),
       ),
@@ -1030,8 +1026,6 @@ class GenealogyRepository {
   }) async {
     final id = IdGenerator.newId();
     final now = DateTime.now();
-    final uuid = IdGenerator.newId();
-
     await _personDao.createFamilyChild(
       FamilyChildrenV2Companion.insert(
         id: id,
@@ -1043,7 +1037,6 @@ class GenealogyRepository {
         paternalRelationship: Value(paternalRelationship?.trim()),
         maternalRelationship: Value(maternalRelationship?.trim()),
         notes: Value(notes?.trim()),
-        uuid: uuid,
         createdAt: Value(now),
         updatedAt: Value(now),
       ),

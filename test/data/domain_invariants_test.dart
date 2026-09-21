@@ -299,7 +299,6 @@ void main() {
             FamiliesV2Companion.insert(
               id: 'empty-family',
               treeId: treeId,
-              uuid: 'uuid-empty-family',
               createdAt: Value(now),
               updatedAt: Value(now),
             ),

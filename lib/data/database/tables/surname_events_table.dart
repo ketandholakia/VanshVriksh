@@ -52,7 +52,6 @@ class SurnameEvents extends Table {
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   BoolColumn get isPrimary => boolean().withDefault(const Constant(false))();
 
-  TextColumn get uuid => text().unique()();
 
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();

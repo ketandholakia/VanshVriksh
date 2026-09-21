@@ -18,6 +18,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vanshvriksh/data/database/app_database.dart';
 
 import '../support/legacy_fixtures.dart';
+import '../support/schema_expectations.dart';
 import '../support/schema_verification.dart';
 
 void main() {
@@ -66,7 +67,7 @@ void main() {
       await expectCanonicalSchema(migrated, because: 'migrated from v12');
       await migrated.close();
 
-      expect(storedUserVersion(path), 13);
+      expect(storedUserVersion(path), expectedSchemaVersion);
     });
 
     test('from v11', () async {

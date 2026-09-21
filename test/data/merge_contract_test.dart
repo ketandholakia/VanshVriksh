@@ -481,7 +481,6 @@ void main() {
               personId: duplicate,
               surname: 'Patel',
               surnameType: 'birth',
-              uuid: 'uuid-s1',
             ),
           );
 

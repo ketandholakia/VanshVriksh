@@ -3430,16 +3430,6 @@ class $SurnameEventsTable extends SurnameEvents
     ),
     defaultValue: const Constant(false),
   );
-  static const VerificationMeta _uuidMeta = const VerificationMeta('uuid');
-  @override
-  late final GeneratedColumn<String> uuid = GeneratedColumn<String>(
-    'uuid',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
-  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -3481,7 +3471,6 @@ class $SurnameEventsTable extends SurnameEvents
     notes,
     sortOrder,
     isPrimary,
-    uuid,
     createdAt,
     updatedAt,
   ];
@@ -3610,14 +3599,6 @@ class $SurnameEventsTable extends SurnameEvents
         isPrimary.isAcceptableOrUnknown(data['is_primary']!, _isPrimaryMeta),
       );
     }
-    if (data.containsKey('uuid')) {
-      context.handle(
-        _uuidMeta,
-        uuid.isAcceptableOrUnknown(data['uuid']!, _uuidMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_uuidMeta);
-    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -3699,10 +3680,6 @@ class $SurnameEventsTable extends SurnameEvents
         DriftSqlType.bool,
         data['${effectivePrefix}is_primary'],
       )!,
-      uuid: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}uuid'],
-      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -3736,7 +3713,6 @@ class SurnameEvent extends DataClass implements Insertable<SurnameEvent> {
   final String? notes;
   final int sortOrder;
   final bool isPrimary;
-  final String uuid;
   final DateTime createdAt;
   final DateTime updatedAt;
   const SurnameEvent({
@@ -3755,7 +3731,6 @@ class SurnameEvent extends DataClass implements Insertable<SurnameEvent> {
     this.notes,
     required this.sortOrder,
     required this.isPrimary,
-    required this.uuid,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -3795,7 +3770,6 @@ class SurnameEvent extends DataClass implements Insertable<SurnameEvent> {
     }
     map['sort_order'] = Variable<int>(sortOrder);
     map['is_primary'] = Variable<bool>(isPrimary);
-    map['uuid'] = Variable<String>(uuid);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -3836,7 +3810,6 @@ class SurnameEvent extends DataClass implements Insertable<SurnameEvent> {
           : Value(notes),
       sortOrder: Value(sortOrder),
       isPrimary: Value(isPrimary),
-      uuid: Value(uuid),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -3865,7 +3838,6 @@ class SurnameEvent extends DataClass implements Insertable<SurnameEvent> {
       notes: serializer.fromJson<String?>(json['notes']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
       isPrimary: serializer.fromJson<bool>(json['isPrimary']),
-      uuid: serializer.fromJson<String>(json['uuid']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -3889,7 +3861,6 @@ class SurnameEvent extends DataClass implements Insertable<SurnameEvent> {
       'notes': serializer.toJson<String?>(notes),
       'sortOrder': serializer.toJson<int>(sortOrder),
       'isPrimary': serializer.toJson<bool>(isPrimary),
-      'uuid': serializer.toJson<String>(uuid),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -3911,7 +3882,6 @@ class SurnameEvent extends DataClass implements Insertable<SurnameEvent> {
     Value<String?> notes = const Value.absent(),
     int? sortOrder,
     bool? isPrimary,
-    String? uuid,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => SurnameEvent(
@@ -3940,7 +3910,6 @@ class SurnameEvent extends DataClass implements Insertable<SurnameEvent> {
     notes: notes.present ? notes.value : this.notes,
     sortOrder: sortOrder ?? this.sortOrder,
     isPrimary: isPrimary ?? this.isPrimary,
-    uuid: uuid ?? this.uuid,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -3973,7 +3942,6 @@ class SurnameEvent extends DataClass implements Insertable<SurnameEvent> {
       notes: data.notes.present ? data.notes.value : this.notes,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
       isPrimary: data.isPrimary.present ? data.isPrimary.value : this.isPrimary,
-      uuid: data.uuid.present ? data.uuid.value : this.uuid,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -3997,7 +3965,6 @@ class SurnameEvent extends DataClass implements Insertable<SurnameEvent> {
           ..write('notes: $notes, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('isPrimary: $isPrimary, ')
-          ..write('uuid: $uuid, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -4021,7 +3988,6 @@ class SurnameEvent extends DataClass implements Insertable<SurnameEvent> {
     notes,
     sortOrder,
     isPrimary,
-    uuid,
     createdAt,
     updatedAt,
   );
@@ -4044,7 +4010,6 @@ class SurnameEvent extends DataClass implements Insertable<SurnameEvent> {
           other.notes == this.notes &&
           other.sortOrder == this.sortOrder &&
           other.isPrimary == this.isPrimary &&
-          other.uuid == this.uuid &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -4065,7 +4030,6 @@ class SurnameEventsCompanion extends UpdateCompanion<SurnameEvent> {
   final Value<String?> notes;
   final Value<int> sortOrder;
   final Value<bool> isPrimary;
-  final Value<String> uuid;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -4085,7 +4049,6 @@ class SurnameEventsCompanion extends UpdateCompanion<SurnameEvent> {
     this.notes = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.isPrimary = const Value.absent(),
-    this.uuid = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -4106,15 +4069,13 @@ class SurnameEventsCompanion extends UpdateCompanion<SurnameEvent> {
     this.notes = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.isPrimary = const Value.absent(),
-    required String uuid,
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        personId = Value(personId),
        surname = Value(surname),
-       surnameType = Value(surnameType),
-       uuid = Value(uuid);
+       surnameType = Value(surnameType);
   static Insertable<SurnameEvent> custom({
     Expression<String>? id,
     Expression<String>? personId,
@@ -4131,7 +4092,6 @@ class SurnameEventsCompanion extends UpdateCompanion<SurnameEvent> {
     Expression<String>? notes,
     Expression<int>? sortOrder,
     Expression<bool>? isPrimary,
-    Expression<String>? uuid,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -4153,7 +4113,6 @@ class SurnameEventsCompanion extends UpdateCompanion<SurnameEvent> {
       if (notes != null) 'notes': notes,
       if (sortOrder != null) 'sort_order': sortOrder,
       if (isPrimary != null) 'is_primary': isPrimary,
-      if (uuid != null) 'uuid': uuid,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -4176,7 +4135,6 @@ class SurnameEventsCompanion extends UpdateCompanion<SurnameEvent> {
     Value<String?>? notes,
     Value<int>? sortOrder,
     Value<bool>? isPrimary,
-    Value<String>? uuid,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -4197,7 +4155,6 @@ class SurnameEventsCompanion extends UpdateCompanion<SurnameEvent> {
       notes: notes ?? this.notes,
       sortOrder: sortOrder ?? this.sortOrder,
       isPrimary: isPrimary ?? this.isPrimary,
-      uuid: uuid ?? this.uuid,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -4252,9 +4209,6 @@ class SurnameEventsCompanion extends UpdateCompanion<SurnameEvent> {
     if (isPrimary.present) {
       map['is_primary'] = Variable<bool>(isPrimary.value);
     }
-    if (uuid.present) {
-      map['uuid'] = Variable<String>(uuid.value);
-    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -4285,7 +4239,6 @@ class SurnameEventsCompanion extends UpdateCompanion<SurnameEvent> {
           ..write('notes: $notes, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('isPrimary: $isPrimary, ')
-          ..write('uuid: $uuid, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -4623,16 +4576,6 @@ class $FamiliesV2Table extends FamiliesV2
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _uuidMeta = const VerificationMeta('uuid');
-  @override
-  late final GeneratedColumn<String> uuid = GeneratedColumn<String>(
-    'uuid',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
-  );
   static const VerificationMeta _isDeletedMeta = const VerificationMeta(
     'isDeleted',
   );
@@ -4701,7 +4644,6 @@ class $FamiliesV2Table extends FamiliesV2
     isPrimaryMarriage,
     notes,
     privateNotes,
-    uuid,
     isDeleted,
     createdAt,
     updatedAt,
@@ -4947,14 +4889,6 @@ class $FamiliesV2Table extends FamiliesV2
         ),
       );
     }
-    if (data.containsKey('uuid')) {
-      context.handle(
-        _uuidMeta,
-        uuid.isAcceptableOrUnknown(data['uuid']!, _uuidMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_uuidMeta);
-    }
     if (data.containsKey('is_deleted')) {
       context.handle(
         _isDeletedMeta,
@@ -5090,10 +5024,6 @@ class $FamiliesV2Table extends FamiliesV2
         DriftSqlType.string,
         data['${effectivePrefix}private_notes'],
       ),
-      uuid: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}uuid'],
-      )!,
       isDeleted: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_deleted'],
@@ -5146,7 +5076,6 @@ class FamiliesV2Data extends DataClass implements Insertable<FamiliesV2Data> {
   final bool isPrimaryMarriage;
   final String? notes;
   final String? privateNotes;
-  final String uuid;
   final bool isDeleted;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -5178,7 +5107,6 @@ class FamiliesV2Data extends DataClass implements Insertable<FamiliesV2Data> {
     required this.isPrimaryMarriage,
     this.notes,
     this.privateNotes,
-    required this.uuid,
     required this.isDeleted,
     required this.createdAt,
     required this.updatedAt,
@@ -5247,7 +5175,6 @@ class FamiliesV2Data extends DataClass implements Insertable<FamiliesV2Data> {
     if (!nullToAbsent || privateNotes != null) {
       map['private_notes'] = Variable<String>(privateNotes);
     }
-    map['uuid'] = Variable<String>(uuid);
     map['is_deleted'] = Variable<bool>(isDeleted);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -5317,7 +5244,6 @@ class FamiliesV2Data extends DataClass implements Insertable<FamiliesV2Data> {
       privateNotes: privateNotes == null && nullToAbsent
           ? const Value.absent()
           : Value(privateNotes),
-      uuid: Value(uuid),
       isDeleted: Value(isDeleted),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -5379,7 +5305,6 @@ class FamiliesV2Data extends DataClass implements Insertable<FamiliesV2Data> {
       isPrimaryMarriage: serializer.fromJson<bool>(json['isPrimaryMarriage']),
       notes: serializer.fromJson<String?>(json['notes']),
       privateNotes: serializer.fromJson<String?>(json['privateNotes']),
-      uuid: serializer.fromJson<String>(json['uuid']),
       isDeleted: serializer.fromJson<bool>(json['isDeleted']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -5422,7 +5347,6 @@ class FamiliesV2Data extends DataClass implements Insertable<FamiliesV2Data> {
       'isPrimaryMarriage': serializer.toJson<bool>(isPrimaryMarriage),
       'notes': serializer.toJson<String?>(notes),
       'privateNotes': serializer.toJson<String?>(privateNotes),
-      'uuid': serializer.toJson<String>(uuid),
       'isDeleted': serializer.toJson<bool>(isDeleted),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -5457,7 +5381,6 @@ class FamiliesV2Data extends DataClass implements Insertable<FamiliesV2Data> {
     bool? isPrimaryMarriage,
     Value<String?> notes = const Value.absent(),
     Value<String?> privateNotes = const Value.absent(),
-    String? uuid,
     bool? isDeleted,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -5509,7 +5432,6 @@ class FamiliesV2Data extends DataClass implements Insertable<FamiliesV2Data> {
     isPrimaryMarriage: isPrimaryMarriage ?? this.isPrimaryMarriage,
     notes: notes.present ? notes.value : this.notes,
     privateNotes: privateNotes.present ? privateNotes.value : this.privateNotes,
-    uuid: uuid ?? this.uuid,
     isDeleted: isDeleted ?? this.isDeleted,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -5587,7 +5509,6 @@ class FamiliesV2Data extends DataClass implements Insertable<FamiliesV2Data> {
       privateNotes: data.privateNotes.present
           ? data.privateNotes.value
           : this.privateNotes,
-      uuid: data.uuid.present ? data.uuid.value : this.uuid,
       isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -5624,7 +5545,6 @@ class FamiliesV2Data extends DataClass implements Insertable<FamiliesV2Data> {
           ..write('isPrimaryMarriage: $isPrimaryMarriage, ')
           ..write('notes: $notes, ')
           ..write('privateNotes: $privateNotes, ')
-          ..write('uuid: $uuid, ')
           ..write('isDeleted: $isDeleted, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
@@ -5661,7 +5581,6 @@ class FamiliesV2Data extends DataClass implements Insertable<FamiliesV2Data> {
     isPrimaryMarriage,
     notes,
     privateNotes,
-    uuid,
     isDeleted,
     createdAt,
     updatedAt,
@@ -5697,7 +5616,6 @@ class FamiliesV2Data extends DataClass implements Insertable<FamiliesV2Data> {
           other.isPrimaryMarriage == this.isPrimaryMarriage &&
           other.notes == this.notes &&
           other.privateNotes == this.privateNotes &&
-          other.uuid == this.uuid &&
           other.isDeleted == this.isDeleted &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
@@ -5731,7 +5649,6 @@ class FamiliesV2Companion extends UpdateCompanion<FamiliesV2Data> {
   final Value<bool> isPrimaryMarriage;
   final Value<String?> notes;
   final Value<String?> privateNotes;
-  final Value<String> uuid;
   final Value<bool> isDeleted;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
@@ -5764,7 +5681,6 @@ class FamiliesV2Companion extends UpdateCompanion<FamiliesV2Data> {
     this.isPrimaryMarriage = const Value.absent(),
     this.notes = const Value.absent(),
     this.privateNotes = const Value.absent(),
-    this.uuid = const Value.absent(),
     this.isDeleted = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -5798,14 +5714,12 @@ class FamiliesV2Companion extends UpdateCompanion<FamiliesV2Data> {
     this.isPrimaryMarriage = const Value.absent(),
     this.notes = const Value.absent(),
     this.privateNotes = const Value.absent(),
-    required String uuid,
     this.isDeleted = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
-       treeId = Value(treeId),
-       uuid = Value(uuid);
+       treeId = Value(treeId);
   static Insertable<FamiliesV2Data> custom({
     Expression<String>? id,
     Expression<String>? treeId,
@@ -5834,7 +5748,6 @@ class FamiliesV2Companion extends UpdateCompanion<FamiliesV2Data> {
     Expression<bool>? isPrimaryMarriage,
     Expression<String>? notes,
     Expression<String>? privateNotes,
-    Expression<String>? uuid,
     Expression<bool>? isDeleted,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
@@ -5879,7 +5792,6 @@ class FamiliesV2Companion extends UpdateCompanion<FamiliesV2Data> {
       if (isPrimaryMarriage != null) 'is_primary_marriage': isPrimaryMarriage,
       if (notes != null) 'notes': notes,
       if (privateNotes != null) 'private_notes': privateNotes,
-      if (uuid != null) 'uuid': uuid,
       if (isDeleted != null) 'is_deleted': isDeleted,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -5915,7 +5827,6 @@ class FamiliesV2Companion extends UpdateCompanion<FamiliesV2Data> {
     Value<bool>? isPrimaryMarriage,
     Value<String?>? notes,
     Value<String?>? privateNotes,
-    Value<String>? uuid,
     Value<bool>? isDeleted,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
@@ -5952,7 +5863,6 @@ class FamiliesV2Companion extends UpdateCompanion<FamiliesV2Data> {
       isPrimaryMarriage: isPrimaryMarriage ?? this.isPrimaryMarriage,
       notes: notes ?? this.notes,
       privateNotes: privateNotes ?? this.privateNotes,
-      uuid: uuid ?? this.uuid,
       isDeleted: isDeleted ?? this.isDeleted,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -6056,9 +5966,6 @@ class FamiliesV2Companion extends UpdateCompanion<FamiliesV2Data> {
     if (privateNotes.present) {
       map['private_notes'] = Variable<String>(privateNotes.value);
     }
-    if (uuid.present) {
-      map['uuid'] = Variable<String>(uuid.value);
-    }
     if (isDeleted.present) {
       map['is_deleted'] = Variable<bool>(isDeleted.value);
     }
@@ -6104,7 +6011,6 @@ class FamiliesV2Companion extends UpdateCompanion<FamiliesV2Data> {
           ..write('isPrimaryMarriage: $isPrimaryMarriage, ')
           ..write('notes: $notes, ')
           ..write('privateNotes: $privateNotes, ')
-          ..write('uuid: $uuid, ')
           ..write('isDeleted: $isDeleted, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -6222,16 +6128,6 @@ class $FamilyChildrenV2Table extends FamilyChildrenV2
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _uuidMeta = const VerificationMeta('uuid');
-  @override
-  late final GeneratedColumn<String> uuid = GeneratedColumn<String>(
-    'uuid',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
-  );
   static const VerificationMeta _isDeletedMeta = const VerificationMeta(
     'isDeleted',
   );
@@ -6282,7 +6178,6 @@ class $FamilyChildrenV2Table extends FamilyChildrenV2
     paternalRelationship,
     maternalRelationship,
     notes,
-    uuid,
     isDeleted,
     createdAt,
     updatedAt,
@@ -6368,14 +6263,6 @@ class $FamilyChildrenV2Table extends FamilyChildrenV2
         notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
       );
     }
-    if (data.containsKey('uuid')) {
-      context.handle(
-        _uuidMeta,
-        uuid.isAcceptableOrUnknown(data['uuid']!, _uuidMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_uuidMeta);
-    }
     if (data.containsKey('is_deleted')) {
       context.handle(
         _isDeletedMeta,
@@ -6439,10 +6326,6 @@ class $FamilyChildrenV2Table extends FamilyChildrenV2
         DriftSqlType.string,
         data['${effectivePrefix}notes'],
       ),
-      uuid: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}uuid'],
-      )!,
       isDeleted: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_deleted'],
@@ -6477,7 +6360,6 @@ class FamilyChildrenV2Data extends DataClass
   final String? paternalRelationship;
   final String? maternalRelationship;
   final String? notes;
-  final String uuid;
   final bool isDeleted;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -6491,7 +6373,6 @@ class FamilyChildrenV2Data extends DataClass
     this.paternalRelationship,
     this.maternalRelationship,
     this.notes,
-    required this.uuid,
     required this.isDeleted,
     required this.createdAt,
     required this.updatedAt,
@@ -6518,7 +6399,6 @@ class FamilyChildrenV2Data extends DataClass
     if (!nullToAbsent || notes != null) {
       map['notes'] = Variable<String>(notes);
     }
-    map['uuid'] = Variable<String>(uuid);
     map['is_deleted'] = Variable<bool>(isDeleted);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -6546,7 +6426,6 @@ class FamilyChildrenV2Data extends DataClass
       notes: notes == null && nullToAbsent
           ? const Value.absent()
           : Value(notes),
-      uuid: Value(uuid),
       isDeleted: Value(isDeleted),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -6574,7 +6453,6 @@ class FamilyChildrenV2Data extends DataClass
         json['maternalRelationship'],
       ),
       notes: serializer.fromJson<String?>(json['notes']),
-      uuid: serializer.fromJson<String>(json['uuid']),
       isDeleted: serializer.fromJson<bool>(json['isDeleted']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -6593,7 +6471,6 @@ class FamilyChildrenV2Data extends DataClass
       'paternalRelationship': serializer.toJson<String?>(paternalRelationship),
       'maternalRelationship': serializer.toJson<String?>(maternalRelationship),
       'notes': serializer.toJson<String?>(notes),
-      'uuid': serializer.toJson<String>(uuid),
       'isDeleted': serializer.toJson<bool>(isDeleted),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -6610,7 +6487,6 @@ class FamilyChildrenV2Data extends DataClass
     Value<String?> paternalRelationship = const Value.absent(),
     Value<String?> maternalRelationship = const Value.absent(),
     Value<String?> notes = const Value.absent(),
-    String? uuid,
     bool? isDeleted,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -6630,7 +6506,6 @@ class FamilyChildrenV2Data extends DataClass
         ? maternalRelationship.value
         : this.maternalRelationship,
     notes: notes.present ? notes.value : this.notes,
-    uuid: uuid ?? this.uuid,
     isDeleted: isDeleted ?? this.isDeleted,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -6656,7 +6531,6 @@ class FamilyChildrenV2Data extends DataClass
           ? data.maternalRelationship.value
           : this.maternalRelationship,
       notes: data.notes.present ? data.notes.value : this.notes,
-      uuid: data.uuid.present ? data.uuid.value : this.uuid,
       isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -6675,7 +6549,6 @@ class FamilyChildrenV2Data extends DataClass
           ..write('paternalRelationship: $paternalRelationship, ')
           ..write('maternalRelationship: $maternalRelationship, ')
           ..write('notes: $notes, ')
-          ..write('uuid: $uuid, ')
           ..write('isDeleted: $isDeleted, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
@@ -6694,7 +6567,6 @@ class FamilyChildrenV2Data extends DataClass
     paternalRelationship,
     maternalRelationship,
     notes,
-    uuid,
     isDeleted,
     createdAt,
     updatedAt,
@@ -6712,7 +6584,6 @@ class FamilyChildrenV2Data extends DataClass
           other.paternalRelationship == this.paternalRelationship &&
           other.maternalRelationship == this.maternalRelationship &&
           other.notes == this.notes &&
-          other.uuid == this.uuid &&
           other.isDeleted == this.isDeleted &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
@@ -6728,7 +6599,6 @@ class FamilyChildrenV2Companion extends UpdateCompanion<FamilyChildrenV2Data> {
   final Value<String?> paternalRelationship;
   final Value<String?> maternalRelationship;
   final Value<String?> notes;
-  final Value<String> uuid;
   final Value<bool> isDeleted;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
@@ -6743,7 +6613,6 @@ class FamilyChildrenV2Companion extends UpdateCompanion<FamilyChildrenV2Data> {
     this.paternalRelationship = const Value.absent(),
     this.maternalRelationship = const Value.absent(),
     this.notes = const Value.absent(),
-    this.uuid = const Value.absent(),
     this.isDeleted = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -6759,15 +6628,13 @@ class FamilyChildrenV2Companion extends UpdateCompanion<FamilyChildrenV2Data> {
     this.paternalRelationship = const Value.absent(),
     this.maternalRelationship = const Value.absent(),
     this.notes = const Value.absent(),
-    required String uuid,
     this.isDeleted = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        familyId = Value(familyId),
-       childId = Value(childId),
-       uuid = Value(uuid);
+       childId = Value(childId);
   static Insertable<FamilyChildrenV2Data> custom({
     Expression<String>? id,
     Expression<String>? familyId,
@@ -6778,7 +6645,6 @@ class FamilyChildrenV2Companion extends UpdateCompanion<FamilyChildrenV2Data> {
     Expression<String>? paternalRelationship,
     Expression<String>? maternalRelationship,
     Expression<String>? notes,
-    Expression<String>? uuid,
     Expression<bool>? isDeleted,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
@@ -6797,7 +6663,6 @@ class FamilyChildrenV2Companion extends UpdateCompanion<FamilyChildrenV2Data> {
       if (maternalRelationship != null)
         'maternal_relationship': maternalRelationship,
       if (notes != null) 'notes': notes,
-      if (uuid != null) 'uuid': uuid,
       if (isDeleted != null) 'is_deleted': isDeleted,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -6815,7 +6680,6 @@ class FamilyChildrenV2Companion extends UpdateCompanion<FamilyChildrenV2Data> {
     Value<String?>? paternalRelationship,
     Value<String?>? maternalRelationship,
     Value<String?>? notes,
-    Value<String>? uuid,
     Value<bool>? isDeleted,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
@@ -6831,7 +6695,6 @@ class FamilyChildrenV2Companion extends UpdateCompanion<FamilyChildrenV2Data> {
       paternalRelationship: paternalRelationship ?? this.paternalRelationship,
       maternalRelationship: maternalRelationship ?? this.maternalRelationship,
       notes: notes ?? this.notes,
-      uuid: uuid ?? this.uuid,
       isDeleted: isDeleted ?? this.isDeleted,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -6875,9 +6738,6 @@ class FamilyChildrenV2Companion extends UpdateCompanion<FamilyChildrenV2Data> {
     if (notes.present) {
       map['notes'] = Variable<String>(notes.value);
     }
-    if (uuid.present) {
-      map['uuid'] = Variable<String>(uuid.value);
-    }
     if (isDeleted.present) {
       map['is_deleted'] = Variable<bool>(isDeleted.value);
     }
@@ -6905,7 +6765,6 @@ class FamilyChildrenV2Companion extends UpdateCompanion<FamilyChildrenV2Data> {
           ..write('paternalRelationship: $paternalRelationship, ')
           ..write('maternalRelationship: $maternalRelationship, ')
           ..write('notes: $notes, ')
-          ..write('uuid: $uuid, ')
           ..write('isDeleted: $isDeleted, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -11318,7 +11177,6 @@ typedef $$SurnameEventsTableCreateCompanionBuilder =
       Value<String?> notes,
       Value<int> sortOrder,
       Value<bool> isPrimary,
-      required String uuid,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -11340,7 +11198,6 @@ typedef $$SurnameEventsTableUpdateCompanionBuilder =
       Value<String?> notes,
       Value<int> sortOrder,
       Value<bool> isPrimary,
-      Value<String> uuid,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -11481,11 +11338,6 @@ class $$SurnameEventsTableFilterComposer
 
   ColumnFilters<bool> get isPrimary => $composableBuilder(
     column: $table.isPrimary,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get uuid => $composableBuilder(
-    column: $table.uuid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -11638,11 +11490,6 @@ class $$SurnameEventsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get uuid => $composableBuilder(
-    column: $table.uuid,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -11776,9 +11623,6 @@ class $$SurnameEventsTableAnnotationComposer
   GeneratedColumn<bool> get isPrimary =>
       $composableBuilder(column: $table.isPrimary, builder: (column) => column);
 
-  GeneratedColumn<String> get uuid =>
-      $composableBuilder(column: $table.uuid, builder: (column) => column);
-
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -11902,7 +11746,6 @@ class $$SurnameEventsTableTableManager
                 Value<String?> notes = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<bool> isPrimary = const Value.absent(),
-                Value<String> uuid = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -11922,7 +11765,6 @@ class $$SurnameEventsTableTableManager
                 notes: notes,
                 sortOrder: sortOrder,
                 isPrimary: isPrimary,
-                uuid: uuid,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -11944,7 +11786,6 @@ class $$SurnameEventsTableTableManager
                 Value<String?> notes = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<bool> isPrimary = const Value.absent(),
-                required String uuid,
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -11964,7 +11805,6 @@ class $$SurnameEventsTableTableManager
                 notes: notes,
                 sortOrder: sortOrder,
                 isPrimary: isPrimary,
-                uuid: uuid,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -12106,7 +11946,6 @@ typedef $$FamiliesV2TableCreateCompanionBuilder =
       Value<bool> isPrimaryMarriage,
       Value<String?> notes,
       Value<String?> privateNotes,
-      required String uuid,
       Value<bool> isDeleted,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -12141,7 +11980,6 @@ typedef $$FamiliesV2TableUpdateCompanionBuilder =
       Value<bool> isPrimaryMarriage,
       Value<String?> notes,
       Value<String?> privateNotes,
-      Value<String> uuid,
       Value<bool> isDeleted,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -12359,11 +12197,6 @@ class $$FamiliesV2TableFilterComposer
 
   ColumnFilters<String> get privateNotes => $composableBuilder(
     column: $table.privateNotes,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get uuid => $composableBuilder(
-    column: $table.uuid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -12606,11 +12439,6 @@ class $$FamiliesV2TableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get uuid => $composableBuilder(
-    column: $table.uuid,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<bool> get isDeleted => $composableBuilder(
     column: $table.isDeleted,
     builder: (column) => ColumnOrderings(column),
@@ -12821,9 +12649,6 @@ class $$FamiliesV2TableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get uuid =>
-      $composableBuilder(column: $table.uuid, builder: (column) => column);
-
   GeneratedColumn<bool> get isDeleted =>
       $composableBuilder(column: $table.isDeleted, builder: (column) => column);
 
@@ -12988,7 +12813,6 @@ class $$FamiliesV2TableTableManager
                 Value<bool> isPrimaryMarriage = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
                 Value<String?> privateNotes = const Value.absent(),
-                Value<String> uuid = const Value.absent(),
                 Value<bool> isDeleted = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -13021,7 +12845,6 @@ class $$FamiliesV2TableTableManager
                 isPrimaryMarriage: isPrimaryMarriage,
                 notes: notes,
                 privateNotes: privateNotes,
-                uuid: uuid,
                 isDeleted: isDeleted,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -13056,7 +12879,6 @@ class $$FamiliesV2TableTableManager
                 Value<bool> isPrimaryMarriage = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
                 Value<String?> privateNotes = const Value.absent(),
-                required String uuid,
                 Value<bool> isDeleted = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -13089,7 +12911,6 @@ class $$FamiliesV2TableTableManager
                 isPrimaryMarriage: isPrimaryMarriage,
                 notes: notes,
                 privateNotes: privateNotes,
-                uuid: uuid,
                 isDeleted: isDeleted,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -13237,7 +13058,6 @@ typedef $$FamilyChildrenV2TableCreateCompanionBuilder =
       Value<String?> paternalRelationship,
       Value<String?> maternalRelationship,
       Value<String?> notes,
-      required String uuid,
       Value<bool> isDeleted,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -13254,7 +13074,6 @@ typedef $$FamilyChildrenV2TableUpdateCompanionBuilder =
       Value<String?> paternalRelationship,
       Value<String?> maternalRelationship,
       Value<String?> notes,
-      Value<String> uuid,
       Value<bool> isDeleted,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -13357,11 +13176,6 @@ class $$FamilyChildrenV2TableFilterComposer
 
   ColumnFilters<String> get notes => $composableBuilder(
     column: $table.notes,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get uuid => $composableBuilder(
-    column: $table.uuid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -13471,11 +13285,6 @@ class $$FamilyChildrenV2TableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get uuid => $composableBuilder(
-    column: $table.uuid,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<bool> get isDeleted => $composableBuilder(
     column: $table.isDeleted,
     builder: (column) => ColumnOrderings(column),
@@ -13578,9 +13387,6 @@ class $$FamilyChildrenV2TableAnnotationComposer
   GeneratedColumn<String> get notes =>
       $composableBuilder(column: $table.notes, builder: (column) => column);
 
-  GeneratedColumn<String> get uuid =>
-      $composableBuilder(column: $table.uuid, builder: (column) => column);
-
   GeneratedColumn<bool> get isDeleted =>
       $composableBuilder(column: $table.isDeleted, builder: (column) => column);
 
@@ -13676,7 +13482,6 @@ class $$FamilyChildrenV2TableTableManager
                 Value<String?> paternalRelationship = const Value.absent(),
                 Value<String?> maternalRelationship = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
-                Value<String> uuid = const Value.absent(),
                 Value<bool> isDeleted = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -13691,7 +13496,6 @@ class $$FamilyChildrenV2TableTableManager
                 paternalRelationship: paternalRelationship,
                 maternalRelationship: maternalRelationship,
                 notes: notes,
-                uuid: uuid,
                 isDeleted: isDeleted,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -13708,7 +13512,6 @@ class $$FamilyChildrenV2TableTableManager
                 Value<String?> paternalRelationship = const Value.absent(),
                 Value<String?> maternalRelationship = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
-                required String uuid,
                 Value<bool> isDeleted = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -13723,7 +13526,6 @@ class $$FamilyChildrenV2TableTableManager
                 paternalRelationship: paternalRelationship,
                 maternalRelationship: maternalRelationship,
                 notes: notes,
-                uuid: uuid,
                 isDeleted: isDeleted,
                 createdAt: createdAt,
                 updatedAt: updatedAt,

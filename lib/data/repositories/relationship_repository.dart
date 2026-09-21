@@ -89,8 +89,7 @@ class RelationshipRepository {
           familyId: targetFamilyId,
           childId: childId,
           relationshipType: Value(relationshipType),
-          uuid: IdGenerator.newId(),
-          createdAt: Value(now),
+            createdAt: Value(now),
           updatedAt: Value(now),
         ),
       );
@@ -209,8 +208,7 @@ class RelationshipRepository {
           husbandId: Value(slots.husbandId),
           wifeId: Value(slots.wifeId),
           isPrimaryMarriage: Value(isPrimary),
-          uuid: IdGenerator.newId(),
-          createdAt: Value(now),
+            createdAt: Value(now),
           updatedAt: Value(now),
         ),
       );
@@ -368,7 +366,6 @@ class RelationshipRepository {
         husbandId: Value(isFemale ? null : parent.id),
         wifeId: Value(isFemale ? parent.id : null),
         isPrimaryMarriage: const Value(false),
-        uuid: IdGenerator.newId(),
         createdAt: Value(now),
         updatedAt: Value(now),
       ),

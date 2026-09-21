@@ -117,7 +117,6 @@ class GedcomImporter {
         FamiliesV2Companion.insert(
           id: dbFamilyId,
           treeId: treeId,
-          uuid: dbFamilyId,
           husbandId: Value(husbDbId),
           wifeId: Value(wifeDbId),
           marriageDate: Value(marrDate.date),
@@ -135,7 +134,6 @@ class GedcomImporter {
             childrenToInsert.add(
               FamilyChildrenV2Companion.insert(
                 id: _uuid.v4(),
-                uuid: _uuid.v4(),
                 familyId: dbFamilyId,
                 childId: childDbId,
               ),

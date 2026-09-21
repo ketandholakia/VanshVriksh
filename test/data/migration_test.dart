@@ -345,7 +345,7 @@ void main() {
           livingLinks.map((link) => link.childId).toSet(),
           {'c1', 'c2', 'c3'},
         );
-        expect(storedUserVersion(), 13);
+        expect(storedUserVersion(), 14);
       },
     );
   });

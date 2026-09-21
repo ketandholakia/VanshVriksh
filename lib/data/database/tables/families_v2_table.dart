@@ -73,7 +73,6 @@ class FamiliesV2 extends Table {
   TextColumn get notes => text().nullable()();
   TextColumn get privateNotes => text().nullable()();
 
-  TextColumn get uuid => text().unique()();
 
   BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
 

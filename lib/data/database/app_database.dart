@@ -61,7 +61,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -391,23 +391,23 @@ class AppDatabase extends _$AppDatabase {
     await customStatement('''
       INSERT OR IGNORE INTO surname_events (
         id, person_id, surname, surname_type, sort_order, is_primary,
-        uuid, created_at, updated_at
+        created_at, updated_at
       )
       SELECT
         p.id || '-birth-surname', p.id,
         TRIM(COALESCE(p.birth_surname, p.last_name)), 'birth', 0, 1,
-        p.id || '-birth-surname', p.created_at, p.updated_at
+        p.created_at, p.updated_at
       FROM persons p
       WHERE TRIM(COALESCE(p.birth_surname, p.last_name, '')) <> ''
     ''');
     await customStatement('''
       INSERT OR IGNORE INTO surname_events (
         id, person_id, surname, surname_type, sort_order, is_primary,
-        uuid, created_at, updated_at
+        created_at, updated_at
       )
       SELECT
         p.id || '-married-surname', p.id, TRIM(p.married_surname),
-        'marriage', 0, 0, p.id || '-married-surname',
+        'marriage', 0, 0,
         p.created_at, p.updated_at
       FROM persons p
       WHERE p.married_surname IS NOT NULL
@@ -470,10 +470,9 @@ class AppDatabase extends _$AppDatabase {
       await customStatement(
         'INSERT OR IGNORE INTO families_v2 '
         '(id, tree_id, husband_id, wife_id, relationship_type, '
-        ' is_primary_marriage, uuid, is_deleted, created_at, updated_at) '
-        "VALUES (?, ?, ?, ?, 'marriage', 0, ?, 0, ?, ?)",
-        [id, AppConstants.defaultTreeId, husband, wife, 'family-uuid-$id',
-          createdAt, createdAt],
+        ' is_primary_marriage, is_deleted, created_at, updated_at) '
+        "VALUES (?, ?, ?, ?, 'marriage', 0, 0, ?, ?)",
+        [id, AppConstants.defaultTreeId, husband, wife, createdAt, createdAt],
       );
     }
 
@@ -504,13 +503,12 @@ class AppDatabase extends _$AppDatabase {
       await customStatement(
         'INSERT OR IGNORE INTO family_children_v2 '
         '(id, family_id, child_id, relationship_type, is_deleted, '
-        ' uuid, created_at, updated_at) '
-        "VALUES (?, ?, ?, 'biological', 0, ?, ?, ?)",
+        ' created_at, updated_at) '
+        "VALUES (?, ?, ?, 'biological', 0, ?, ?)",
         [
           'link-$familyId-$childId',
           familyId,
           childId,
-          'link-uuid-$familyId-$childId',
           createdAt,
           createdAt,
         ],
@@ -527,14 +525,13 @@ class AppDatabase extends _$AppDatabase {
       await customStatement(
         'INSERT OR IGNORE INTO families_v2 '
         '(id, tree_id, husband_id, wife_id, relationship_type, '
-        ' is_primary_marriage, uuid, is_deleted, created_at, updated_at) '
-        "VALUES (?, ?, ?, ?, 'marriage', 0, ?, 0, 0, 0)",
+        ' is_primary_marriage, is_deleted, created_at, updated_at) '
+        "VALUES (?, ?, ?, ?, 'marriage', 0, 0, 0, 0)",
         [
           familyId,
           AppConstants.defaultTreeId,
           isFemale ? null : parentId,
           isFemale ? parentId : null,
-          'family-uuid-$familyId',
         ],
       );
       return familyId;

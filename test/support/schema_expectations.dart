@@ -9,7 +9,7 @@
 // Column entries are `name|notnull|primaryKeyPosition|default` as reported by
 // `PRAGMA table_info`.
 //
-// Schema version: 13. Last reviewed: 2026-09-21.
+// Schema version: 14. Last reviewed: 2026-09-21.
 //
 // `citations`, `citation_links` and `todos` are deliberately absent. Earlier
 // versions created them, but no code ever produced or read them, so they were
@@ -67,7 +67,6 @@ const Map<String, List<String>> expectedColumns = {
     'is_primary_marriage|1|0|0',
     'notes|0|0|null',
     'private_notes|0|0|null',
-    'uuid|1|0|null',
     'is_deleted|1|0|0',
     "created_at|1|0|CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)",
     "updated_at|1|0|CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)",
@@ -82,7 +81,6 @@ const Map<String, List<String>> expectedColumns = {
     'paternal_relationship|0|0|null',
     'maternal_relationship|0|0|null',
     'notes|0|0|null',
-    'uuid|1|0|null',
     'is_deleted|1|0|0',
     "created_at|1|0|CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)",
     "updated_at|1|0|CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)",
@@ -170,7 +168,6 @@ const Map<String, List<String>> expectedColumns = {
     'notes|0|0|null',
     'sort_order|1|0|0',
     'is_primary|1|0|0',
-    'uuid|1|0|null',
     "created_at|1|0|CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)",
     "updated_at|1|0|CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)",
   ],
@@ -235,11 +232,10 @@ const Set<String> expectedIndexes = {
 /// Table → its UNIQUE constraints, as comma-joined column lists.
 const Map<String, Set<String>> expectedUniqueConstraints = {
   'duplicate_markers': {'person_a_id, person_b_id'},
-  'families_v2': {'husband_id, wife_id', 'uuid'},
-  'family_children_v2': {'family_id, child_id', 'uuid'},
+  'families_v2': {'husband_id, wife_id'},
+  'family_children_v2': {'family_id, child_id'},
   'genealogy_persons': {'uuid'},
-  'surname_events': {'uuid'},
 };
 
 /// The schema version these expectations describe.
-const int expectedSchemaVersion = 13;
+const int expectedSchemaVersion = 14;
