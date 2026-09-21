@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../../core/constants/relationship_types.dart';
 import '../models/relationship_edges.dart';
 import 'tables/citation_links_table.dart';
 import 'tables/citations_table.dart';
@@ -74,47 +75,14 @@ class AppDatabase extends _$AppDatabase {
           await m.createAll();
         },
         onUpgrade: (m, from, to) async {
-          if (from < 3) {
-            await m.createTable(events);
-            await m.createTable(citations);
-            await m.createTable(citationLinks);
-            await m.createTable(researchNotes);
-            await m.createTable(todos);
-          }
-          if (from < 4) {
-            await customStatement(
-              'ALTER TABLE research_notes ADD COLUMN note_date_sort REAL',
-            );
-            await customStatement(
-              'ALTER TABLE research_notes ADD COLUMN note_date_display TEXT',
-            );
-          }
-          if (from < 5) {
-            await m.createTable(duplicateMarkers);
-          }
-          if (from < 6) {
-            await customStatement(
-              'ALTER TABLE persons ADD COLUMN birth_surname TEXT',
-            );
-            await customStatement(
-              'ALTER TABLE persons ADD COLUMN married_surname TEXT',
-            );
-          }
-          if (from < 7) {
-            await m.createTable(genealogyPersons);
-            await m.createTable(surnameEvents);
-            await m.createTable(familiesV2);
-            await m.createTable(familyChildrenV2);
-          }
-          if (from < 8) {
-            await _absorbLegacyPersons();
-          }
-          if (from < 10) {
-            await _absorbLegacyRelationships();
-          }
-          if (from < 12) {
-            await _upgradeToCanonicalSchema(m);
-          }
+          // One consolidated path. Every pre-v12 database — including the very
+          // old ones that still carry the legacy `persons` / `relationships`
+          // tables — is upgraded by the same deterministic routine, so there is
+          // exactly one migration to reason about and to test.
+          //
+          // See scratch/audit/migration-strategy.md: schema v12 is the canonical
+          // baseline; earlier versions are supported as import paths only.
+          await _upgradeToCanonicalSchema(m);
         },
         beforeOpen: (details) async {
           // Enable foreign keys on EVERY connection, not just first create.
@@ -123,29 +91,79 @@ class AppDatabase extends _$AppDatabase {
       );
 
   // ---------------------------------------------------------------------------
-  // v11 → v12: canonical schema
+  // Migration to the canonical schema (v12)
   // ---------------------------------------------------------------------------
 
-  /// Brings an older database to the canonical model:
-  /// rebuilds every table whose definition changed (dropped sync columns, new
-  /// foreign keys, new indexes), backfills the new mandatory `families_v2.tree_id`
-  /// and drops the tables that are no longer part of the model.
+  /// Brings **any** pre-v12 database to the canonical model, atomically.
+  ///
+  /// Steps:
+  ///  1. create any canonical table the incoming database lacks, so a very old
+  ///     database does not have to replay years of incremental steps;
+  ///  2. make sure the legacy `persons` columns the import reads exist;
+  ///  3. import the legacy `persons` / `relationships` tables (if present);
+  ///  4. ensure the ownership root exists and repair states the new constraints
+  ///     would reject;
+  ///  5. rebuild every canonical table (this is what drops obsolete columns,
+  ///     applies the foreign keys and re-creates the schema-declared indexes);
+  ///  6. drop the legacy tables;
+  ///  7. verify that nothing the import claimed to preserve was lost.
+  ///
+  /// Drift already runs `onUpgrade` inside a transaction (an explicit `BEGIN`
+  /// here fails with "cannot start a transaction within a transaction"), so the
+  /// routine is atomic: a verification failure throws, drift rolls the
+  /// transaction back, and the database keeps its previous version and contents
+  /// instead of ending up half-migrated.
   Future<void> _upgradeToCanonicalSchema(Migrator m) async {
-    // Legacy data first: both of these are no-ops on a v10+ database.
-    await _absorbLegacyPersons();
-    await _absorbLegacyRelationships();
-
+    await _ensureCanonicalTablesExist(m);
+    await _ensureLegacyColumns();
+    final importedPeople = await _absorbLegacyPersons();
+    final importedLinks = await _absorbLegacyRelationships();
     await _ensureDefaultTreeRow();
     await _repairPreExistingData();
+    await _rebuildCanonicalTables(m);
+    await customStatement('DROP TABLE IF EXISTS persons');
+    await customStatement('DROP TABLE IF EXISTS relationships');
+    await customStatement('DROP TABLE IF EXISTS sync_change_log');
+    await _verifyUpgrade(
+      importedPeople: importedPeople,
+      importedLinks: importedLinks,
+    );
+  }
+
+  /// Creates any canonical table the incoming database does not have yet.
+  Future<void> _ensureCanonicalTablesExist(Migrator m) async {
+    Future<void> ensure(String name, Future<void> Function() create) async {
+      if (await _tableExists(name)) return;
+      await create();
+    }
+
+    await ensure('family_trees', () => m.createTable(familyTrees));
+    await ensure('genealogy_persons', () => m.createTable(genealogyPersons));
+    await ensure('surname_events', () => m.createTable(surnameEvents));
+    await ensure('families_v2', () => m.createTable(familiesV2));
+    await ensure('family_children_v2', () => m.createTable(familyChildrenV2));
+    await ensure('media_items', () => m.createTable(mediaItems));
+    await ensure('events', () => m.createTable(events));
+    await ensure('duplicate_markers', () => m.createTable(duplicateMarkers));
+    await ensure('citations', () => m.createTable(citations));
+    await ensure('citation_links', () => m.createTable(citationLinks));
+    await ensure('research_notes', () => m.createTable(researchNotes));
+    await ensure('todos', () => m.createTable(todos));
+  }
+
+  /// Rebuilds every canonical table so the physical schema matches the model:
+  /// obsolete columns go, foreign keys and delete actions arrive, and the
+  /// indexes declared on the tables are re-created.
+  Future<void> _rebuildCanonicalTables(Migrator m) async {
     await m.alterTable(TableMigration(familyTrees));
     await m.alterTable(TableMigration(genealogyPersons));
     await m.alterTable(
       TableMigration(
         familiesV2,
-        // `tree_id` is mandatory in the new model. Every family in a pre-v12
-        // database belongs to the application's single default tree; if that
-        // tree is missing the foreign key makes the copy fail loudly instead of
-        // inventing an owner.
+        // `tree_id` is mandatory in the canonical model and every pre-v12 row
+        // belongs to the application's single tree. If that tree were missing
+        // the foreign key would make the copy fail loudly rather than invent an
+        // owner.
         columnTransformer: {
           familiesV2.treeId: const Constant(AppConstants.defaultTreeId),
         },
@@ -158,11 +176,83 @@ class AppDatabase extends _$AppDatabase {
     await m.alterTable(TableMigration(mediaItems));
     await m.alterTable(TableMigration(researchNotes));
     await m.alterTable(TableMigration(todos));
+  }
 
-    // Tables that are no longer part of the model.
-    await customStatement('DROP TABLE IF EXISTS persons');
-    await customStatement('DROP TABLE IF EXISTS relationships');
-    await customStatement('DROP TABLE IF EXISTS sync_change_log');
+  /// Older `persons` tables lack columns that later versions added. They are
+  /// added before the import reads them, so the same query works from any
+  /// version instead of failing on an ancient database.
+  Future<void> _ensureLegacyColumns() async {
+    if (!await _tableExists('persons')) return;
+    final columns = await _columnsOf('persons');
+    if (!columns.contains('birth_surname')) {
+      await customStatement(
+        'ALTER TABLE persons ADD COLUMN birth_surname TEXT',
+      );
+    }
+    if (!columns.contains('married_surname')) {
+      await customStatement(
+        'ALTER TABLE persons ADD COLUMN married_surname TEXT',
+      );
+    }
+  }
+
+  /// Proves that the import preserved what it claims to have preserved.
+  ///
+  /// A failure throws, which rolls the whole upgrade back — a database that
+  /// cannot be migrated correctly is left untouched rather than silently
+  /// missing relationships.
+  Future<void> _verifyUpgrade({
+    required int importedPeople,
+    required ImportedRelationships importedLinks,
+  }) async {
+    final failures = <String>[];
+
+    if (importedPeople > 0) {
+      final migrated = await _rowCount('genealogy_persons');
+      if (migrated < importedPeople) {
+        failures.add(
+          'imported $importedPeople legacy people but only $migrated exist',
+        );
+      }
+    }
+
+    for (final pair in importedLinks.parentChildPairs) {
+      final linked = await customSelect(
+        'SELECT 1 FROM family_children_v2 l '
+        'JOIN families_v2 f ON f.id = l.family_id '
+        'WHERE l.child_id = ? AND l.is_deleted = 0 AND f.is_deleted = 0 '
+        'AND (f.husband_id = ? OR f.wife_id = ?) LIMIT 1',
+        variables: [
+          Variable<String>(pair.childId),
+          Variable<String>(pair.parentId),
+          Variable<String>(pair.parentId),
+        ],
+      ).get();
+      if (linked.isEmpty) {
+        failures.add(
+          'legacy parentage ${pair.parentId} -> ${pair.childId} has no link',
+        );
+      }
+    }
+
+    if (importedLinks.spouseRows > 0 && await _rowCount('families_v2') == 0) {
+      failures.add(
+        'imported ${importedLinks.spouseRows} legacy partner rows but no '
+        'partnership exists',
+      );
+    }
+
+    if (failures.isNotEmpty) {
+      throw StateError(
+        'Migration verification failed, the upgrade was rolled back:\n'
+        '${failures.join('\n')}',
+      );
+    }
+  }
+
+  Future<Set<String>> _columnsOf(String table) async {
+    final rows = await customSelect('PRAGMA table_info($table)').get();
+    return rows.map((row) => row.data['name'] as String).toSet();
   }
 
   /// Makes sure the ownership root exists before anything references it.
@@ -269,10 +359,13 @@ class AppDatabase extends _$AppDatabase {
   }
 
   /// Copies `persons` into `genealogy_persons` (schema < 8 databases).
-  Future<void> _absorbLegacyPersons() async {
-    if (!await _tableExists('persons')) return;
-    if (await _rowCount('persons') == 0) return;
-    if (await _rowCount('genealogy_persons') > 0) return;
+  /// Copies `persons` into `genealogy_persons` (schema < 8 databases) and returns
+  /// how many people were copied.
+  Future<int> _absorbLegacyPersons() async {
+    if (!await _tableExists('persons')) return 0;
+    final legacyCount = await _rowCount('persons');
+    if (legacyCount == 0) return 0;
+    if (await _rowCount('genealogy_persons') > 0) return 0;
 
     await _ensureDefaultTreeRow();
 
@@ -327,6 +420,8 @@ class AppDatabase extends _$AppDatabase {
         AND TRIM(p.married_surname) <> ''
         AND TRIM(p.married_surname) <> TRIM(COALESCE(p.birth_surname, ''))
     ''');
+
+    return legacyCount;
   }
 
   /// Copies `relationships` into `families_v2` / `family_children_v2`
@@ -339,9 +434,22 @@ class AppDatabase extends _$AppDatabase {
   ///  * the single-parent lookup used `getSingleOrNull()` and threw as soon as a
   ///    parent had more than one family, aborting the upgrade halfway. The
   ///    resolution below is explicit and deterministic.
-  Future<void> _absorbLegacyRelationships() async {
-    if (!await _tableExists('relationships')) return;
-    if (await _rowCount('families_v2') > 0) return;
+  ///
+  ///  * a child with more than two recorded parents keeps **all** of them: the
+  ///    first two share a family and every further parent gets their own
+  ///    single-parent family, whose `notes` records why. Nothing is dropped and
+  ///    no record is chosen arbitrarily;
+  ///  * every parentage that was migrated is returned so the caller can verify
+  ///    it survived.
+  Future<ImportedRelationships> _absorbLegacyRelationships() async {
+    const nothingImported = (
+      parentChildPairs: <({String parentId, String childId})>[],
+      spouseRows: 0,
+      unresolvedRows: 0,
+    );
+
+    if (!await _tableExists('relationships')) return nothingImported;
+    if (await _rowCount('families_v2') > 0) return nothingImported;
 
     await _ensureDefaultTreeRow();
 
@@ -349,7 +457,7 @@ class AppDatabase extends _$AppDatabase {
       'SELECT id, tree_id, person_id, related_person_id, relationship_type, '
       'created_at FROM relationships ORDER BY rowid',
     ).get();
-    if (rows.isEmpty) return;
+    if (rows.isEmpty) return nothingImported;
 
     final genderById = <String, String>{};
     for (final person in await customSelect(
@@ -394,26 +502,84 @@ class AppDatabase extends _$AppDatabase {
       return result.isEmpty ? null : result.first.data['id'] as String;
     }
 
-    Future<void> linkChild(String familyId, String childId, int createdAt) async {
+    Future<void> linkChild(
+      String familyId,
+      String childId,
+      int createdAt,
+    ) async {
       await customStatement(
         'INSERT OR IGNORE INTO family_children_v2 '
         '(id, family_id, child_id, relationship_type, is_deleted, '
         ' uuid, created_at, updated_at) '
         "VALUES (?, ?, ?, 'biological', 0, ?, ?, ?)",
-        ['link-$familyId-$childId', familyId, childId,
-          'link-uuid-$familyId-$childId', createdAt, createdAt],
+        [
+          'link-$familyId-$childId',
+          familyId,
+          childId,
+          'link-uuid-$familyId-$childId',
+          createdAt,
+          createdAt,
+        ],
       );
     }
 
-    // 1. Partner rows (both historical literals).
-    final spouseTypes = {'spouse', 'marriage'};
+    var sequence = 0;
+
+    /// A single-parent family for [parentId], in the slot their recorded gender
+    /// implies.
+    Future<String> insertSingleParentFamily(String parentId) async {
+      final familyId = 'family-imported-${sequence++}';
+      final isFemale = isFemaleGender(genderById[parentId] ?? '');
+      await customStatement(
+        'INSERT OR IGNORE INTO families_v2 '
+        '(id, tree_id, husband_id, wife_id, relationship_type, '
+        ' is_primary_marriage, uuid, is_deleted, created_at, updated_at) '
+        "VALUES (?, ?, ?, ?, 'marriage', 0, ?, 0, 0, 0)",
+        [
+          familyId,
+          AppConstants.defaultTreeId,
+          isFemale ? null : parentId,
+          isFemale ? parentId : null,
+          'family-uuid-$familyId',
+        ],
+      );
+      return familyId;
+    }
+
+    /// Records, in the row itself, that a legacy child had more parents than a
+    /// family can hold. The extra parentage is preserved rather than dropped.
+    Future<void> markAdditionalParentFamily(
+      String familyId,
+      String childId,
+      int recordedParents,
+    ) async {
+      await customStatement(
+        'UPDATE families_v2 SET notes = ? WHERE id = ?',
+        [
+          'Imported from legacy data: $childId was recorded with '
+              '$recordedParents parents, but a family holds two. This family '
+              'keeps one of the additional parents so no parentage is lost.',
+          familyId,
+        ],
+      );
+    }
+
+    var spouseRows = 0;
+    var unresolvedRows = 0;
+    final parentChildPairs = <({String parentId, String childId})>[];
+
+    // 1. Partner rows. Every confirmed partner value is accepted.
     for (final row in rows) {
       final type = row.data['relationship_type'] as String? ?? '';
-      if (!spouseTypes.contains(type)) continue;
+      if (!RelationshipTypes.partnerTypes.contains(type)) continue;
       final a = row.data['person_id'] as String;
       final b = row.data['related_person_id'] as String;
       if (a == b) continue;
-      if (!genderById.containsKey(a) || !genderById.containsKey(b)) continue;
+      if (!genderById.containsKey(a) || !genderById.containsKey(b)) {
+        unresolvedRows++;
+        continue;
+      }
+      spouseRows++;
       // The partner slots are decided by the shared canonical rule, so the
       // migration and the repository order couples identically.
       final slots = canonicalPartnerSlots(
@@ -433,44 +599,52 @@ class AppDatabase extends _$AppDatabase {
     // 2. Parent-child rows, grouped by child in source order.
     final childToParents = <String, List<String>>{};
     for (final row in rows) {
-      if ((row.data['relationship_type'] as String?) != 'parent_child') {
+      final type = row.data['relationship_type'] as String? ?? '';
+      if (!RelationshipTypes.parentChildTypes.contains(type)) {
+        if (!RelationshipTypes.partnerTypes.contains(type)) unresolvedRows++;
         continue;
       }
       final parent = row.data['person_id'] as String;
       final child = row.data['related_person_id'] as String;
-      if (parent == child) continue;
+      if (parent == child) {
+        unresolvedRows++;
+        continue;
+      }
       if (!genderById.containsKey(parent) ||
           !genderById.containsKey(child)) {
+        unresolvedRows++;
         continue;
       }
       childToParents.putIfAbsent(child, () => []).add(parent);
     }
 
-    var sequence = 0;
     for (final entry in childToParents.entries) {
       final childId = entry.key;
       final parents = entry.value.toSet().toList();
       if (parents.isEmpty) continue;
 
+      final primary = parents.take(2).toList();
+      final additional = parents.skip(2).toList();
+
       final String husband;
       final String? wife;
-      if (parents.length == 1) {
-        husband = parents.single;
+      if (primary.length == 1) {
+        husband = primary.single;
         wife = null;
       } else {
         final slots = canonicalPartnerSlots(
-          firstId: parents[0],
-          firstGender: genderById[parents[0]] ?? '',
-          secondId: parents[1],
-          secondGender: genderById[parents[1]] ?? '',
+          firstId: primary[0],
+          firstGender: genderById[primary[0]] ?? '',
+          secondId: primary[1],
+          secondGender: genderById[primary[1]] ?? '',
         );
         husband = slots.husbandId;
         wife = slots.wifeId;
       }
 
       var familyId = await findFamily(husband, wife);
-      familyId ??= 'family-imported-${sequence++}';
-      if (await findFamily(husband, wife) == null) {
+      if (familyId == null) {
+        familyId = 'family-imported-${sequence++}';
         await insertFamily(
           id: familyId,
           husband: husband,
@@ -479,6 +653,35 @@ class AppDatabase extends _$AppDatabase {
         );
       }
       await linkChild(familyId, childId, 0);
+      for (final parentId in primary) {
+        parentChildPairs.add((parentId: parentId, childId: childId));
+      }
+
+      for (final extraParentId in additional) {
+        final extraFamilyId = await insertSingleParentFamily(extraParentId);
+        await markAdditionalParentFamily(
+          extraFamilyId,
+          childId,
+          parents.length,
+        );
+        await linkChild(extraFamilyId, childId, 0);
+        parentChildPairs.add(
+          (parentId: extraParentId, childId: childId),
+        );
+      }
     }
+
+    return (
+      parentChildPairs: parentChildPairs,
+      spouseRows: spouseRows,
+      unresolvedRows: unresolvedRows,
+    );
   }
 }
+
+/// What a legacy import produced, so the upgrade can verify it afterwards.
+typedef ImportedRelationships = ({
+  List<({String parentId, String childId})> parentChildPairs,
+  int spouseRows,
+  int unresolvedRows,
+});
