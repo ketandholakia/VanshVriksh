@@ -239,23 +239,33 @@ void main() {
       expect(familyId, isNotEmpty);
     });
 
-    test('removing a child removes only that child link', () async {
+    test('removing a child hides it without touching the family or its links',
+        () async {
+      final dad = await addPerson(firstName: 'Dad');
       final mom = await addPerson(firstName: 'Mom', gender: 'F');
       final kid = await addPerson(firstName: 'Kid');
-      await relationships.addParentChildRelationship(
+      await relationships.addSpouseRelationship(
         treeId: treeId,
-        parentId: mom,
-        childId: kid,
+        personAId: dad,
+        personBId: mom,
       );
+      final familyId = (await repository.getFamiliesForPerson(dad)).single.id;
+      await repository.addChildToFamily(familyId: familyId, childId: kid);
 
       await repository.deletePerson(kid);
 
-      final families = await db.select(db.familiesV2).get();
-      expect(families.single.isDeleted, isFalse, reason: 'family survives');
+      // Only the person is flagged: the family and the link row are intact, so
+      // the delete is exactly reversible.
+      final familyRow = (await db.select(db.familiesV2).get()).single;
+      expect(familyRow.isDeleted, isFalse);
+      expect(familyRow.husbandId, dad);
+      expect(familyRow.wifeId, mom);
       expect(
         (await db.select(db.familyChildrenV2).get()).single.isDeleted,
-        isTrue,
+        isFalse,
       );
+      // ...and the removed child is gone from every lookup.
+      expect(await relationships.getChildren(dad), isEmpty);
       expect(await relationships.getChildren(mom), isEmpty);
     });
 

@@ -119,65 +119,90 @@ class GenealogyRepository {
     return rows > 0;
   }
 
-  /// Removes [personId] from the tree (soft delete), in one transaction.
+  /// Removes [personId] from the tree (soft delete) in one transaction.
   ///
-  /// Rules:
-  ///  * the person row is flagged `is_deleted`;
-  ///  * child links where the person is the child are flagged `is_deleted`;
-  ///  * a family that exists only for this person (its other partner slot is
-  ///    empty) is soft-deleted together with its remaining child links;
-  ///  * a family shared with a partner is KEPT, so the surviving spouse's
-  ///    marriage and the children's place in the tree survive. The deleted
-  ///    person is filtered out of every read path instead.
+  /// Only the person row is flagged, so the delete is exactly reversible and no
+  /// historical row is destroyed. Reads exclude anything that involves a deleted
+  /// person, so the person disappears from lists, search, trees, dashboards and
+  /// relationship lookups.
   ///
-  /// Person-scoped rows (events, media, notes, todos) are intentionally left
-  /// alone: they are unreachable while the person is deleted, and they come
-  /// back if the delete is reverted.
+  /// The person is also detached from the families they were a partner of, by
+  /// clearing their slot:
+  ///  * a family that still has a partner stays live and keeps its child links,
+  ///    so the surviving spouse's marriage and the children's place survive;
+  ///  * a family left with no partner existed only for this person, so it and
+  ///    its child links are soft-deleted as well.
+  ///
+  /// Rows that simply reference the person (child links where they are the
+  /// child, events, media, notes, to-dos, surname events) are left untouched and
+  /// become reachable again if the delete is reverted.
   Future<void> deletePerson(String personId) async {
     final person = await _personDao.getPersonById(personId);
     if (person == null) {
       throw ArgumentError('Person not found: $personId');
     }
+    // Checked before the already-deleted early return: a merged person is
+    // flagged as deleted, so the order matters.
+    if (person.mergedIntoId != null) {
+      throw StateError(
+        'Cannot delete $personId: they were merged into '
+        '${person.mergedIntoId}. Delete the survivor instead.',
+      );
+    }
     if (person.isDeleted) return;
 
     final now = DateTime.now();
     await _database.transaction(() async {
-      final childLinks = await (_database.select(_database.familyChildrenV2)
-            ..where(
-              (t) =>
-                  t.childId.equals(personId) & t.isDeleted.equals(false),
-            ))
-          .get();
-      for (final link in childLinks) {
-        await _personDao.markFamilyChildDeleted(link.id, now);
-      }
-
       for (final family in await _personDao.getFamiliesForPerson(personId)) {
-        final partnerId =
-            family.husbandId == personId ? family.wifeId : family.husbandId;
-        if (partnerId != null) continue; // shared family survives
+        final isHusband = family.husbandId == personId;
+        final remainingPartnerId = isHusband ? family.wifeId : family.husbandId;
 
-        for (final link in await _personDao.getChildrenForFamily(family.id)) {
-          await _personDao.markFamilyChildDeleted(link.id, now);
+        await _personDao.updateFamilyFields(
+          family.id,
+          isHusband
+              ? FamiliesV2Companion(
+                  husbandId: const Value(null),
+                  updatedAt: Value(now),
+                )
+              : FamiliesV2Companion(
+                  wifeId: const Value(null),
+                  updatedAt: Value(now),
+                ),
+        );
+
+        if (remainingPartnerId == null) {
+          // The family existed only for this person.
+          for (final link in await _personDao.getChildrenForFamily(family.id)) {
+            await _personDao.markFamilyChildDeleted(link.id, now);
+          }
+          await _personDao.markFamilyDeleted(family.id, now);
         }
-        await _personDao.markFamilyDeleted(family.id, now);
       }
 
       await _personDao.markPersonDeleted(personId, now);
     });
   }
 
-  /// Reverts a soft delete of the person row itself.
+  /// Reverts a soft delete of the person row.
   ///
-  /// Family links that [deletePerson] removed are not restored here: without an
-  /// audit trail there is no way to tell a link that was deleted by the cascade
-  /// from one the user removed deliberately. Restoring links is a Phase 5
-  /// concern (restore/purge semantics).
+  /// Only the person is restored. Partner slots that [deletePerson] cleared are
+  /// not rebuilt, because nothing records whether a membership was removed by a
+  /// delete or deliberately, and the same is true of a family that was retired
+  /// with its child links. A merged person cannot be restored at all: that would
+  /// need an un-merge, which has its own integrity rules.
   Future<void> restorePerson(String personId) async {
     final person = await _personDao.getPersonById(personId);
     if (person == null) {
       throw ArgumentError('Person not found: $personId');
     }
+    if (person.mergedIntoId != null) {
+      throw StateError(
+        'Cannot restore $personId: they were merged into '
+        '${person.mergedIntoId} and un-merging is not supported.',
+      );
+    }
+    if (!person.isDeleted) return;
+
     await _personDao.restorePerson(personId, DateTime.now());
   }
 

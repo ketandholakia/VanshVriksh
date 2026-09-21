@@ -238,18 +238,35 @@ class RelationshipRepository {
   }
 
   /// Streams the partnership rows of [treeId] (one per `families_v2` row).
+  ///
+  /// Only partnerships of live people are exposed: a family whose partners are
+  /// all deleted belongs to nobody left in the tree.
   Stream<List<Partnership>> watchPartnerships(String treeId) {
     final familiesQuery = (_database.select(_database.familiesV2)
           ..where(
             (t) => t.treeId.equals(treeId) & t.isDeleted.equals(false),
           ));
-    return familiesQuery.watch().map(_toPartnerships);
+    final peopleQuery = (_database.select(_database.genealogyPersons)
+          ..where(
+            (t) => t.treeId.equals(treeId) & t.isDeleted.equals(false),
+          ));
+
+    return Rx.combineLatest2<
+        List<FamiliesV2Data>,
+        List<GenealogyPerson>,
+        List<Partnership>>(
+      familiesQuery.watch(),
+      peopleQuery.watch(),
+      (families, people) =>
+          _toPartnerships(families, {for (final p in people) p.id}),
+    );
   }
 
   /// Streams the parent→child edges of [treeId].
   ///
   /// One edge per recorded parent, so a child with two parents yields two edges
-  /// that share a [ParentChildRelationship.linkId].
+  /// that share a [ParentChildRelationship.linkId]. Edges touching a deleted
+  /// person are omitted.
   Stream<List<ParentChildRelationship>> watchParentChildRelationships(
     String treeId,
   ) {
@@ -259,15 +276,24 @@ class RelationshipRepository {
           ));
     final linksQuery = (_database.select(_database.familyChildrenV2)
           ..where((t) => t.isDeleted.equals(false)));
+    final peopleQuery = (_database.select(_database.genealogyPersons)
+          ..where(
+            (t) => t.treeId.equals(treeId) & t.isDeleted.equals(false),
+          ));
 
-    return Rx.combineLatest2<
+    return Rx.combineLatest3<
         List<FamiliesV2Data>,
         List<FamilyChildrenV2Data>,
-        ({List<FamiliesV2Data> families, List<FamilyChildrenV2Data> links})>(
+        List<GenealogyPerson>,
+        List<ParentChildRelationship>>(
       familiesQuery.watch(),
       linksQuery.watch(),
-      (families, links) => (families: families, links: links),
-    ).map(_toParentChildRelationships);
+      peopleQuery.watch(),
+      (families, links, people) => _toParentChildRelationships(
+        (families: families, links: links),
+        {for (final p in people) p.id},
+      ),
+    );
   }
 
   Future<List<Partnership>> getPartnerships(String treeId) async {
@@ -276,7 +302,8 @@ class RelationshipRepository {
             (t) => t.treeId.equals(treeId) & t.isDeleted.equals(false),
           ))
         .get();
-    return _toPartnerships(families);
+    if (families.isEmpty) return const [];
+    return _toPartnerships(families, await _livePersonIdsInTree(treeId));
   }
 
   Future<List<ParentChildRelationship>> getParentChildRelationships(
@@ -296,40 +323,72 @@ class RelationshipRepository {
                 t.isDeleted.equals(false),
           ))
         .get();
-    return _toParentChildRelationships((families: families, links: links));
+    return _toParentChildRelationships(
+      (families: families, links: links),
+      await _livePersonIdsInTree(treeId),
+    );
   }
 
-  static List<Partnership> _toPartnerships(List<FamiliesV2Data> families) {
-    return [
-      for (final family in families)
+  Future<Set<String>> _livePersonIdsInTree(String treeId) async {
+    final people = await (_database.select(_database.genealogyPersons)
+          ..where(
+            (t) => t.treeId.equals(treeId) & t.isDeleted.equals(false),
+          ))
+        .get();
+    return {for (final person in people) person.id};
+  }
+
+  static List<Partnership> _toPartnerships(
+    List<FamiliesV2Data> families,
+    Set<String> livePersonIds,
+  ) {
+    final partnerships = <Partnership>[];
+    for (final family in families) {
+      final husbandId = family.husbandId;
+      final wifeId = family.wifeId;
+      final liveHusband =
+          husbandId != null && livePersonIds.contains(husbandId)
+              ? husbandId
+              : null;
+      final liveWife =
+          wifeId != null && livePersonIds.contains(wifeId) ? wifeId : null;
+      // A family with no live partner belongs to nobody left in the tree.
+      if (liveHusband == null && liveWife == null) continue;
+
+      partnerships.add(
         Partnership(
           familyId: family.id,
           treeId: family.treeId,
-          husbandId: family.husbandId,
-          wifeId: family.wifeId,
+          husbandId: liveHusband,
+          wifeId: liveWife,
           marriageDate: family.marriageDate,
           isPrimary: family.isPrimaryMarriage,
         ),
-    ];
+      );
+    }
+    return partnerships;
   }
 
-  /// Expands child links into one edge per recorded parent.
+  /// Expands child links into one edge per recorded parent, skipping anyone who
+  /// is no longer in the tree.
   static List<ParentChildRelationship> _toParentChildRelationships(
     ({List<FamiliesV2Data> families, List<FamilyChildrenV2Data> links})
         snapshot,
+    Set<String> livePersonIds,
   ) {
     final parentIdsByFamily = <String, List<String>>{};
     for (final family in snapshot.families) {
       parentIdsByFamily[family.id] = [
         if (family.husbandId != null) family.husbandId!,
         if (family.wifeId != null) family.wifeId!,
-      ];
+      ].where(livePersonIds.contains).toList();
     }
 
     final edges = <ParentChildRelationship>[];
     for (final link in snapshot.links) {
       final parentIds = parentIdsByFamily[link.familyId];
       if (parentIds == null) continue; // family belongs to another tree
+      if (!livePersonIds.contains(link.childId)) continue;
       for (final parentId in parentIds) {
         edges.add(
           ParentChildRelationship(
