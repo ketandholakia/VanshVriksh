@@ -18,8 +18,10 @@ import '../../core/constants/app_constants.dart';
 import '../../core/extensions/genealogy_person_extensions.dart';
 import '../settings/display_formatters.dart';
 import '../../data/database/app_database.dart';
+import '../../data/models/person_save_data.dart';
 import '../../data/providers/image_storage_provider.dart';
 import '../../data/providers/genealogy_repository_provider.dart';
+import '../../data/providers/person_save_service_provider.dart';
 import '../../data/providers/relationship_repository_provider.dart';
 import 'people_providers.dart';
 import '../settings/app_settings_provider.dart';
@@ -615,61 +617,78 @@ class _PersonFormPageState extends ConsumerState<PersonFormPage> {
           throw Exception('Existing person data not loaded.');
         }
 
+        // Filesystem work stays outside any database transaction: the old
+        // photo is only deleted after the database successfully points at the
+        // new one (or at NULL), so a failed save never loses a valid photo.
         String? photoPath = existingPerson.profilePhotoPath;
-        if (_pickedPhotoFile != null) {
-          photoPath = await imageStorage.saveProfilePhoto(
-            sourceFile: _pickedPhotoFile!,
-            personId: existingPerson.id,
+        String? newlySavedPhotoPath;
+        try {
+          if (_pickedPhotoFile != null) {
+            newlySavedPhotoPath = await imageStorage.saveProfilePhoto(
+              sourceFile: _pickedPhotoFile!,
+              personId: existingPerson.id,
+            );
+            photoPath = newlySavedPhotoPath;
+          } else if (_profilePhotoPath == null &&
+              existingPerson.profilePhotoPath != null) {
+            // Photo removed by the user: clear the reference first, delete
+            // the file only after the database update succeeds.
+            photoPath = null;
+          }
+
+          await repository.updatePerson(
+            GenealogyPersonsCompanion(
+              id: Value(existingPerson.id),
+              firstName: Value(
+                _firstNameController.text.trim().isEmpty
+                    ? 'Unknown'
+                    : _firstNameController.text.trim(),
+              ),
+              middleName: Value(_emptyToNull(_middleNameController.text)),
+              // The form has one surname field; it feeds both the plain surname
+              // and the birth surname.
+              lastName: Value(_emptyToNull(_birthSurnameController.text)),
+              birthSurname: Value(_emptyToNull(_birthSurnameController.text)),
+              marriedSurname: Value(
+                _emptyToNull(_marriedSurnameController.text),
+              ),
+              prefix: Value(_emptyToNull(_prefixController.text)),
+              suffix: Value(_emptyToNull(_suffixController.text)),
+              nickname: Value(_emptyToNull(_nicknameController.text)),
+              gender: Value(_gender),
+              birthDate: Value(_birthDate),
+              deathDate: Value(_deathDate),
+              // Derived from the death date the user just entered, so it is
+              // written explicitly rather than defaulting to "alive".
+              isLiving: Value(_deathDate == null),
+              birthPlace: Value(_emptyToNull(_birthPlaceController.text)),
+              currentPlace: Value(_emptyToNull(_currentPlaceController.text)),
+              biography: Value(_emptyToNull(_bioController.text)),
+              notes: Value(_emptyToNull(_notesController.text)),
+              isPrivate: Value(_isPrivate),
+              profilePhotoPath: Value(photoPath),
+            ),
           );
+
           if (existingPerson.profilePhotoPath != null &&
               existingPerson.profilePhotoPath != photoPath) {
             await imageStorage.deleteFileIfExists(
               existingPerson.profilePhotoPath!,
             );
           }
-        } else if (_profilePhotoPath == null &&
-            existingPerson.profilePhotoPath != null) {
-          // Photo removed by the user.
-          await imageStorage.deleteFileIfExists(
-            existingPerson.profilePhotoPath!,
-          );
-          photoPath = null;
+        } catch (e) {
+          // The database still points at the old photo (or nothing changed),
+          // so remove only the replacement file created by this attempt.
+          if (newlySavedPhotoPath != null) {
+            await imageStorage.deleteFileIfExists(newlySavedPhotoPath);
+          }
+          rethrow;
         }
-
-        await repository.updatePerson(
-          GenealogyPersonsCompanion(
-            id: Value(existingPerson.id),
-            firstName: Value(
-              _firstNameController.text.trim().isEmpty
-                  ? 'Unknown'
-                  : _firstNameController.text.trim(),
-            ),
-            middleName: Value(_emptyToNull(_middleNameController.text)),
-            // The form has one surname field; it feeds both the plain surname
-            // and the birth surname.
-            lastName: Value(_emptyToNull(_birthSurnameController.text)),
-            birthSurname: Value(_emptyToNull(_birthSurnameController.text)),
-            marriedSurname: Value(_emptyToNull(_marriedSurnameController.text)),
-            prefix: Value(_emptyToNull(_prefixController.text)),
-            suffix: Value(_emptyToNull(_suffixController.text)),
-            nickname: Value(_emptyToNull(_nicknameController.text)),
-            gender: Value(_gender),
-            birthDate: Value(_birthDate),
-            deathDate: Value(_deathDate),
-            // Derived from the death date the user just entered, so it is
-            // written explicitly rather than defaulting to "alive".
-            isLiving: Value(_deathDate == null),
-            birthPlace: Value(_emptyToNull(_birthPlaceController.text)),
-            currentPlace: Value(_emptyToNull(_currentPlaceController.text)),
-            biography: Value(_emptyToNull(_bioController.text)),
-            notes: Value(_emptyToNull(_notesController.text)),
-            isPrivate: Value(_isPrivate),
-            profilePhotoPath: Value(photoPath),
-          ),
-        );
       } else {
-        final personId = await repository.addPerson(
-          treeId: AppConstants.defaultTreeId,
+        // One logical user operation -> one application operation with one
+        // database transaction (person + relationships commit or roll back
+        // together). The UI does not orchestrate the write sequence.
+        final personData = PersonSaveData(
           firstName: _firstNameController.text.trim().isEmpty
               ? 'Unknown'
               : _firstNameController.text.trim(),
@@ -691,110 +710,104 @@ class _PersonFormPageState extends ConsumerState<PersonFormPage> {
           isLiving: _deathDate == null,
         );
 
-        if (_pickedPhotoFile != null) {
-          final savedPhotoPath = await imageStorage.saveProfilePhoto(
-            sourceFile: _pickedPhotoFile!,
-            personId: personId,
-          );
+        final saveService = ref.read(personSaveServiceProvider);
+        final linkedPersonId = widget.linkPersonId;
+        final siblingOfPersonId = widget.siblingOfPersonId;
+        final relationKind = widget.relationKind;
 
-          final createdPerson = await repository.getPersonById(personId);
-          if (createdPerson != null) {
+        late final String personId;
+        if (siblingOfPersonId != null) {
+          final parentIds = <String>[];
+          if (_selectedSiblingParentId != null) {
+            parentIds.add(_selectedSiblingParentId!);
+          } else {
+            parentIds.addAll(
+              (await ref
+                      .read(relationshipRepositoryProvider)
+                      .getParents(siblingOfPersonId))
+                  .map((parent) => parent.id),
+            );
+          }
+          // Empty parentIds fails inside the service without creating anyone.
+          personId = await saveService.createPersonAsSibling(
+            treeId: AppConstants.defaultTreeId,
+            person: personData,
+            parentIds: parentIds,
+          );
+        } else if (linkedPersonId != null && relationKind == 'parent') {
+          personId = await saveService.createPersonAsParent(
+            treeId: AppConstants.defaultTreeId,
+            person: personData,
+            childId: linkedPersonId,
+          );
+        } else if (linkedPersonId != null && relationKind == 'child') {
+          personId = await saveService.createPersonAsChild(
+            treeId: AppConstants.defaultTreeId,
+            person: personData,
+            parentId: linkedPersonId,
+            coParentIds: _selectedSpouseId != null
+                ? [_selectedSpouseId!]
+                : const [],
+            includeParentSpouses: _selectedSpouseId == null,
+          );
+        } else if (linkedPersonId != null && relationKind == 'spouse') {
+          personId = await saveService.createPersonAsSpouse(
+            treeId: AppConstants.defaultTreeId,
+            person: personData,
+            partnerId: linkedPersonId,
+          );
+        } else {
+          personId = await repository.addPerson(
+            treeId: AppConstants.defaultTreeId,
+            firstName: personData.firstName,
+            middleName: personData.middleName,
+            lastName: personData.lastName,
+            birthSurname: personData.birthSurname,
+            marriedSurname: personData.marriedSurname,
+            prefix: personData.prefix,
+            suffix: personData.suffix,
+            nickname: personData.nickname,
+            gender: personData.gender,
+            birthDate: personData.birthDate,
+            deathDate: personData.deathDate,
+            birthPlace: personData.birthPlace,
+            currentPlace: personData.currentPlace,
+            biography: personData.biography,
+            notes: personData.notes,
+            isPrivate: personData.isPrivate,
+            isLiving: personData.isLiving,
+          );
+        }
+
+        // Photo attach happens after the atomic save: a photo failure must
+        // not roll back (or orphan) an already-committed person.
+        if (_pickedPhotoFile != null) {
+          String? savedPhotoPath;
+          try {
+            savedPhotoPath = await imageStorage.saveProfilePhoto(
+              sourceFile: _pickedPhotoFile!,
+              personId: personId,
+            );
             // Attaching a photo touches one column: send only that column
             // instead of echoing the whole row back to the database.
             await repository.updatePerson(
               GenealogyPersonsCompanion(
-                id: Value(createdPerson.id),
+                id: Value(personId),
                 profilePhotoPath: Value(savedPhotoPath),
               ),
             );
-          }
-        }
-
-        final linkedPersonId = widget.linkPersonId;
-        final siblingOfPersonId = widget.siblingOfPersonId;
-        final relationKind = widget.relationKind;
-        if (linkedPersonId != null && relationKind != null) {
-          final relationshipRepository = ref.read(
-            relationshipRepositoryProvider,
-          );
-
-          switch (relationKind) {
-            case 'parent':
-              await relationshipRepository.addParentChildRelationship(
-                treeId: AppConstants.defaultTreeId,
-                parentId: personId,
-                childId: linkedPersonId,
-              );
-              break;
-            case 'child':
-              await relationshipRepository.addParentChildRelationship(
-                treeId: AppConstants.defaultTreeId,
-                parentId: linkedPersonId,
-                childId: personId,
-              );
-
-              final spouses = <GenealogyPerson>[];
-              if (_selectedSpouseId != null) {
-                final GenealogyPerson? spouse = await ref
-                    .read(genealogyRepositoryProvider)
-                    .getPersonById(_selectedSpouseId!);
-                if (spouse != null) spouses.add(spouse);
-              } else {
-                spouses.addAll(
-                  await relationshipRepository.getSpouses(linkedPersonId),
-                );
-              }
-
-              for (final spouse in spouses) {
-                try {
-                  await relationshipRepository.addParentChildRelationship(
-                    treeId: AppConstants.defaultTreeId,
-                    parentId: spouse.id,
-                    childId: personId,
-                  );
-                } catch (_) {
-                  // Ignore duplicates when the spouse-child link already exists.
-                }
-              }
-              break;
-            case 'spouse':
-              await relationshipRepository.addSpouseRelationship(
-                treeId: AppConstants.defaultTreeId,
-                personAId: linkedPersonId,
-                personBId: personId,
-              );
-              break;
-          }
-        }
-
-        if (siblingOfPersonId != null) {
-          final relationshipRepository = ref.read(
-            relationshipRepositoryProvider,
-          );
-          final parents = <GenealogyPerson>[];
-          if (_selectedSiblingParentId != null) {
-            final GenealogyPerson? selectedParent = await ref
-                .read(genealogyRepositoryProvider)
-                .getPersonById(_selectedSiblingParentId!);
-            if (selectedParent != null) {
-              parents.add(selectedParent);
+          } catch (_) {
+            if (savedPhotoPath != null) {
+              await imageStorage.deleteFileIfExists(savedPhotoPath);
             }
-          } else {
-            parents.addAll(
-              await relationshipRepository.getParents(siblingOfPersonId),
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Person saved, but the photo could not be attached.',
+                ),
+              ),
             );
-          }
-
-          for (final parent in parents) {
-            try {
-              await relationshipRepository.addParentChildRelationship(
-                treeId: AppConstants.defaultTreeId,
-                parentId: parent.id,
-                childId: personId,
-              );
-            } catch (_) {
-              // Ignore duplicate parent-child links when one already exists.
-            }
           }
         }
       }

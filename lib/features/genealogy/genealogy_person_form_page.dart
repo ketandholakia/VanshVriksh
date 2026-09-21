@@ -7,7 +7,9 @@ import 'package:drift/drift.dart' show Value;
 
 import '../../core/constants/app_constants.dart';
 import '../../data/database/app_database.dart';
+import '../../data/models/person_save_data.dart';
 import '../../data/providers/genealogy_repository_provider.dart';
+import '../../data/providers/person_save_service_provider.dart';
 
 class GenealogyPersonFormPage extends ConsumerStatefulWidget {
   const GenealogyPersonFormPage({
@@ -110,9 +112,48 @@ class _GenealogyPersonFormPageState
         ? null
         : _fullNameController.text.trim();
 
-    final String savedId;
-    if (_loadedPersonId == null) {
-      savedId = await repo.addPerson(
+    if (_loadedPersonId == null &&
+        widget.linkPersonId != null &&
+        widget.relationKind == 'spouse') {
+      // One atomic application operation instead of the previous raw
+      // createFamily with ad-hoc partner slotting.
+      await ref
+          .read(personSaveServiceProvider)
+          .createPersonAsSpouse(
+            treeId: AppConstants.defaultTreeId,
+            person: PersonSaveData(
+              firstName: firstName,
+              middleName: middleName,
+              lastName: lastName,
+              birthSurname: birthSurname,
+              marriedSurname: marriedSurname,
+              gender: _gender,
+              customDisplayName: customDisplayName,
+            ),
+            partnerId: widget.linkPersonId!,
+          );
+    } else if (_loadedPersonId == null &&
+        widget.linkPersonId != null &&
+        widget.relationKind == 'child') {
+      // Canonical relationship rules instead of the previous
+      // families.first / single-parent createFamily path.
+      await ref
+          .read(personSaveServiceProvider)
+          .createPersonAsChild(
+            treeId: AppConstants.defaultTreeId,
+            person: PersonSaveData(
+              firstName: firstName,
+              middleName: middleName,
+              lastName: lastName,
+              birthSurname: birthSurname,
+              marriedSurname: marriedSurname,
+              gender: _gender,
+              customDisplayName: customDisplayName,
+            ),
+            parentId: widget.linkPersonId!,
+          );
+    } else if (_loadedPersonId == null) {
+      await repo.addPerson(
         treeId: AppConstants.defaultTreeId,
         firstName: firstName,
         middleName: middleName,
@@ -135,50 +176,6 @@ class _GenealogyPersonFormPageState
           customDisplayName: Value(customDisplayName),
         ),
       );
-      savedId = _loadedPersonId!;
-    }
-
-    if (widget.linkPersonId != null && _loadedPersonId == null) {
-      final current = await repo.getPersonById(widget.linkPersonId!);
-      if (current != null) {
-        if (widget.relationKind == 'spouse') {
-          final spouse = await repo.getPersonById(savedId);
-          if (spouse != null) {
-            await repo.createFamily(
-              treeId: AppConstants.defaultTreeId,
-              husbandId: current.gender == 'M'
-                  ? current.id
-                  : spouse.gender == 'M'
-                  ? spouse.id
-                  : current.id,
-              wifeId: current.gender == 'F'
-                  ? current.id
-                  : spouse.gender == 'F'
-                  ? spouse.id
-                  : spouse.id,
-              isPrimaryMarriage: true,
-            );
-          }
-        } else if (widget.relationKind == 'child') {
-          final families = await repo.getFamiliesForPerson(current.id);
-          final familyId = families.isNotEmpty
-              ? families.first.id
-              : await repo.createFamily(
-                  treeId: AppConstants.defaultTreeId,
-                  husbandId: current.gender == 'M' ? current.id : null,
-                  wifeId: current.gender == 'F' ? current.id : null,
-                  isPrimaryMarriage: true,
-                );
-
-          await repo.addChildToFamily(
-            familyId: familyId,
-            childId: savedId,
-            relationshipType: 'biological',
-            paternalRelationship: current.gender == 'M' ? 'biological' : null,
-            maternalRelationship: current.gender == 'F' ? 'biological' : null,
-          );
-        }
-      }
     }
 
     if (!mounted) return;

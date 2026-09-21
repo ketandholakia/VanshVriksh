@@ -42,61 +42,84 @@ class RelationshipRepository {
     String? familyId,
     String relationshipType = 'biological',
   }) async {
+    await _database.transaction(() async {
+      await addParentChildRelationshipInTransaction(
+        treeId: treeId,
+        parentId: parentId,
+        childId: childId,
+        familyId: familyId,
+        relationshipType: relationshipType,
+      );
+    });
+  }
+
+  /// Transaction-aware primitive behind [addParentChildRelationship].
+  ///
+  /// Performs exactly the same validation and writes, but joins the caller's
+  /// transaction instead of starting its own. Composite application operations
+  /// (see `PersonSaveService`) call this inside their single outer transaction
+  /// so the whole logical operation commits or rolls back together. It must
+  /// NOT be called outside a transaction by UI code; use the public method for
+  /// standalone operations.
+  Future<void> addParentChildRelationshipInTransaction({
+    required String treeId,
+    required String parentId,
+    required String childId,
+    String? familyId,
+    String relationshipType = 'biological',
+  }) async {
     if (parentId == childId) {
       throw ArgumentError('A person cannot be their own parent.');
     }
 
-    await _database.transaction(() async {
-      final parent = await _personDao.getPersonById(parentId);
-      if (parent == null || parent.isDeleted) {
-        throw ArgumentError('Parent person not found: $parentId');
-      }
-      final child = await _personDao.getPersonById(childId);
-      if (child == null || child.isDeleted) {
-        throw ArgumentError('Child person not found: $childId');
-      }
+    final parent = await _personDao.getPersonById(parentId);
+    if (parent == null || parent.isDeleted) {
+      throw ArgumentError('Parent person not found: $parentId');
+    }
+    final child = await _personDao.getPersonById(childId);
+    if (child == null || child.isDeleted) {
+      throw ArgumentError('Child person not found: $childId');
+    }
 
-      final targetFamilyId =
-          familyId ?? await _familyForNewChild(treeId, parent);
-      final targetFamily = await _personDao.getFamilyById(targetFamilyId);
-      if (targetFamily == null || targetFamily.isDeleted) {
-        throw ArgumentError('Family not found: $targetFamilyId');
-      }
-      if (targetFamily.treeId != treeId) {
-        throw ArgumentError(
-          'Family $targetFamilyId belongs to tree ${targetFamily.treeId}, '
-          'not to $treeId.',
-        );
-      }
-
-      final existing = await _personDao.getFamilyChildLink(
-        targetFamilyId,
-        childId,
+    final targetFamilyId = familyId ?? await _familyForNewChild(treeId, parent);
+    final targetFamily = await _personDao.getFamilyById(targetFamilyId);
+    if (targetFamily == null || targetFamily.isDeleted) {
+      throw ArgumentError('Family not found: $targetFamilyId');
+    }
+    if (targetFamily.treeId != treeId) {
+      throw ArgumentError(
+        'Family $targetFamilyId belongs to tree ${targetFamily.treeId}, '
+        'not to $treeId.',
       );
-      if (existing != null) {
-        if (existing.isDeleted) {
-          await _personDao.restoreFamilyChild(existing.id, DateTime.now());
-        }
-        return;
-      }
+    }
 
-      await _assertParentNotAlreadyLinked(
+    final existing = await _personDao.getFamilyChildLink(
+      targetFamilyId,
+      childId,
+    );
+    if (existing != null) {
+      if (existing.isDeleted) {
+        await _personDao.restoreFamilyChild(existing.id, DateTime.now());
+      }
+      return;
+    }
+
+    await _assertParentNotAlreadyLinked(
+      childId: childId,
+      targetFamily: targetFamily,
+    );
+
+    final now = DateTime.now();
+    await _personDao.createFamilyChild(
+      FamilyChildrenV2Companion.insert(
+        id: IdGenerator.newId(),
+        familyId: targetFamilyId,
         childId: childId,
-        targetFamily: targetFamily,
-      );
-
-      final now = DateTime.now();
-      await _personDao.createFamilyChild(
-        FamilyChildrenV2Companion.insert(
-          id: IdGenerator.newId(),
-          familyId: targetFamilyId,
-          childId: childId,
-          relationshipType: Value(relationshipType),
-          createdAt: Value(now),
-          updatedAt: Value(now),
-        ),
-      );
-    });
+        relationshipType: Value(relationshipType),
+        createdAt: Value(now),
+        updatedAt: Value(now),
+      ),
+    );
   }
 
   /// Refuses a parentage that already exists through a different family, so the
@@ -174,46 +197,64 @@ class RelationshipRepository {
     required String personBId,
     bool isPrimary = false,
   }) async {
+    await _database.transaction(() async {
+      await addSpouseRelationshipInTransaction(
+        treeId: treeId,
+        personAId: personAId,
+        personBId: personBId,
+        isPrimary: isPrimary,
+      );
+    });
+  }
+
+  /// Transaction-aware primitive behind [addSpouseRelationship].
+  ///
+  /// Same contract as [addParentChildRelationshipInTransaction]: joins the
+  /// caller's transaction instead of starting its own.
+  Future<void> addSpouseRelationshipInTransaction({
+    required String treeId,
+    required String personAId,
+    required String personBId,
+    bool isPrimary = false,
+  }) async {
     if (personAId == personBId) {
       throw ArgumentError('A person cannot be their own spouse.');
     }
 
-    await _database.transaction(() async {
-      final a = await _personDao.getPersonById(personAId);
-      final b = await _personDao.getPersonById(personBId);
-      if (a == null || a.isDeleted || b == null || b.isDeleted) {
-        throw ArgumentError(
-          'Both people must exist to create a spouse relationship.',
-        );
-      }
-      if (a.treeId != treeId || b.treeId != treeId) {
-        throw ArgumentError('Both people must belong to tree $treeId.');
-      }
-
-      if (await _familyForPair(personAId, personBId) != null) {
-        return; // already partners
-      }
-
-      final slots = canonicalPartnerSlots(
-        firstId: a.id,
-        firstGender: a.gender,
-        secondId: b.id,
-        secondGender: b.gender,
+    final a = await _personDao.getPersonById(personAId);
+    final b = await _personDao.getPersonById(personBId);
+    if (a == null || a.isDeleted || b == null || b.isDeleted) {
+      throw ArgumentError(
+        'Both people must exist to create a spouse relationship.',
       );
+    }
+    if (a.treeId != treeId || b.treeId != treeId) {
+      throw ArgumentError('Both people must belong to tree $treeId.');
+    }
 
-      final now = DateTime.now();
-      await _personDao.createFamily(
-        FamiliesV2Companion.insert(
-          id: IdGenerator.newId(),
-          treeId: treeId,
-          husbandId: Value(slots.husbandId),
-          wifeId: Value(slots.wifeId),
-          isPrimaryMarriage: Value(isPrimary),
-          createdAt: Value(now),
-          updatedAt: Value(now),
-        ),
-      );
-    });
+    if (await _familyForPair(personAId, personBId) != null) {
+      return; // already partners
+    }
+
+    final slots = canonicalPartnerSlots(
+      firstId: a.id,
+      firstGender: a.gender,
+      secondId: b.id,
+      secondGender: b.gender,
+    );
+
+    final now = DateTime.now();
+    await _personDao.createFamily(
+      FamiliesV2Companion.insert(
+        id: IdGenerator.newId(),
+        treeId: treeId,
+        husbandId: Value(slots.husbandId),
+        wifeId: Value(slots.wifeId),
+        isPrimaryMarriage: Value(isPrimary),
+        createdAt: Value(now),
+        updatedAt: Value(now),
+      ),
+    );
   }
 
   // The partner-slot rule lives in `lib/data/models/relationship_edges.dart`

@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../core/constants/app_constants.dart';
 import '../../data/database/app_database.dart';
 import '../../data/providers/genealogy_repository_provider.dart';
+import '../../data/providers/person_save_service_provider.dart';
+import '../../data/providers/relationship_repository_provider.dart';
 
 class GenealogyLinkFamilyPage extends ConsumerStatefulWidget {
   const GenealogyLinkFamilyPage({
@@ -83,37 +85,25 @@ class _GenealogyLinkFamilyPageState
     }
 
     if (widget.linkType == 'spouse') {
-      final spouse = _selected!;
-      final husbandId = current.gender == 'M'
-          ? current.id
-          : spouse.gender == 'M'
-          ? spouse.id
-          : current.id;
-      final wifeId = current.gender == 'F'
-          ? current.id
-          : spouse.gender == 'F'
-          ? spouse.id
-          : spouse.id;
-      await repo.createFamily(
-        treeId: AppConstants.defaultTreeId,
-        husbandId: husbandId,
-        wifeId: wifeId,
-        isPrimaryMarriage: true,
-        husbandTookWifeName: false,
-        wifeTookHusbandName: false,
-      );
+      // Canonical partnership rules (slot order, duplicate no-op) instead of
+      // the previous raw createFamily with ad-hoc gender slotting.
+      await ref
+          .read(relationshipRepositoryProvider)
+          .addSpouseRelationship(
+            treeId: AppConstants.defaultTreeId,
+            personAId: current.id,
+            personBId: _selected!.id,
+          );
     } else {
-      final familyId = await repo.createFamily(
-        treeId: AppConstants.defaultTreeId,
-        husbandId: current.gender == 'M' ? current.id : null,
-        wifeId: current.gender == 'F' ? current.id : null,
-        isPrimaryMarriage: true,
-      );
-      await repo.addChildToFamily(
-        familyId: familyId,
-        childId: _selected!.id,
-        relationshipType: 'biological',
-      );
+      // One atomic link operation instead of independent createFamily +
+      // addChildToFamily writes that could leave an empty solo family.
+      await ref
+          .read(personSaveServiceProvider)
+          .addExistingChildWithCoParents(
+            treeId: AppConstants.defaultTreeId,
+            parentId: current.id,
+            childId: _selected!.id,
+          );
     }
 
     if (!mounted) return;

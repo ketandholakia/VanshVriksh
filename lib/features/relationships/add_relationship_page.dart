@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../data/database/app_database.dart';
+import '../../data/providers/person_save_service_provider.dart';
 import '../../data/providers/relationship_repository_provider.dart';
 import '../people/people_providers.dart';
 import '../../core/extensions/genealogy_person_extensions.dart';
@@ -72,24 +73,17 @@ class _AddRelationshipPageState extends ConsumerState<AddRelationshipPage> {
           );
           break;
         case 'child':
-          await repository.addParentChildRelationship(
-            treeId: AppConstants.defaultTreeId,
-            parentId: currentPerson.id,
-            childId: relatedPersonId,
-          );
-
-          final spouses = await repository.getSpouses(currentPerson.id);
-          for (final spouse in spouses) {
-            try {
-              await repository.addParentChildRelationship(
+          // One logical operation: the first parent link and every co-parent
+          // link commit or roll back together, so a co-parent failure can
+          // never leave asymmetric partial parentage behind.
+          await ref
+              .read(personSaveServiceProvider)
+              .addExistingChildWithCoParents(
                 treeId: AppConstants.defaultTreeId,
-                parentId: spouse.id,
+                parentId: currentPerson.id,
                 childId: relatedPersonId,
+                includeParentSpouses: true,
               );
-            } catch (_) {
-              // Ignore duplicate links when the child is already attached.
-            }
-          }
           break;
         case 'spouse':
           await repository.addSpouseRelationship(

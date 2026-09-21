@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import '../../core/utils/id_generator.dart';
 import '../database/app_database.dart';
 import '../database/daos/genealogy_person_dao.dart';
+import '../models/person_save_data.dart';
 import '../models/relationship_edges.dart';
 import '../../features/duplicates/duplicate_detection_providers.dart';
 
@@ -28,6 +29,109 @@ class GenealogyRepository {
   GenealogyPersonDao get _personDao => _database.genealogyPersonDao;
 
   Future<String> addPerson({
+    required String treeId,
+    required String firstName,
+    String? middleName,
+    String? lastName,
+    String? birthSurname,
+    String? marriedSurname,
+    String? prefix,
+    String? suffix,
+    String? nickname,
+    required String gender,
+    DateTime? birthDate,
+    String? birthDateQualifier,
+    String? birthPlace,
+    double? birthPlaceLat,
+    double? birthPlaceLng,
+    String? currentPlace,
+    DateTime? deathDate,
+    String? deathDateQualifier,
+    String? deathPlace,
+    double? deathPlaceLat,
+    double? deathPlaceLng,
+    bool isLiving = true,
+    String? biography,
+    String? notes,
+    String? occupation,
+    String? religion,
+    String? ethnicity,
+    bool isPrivate = false,
+    int privacyLevel = 0,
+    String displayNameFormat = 'birth_married',
+    String? customDisplayName,
+    String? mergedIntoId,
+    String? profilePhotoPath,
+  }) {
+    return _insertPersonRecord(
+      treeId: treeId,
+      firstName: firstName,
+      middleName: middleName,
+      lastName: lastName,
+      birthSurname: birthSurname,
+      marriedSurname: marriedSurname,
+      prefix: prefix,
+      suffix: suffix,
+      nickname: nickname,
+      gender: gender,
+      birthDate: birthDate,
+      birthDateQualifier: birthDateQualifier,
+      birthPlace: birthPlace,
+      birthPlaceLat: birthPlaceLat,
+      birthPlaceLng: birthPlaceLng,
+      currentPlace: currentPlace,
+      deathDate: deathDate,
+      deathDateQualifier: deathDateQualifier,
+      deathPlace: deathPlace,
+      deathPlaceLat: deathPlaceLat,
+      deathPlaceLng: deathPlaceLng,
+      isLiving: isLiving,
+      biography: biography,
+      notes: notes,
+      occupation: occupation,
+      religion: religion,
+      ethnicity: ethnicity,
+      isPrivate: isPrivate,
+      privacyLevel: privacyLevel,
+      displayNameFormat: displayNameFormat,
+      customDisplayName: customDisplayName,
+      mergedIntoId: mergedIntoId,
+      profilePhotoPath: profilePhotoPath,
+    );
+  }
+
+  /// Inserts one person row from a form-level [PersonSaveData].
+  ///
+  /// A single statement with no transaction of its own, so it joins the
+  /// caller's transaction when `PersonSaveService` calls it inside an atomic
+  /// composite operation — and behaves as one atomic write when called alone.
+  Future<String> createPersonFromSave(PersonSaveData person, String treeId) {
+    return _insertPersonRecord(
+      treeId: treeId,
+      firstName: person.firstName,
+      middleName: person.middleName,
+      lastName: person.lastName,
+      birthSurname: person.birthSurname,
+      marriedSurname: person.marriedSurname,
+      prefix: person.prefix,
+      suffix: person.suffix,
+      nickname: person.nickname,
+      gender: person.gender,
+      birthDate: person.birthDate,
+      birthPlace: person.birthPlace,
+      currentPlace: person.currentPlace,
+      deathDate: person.deathDate,
+      isLiving: person.isLiving,
+      biography: person.biography,
+      notes: person.notes,
+      isPrivate: person.isPrivate,
+      customDisplayName: person.customDisplayName,
+    );
+  }
+
+  /// The single person-insert implementation both [addPerson] and
+  /// [createPersonFromSave] share, so the two paths cannot drift apart.
+  Future<String> _insertPersonRecord({
     required String treeId,
     required String firstName,
     String? middleName,
