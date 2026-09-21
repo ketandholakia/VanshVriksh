@@ -2,12 +2,12 @@ import 'dart:async';
 import 'package:drift/drift.dart';
 import 'package:rxdart/rxdart.dart';
 
-import '../../core/constants/relationship_types.dart';
 import '../../core/utils/id_generator.dart';
 import '../../features/people/person_relationship_models.dart';
 import '../database/app_database.dart';
 import '../database/daos/genealogy_person_dao.dart';
 import '../database/daos/relationship_dao.dart';
+import '../models/relationship_edges.dart';
 
 class RelationshipRepository {
   RelationshipRepository(this._database);
@@ -143,6 +143,7 @@ class RelationshipRepository {
       await _personDao.createFamily(
         FamiliesV2Companion.insert(
           id: IdGenerator.newId(),
+          treeId: treeId,
           husbandId: Value(husbandId),
           wifeId: Value(wifeId),
           isPrimaryMarriage: const Value(false),
@@ -213,6 +214,7 @@ class RelationshipRepository {
     await _personDao.createFamily(
       FamiliesV2Companion.insert(
         id: id,
+        treeId: treeId,
         husbandId: Value(isFemale ? null : parent.id),
         wifeId: Value(isFemale ? parent.id : null),
         isPrimaryMarriage: const Value(false),
@@ -229,128 +231,119 @@ class RelationshipRepository {
     return g == 'F' || g == 'FEMALE';
   }
 
-  // Instead of Stream<List<Relationship>>, we return a generic Stream that ticks when families change
-  Stream<void> watchRelationshipsForPerson(String personId) {
+  /// Ticks whenever the families of [personId] change. Typed as the rows it
+  /// actually carries, not as `void`.
+  Stream<List<FamiliesV2Data>> watchRelationshipsForPerson(String personId) {
     return _personDao.watchFamiliesForPerson(personId);
   }
 
-  /// Streams all spouse + parent-child relationships in a tree as legacy
-  /// [Relationship] objects, derived from the V2 families_v2/family_children_v2
-  /// tables (the legacy `relationships` table was dropped in schema v10).
-  Stream<List<Relationship>> watchRelationshipsByTree(String treeId) {
-    final peopleQuery = (_database.select(_database.genealogyPersons)
-          ..where((t) => t.treeId.equals(treeId) & t.isDeleted.equals(false)));
+  /// Streams the partnership rows of [treeId] (one per `families_v2` row).
+  Stream<List<Partnership>> watchPartnerships(String treeId) {
     final familiesQuery = (_database.select(_database.familiesV2)
-          ..where((t) => t.isDeleted.equals(false)));
+          ..where(
+            (t) => t.treeId.equals(treeId) & t.isDeleted.equals(false),
+          ));
+    return familiesQuery.watch().map(_toPartnerships);
+  }
+
+  /// Streams the parent→child edges of [treeId].
+  ///
+  /// One edge per recorded parent, so a child with two parents yields two edges
+  /// that share a [ParentChildRelationship.linkId].
+  Stream<List<ParentChildRelationship>> watchParentChildRelationships(
+    String treeId,
+  ) {
+    final familiesQuery = (_database.select(_database.familiesV2)
+          ..where(
+            (t) => t.treeId.equals(treeId) & t.isDeleted.equals(false),
+          ));
     final linksQuery = (_database.select(_database.familyChildrenV2)
           ..where((t) => t.isDeleted.equals(false)));
 
-    return Rx.combineLatest3<
-        List<GenealogyPerson>,
+    return Rx.combineLatest2<
         List<FamiliesV2Data>,
         List<FamilyChildrenV2Data>,
-        List<Relationship>>(
-      peopleQuery.watch(),
+        ({List<FamiliesV2Data> families, List<FamilyChildrenV2Data> links})>(
       familiesQuery.watch(),
       linksQuery.watch(),
-      (people, families, links) => _buildRelationships(
-        treeId,
-        _familiesInTree(people, families),
-        links,
-      ),
-    );
+      (families, links) => (families: families, links: links),
+    ).map(_toParentChildRelationships);
   }
 
-  Future<List<Relationship>> getRelationshipsByTree(String treeId) async {
-    final people = await _personDao.getPeopleByTree(treeId);
+  Future<List<Partnership>> getPartnerships(String treeId) async {
     final families = await (_database.select(_database.familiesV2)
-          ..where((t) => t.isDeleted.equals(false)))
+          ..where(
+            (t) => t.treeId.equals(treeId) & t.isDeleted.equals(false),
+          ))
         .get();
-    final links = await (_database.select(_database.familyChildrenV2)
-          ..where((t) => t.isDeleted.equals(false)))
-        .get();
-
-    return _buildRelationships(
-      treeId,
-      _familiesInTree(people, families),
-      links,
-    );
+    return _toPartnerships(families);
   }
 
-  Future<List<Relationship>> getRelationshipsForPerson(
-    String personId,
-  ) async {
-    final families = await _personDao.getFamiliesForPerson(personId);
-    final links = await (_database.select(_database.familyChildrenV2)
-          ..where((t) => t.isDeleted.equals(false)))
-        .get();
-
-    return _buildRelationships('', families, links);
-  }
-
-  List<FamiliesV2Data> _familiesInTree(
-    List<GenealogyPerson> people,
-    List<FamiliesV2Data> families,
-  ) {
-    final ids = {for (final person in people) person.id};
-    return families
-        .where(
-          (f) =>
-              (f.husbandId != null && ids.contains(f.husbandId)) ||
-              (f.wifeId != null && ids.contains(f.wifeId)),
-        )
-        .toList();
-  }
-
-  /// Flattens the V2 family model into legacy [Relationship] edges:
-  /// one `spouse` edge per couple and one `parent_child` edge per parent-child
-  /// link, so consumers (dashboard stats, integrity checker) can stay on the
-  /// legacy model without the dropped `relationships` table.
-  List<Relationship> _buildRelationships(
+  Future<List<ParentChildRelationship>> getParentChildRelationships(
     String treeId,
-    List<FamiliesV2Data> families,
-    List<FamilyChildrenV2Data> links,
+  ) async {
+    final families = await (_database.select(_database.familiesV2)
+          ..where(
+            (t) => t.treeId.equals(treeId) & t.isDeleted.equals(false),
+          ))
+        .get();
+    if (families.isEmpty) return const [];
+
+    final links = await (_database.select(_database.familyChildrenV2)
+          ..where(
+            (t) =>
+                t.familyId.isIn(families.map((f) => f.id).toList()) &
+                t.isDeleted.equals(false),
+          ))
+        .get();
+    return _toParentChildRelationships((families: families, links: links));
+  }
+
+  static List<Partnership> _toPartnerships(List<FamiliesV2Data> families) {
+    return [
+      for (final family in families)
+        Partnership(
+          familyId: family.id,
+          treeId: family.treeId,
+          husbandId: family.husbandId,
+          wifeId: family.wifeId,
+          marriageDate: family.marriageDate,
+          isPrimary: family.isPrimaryMarriage,
+        ),
+    ];
+  }
+
+  /// Expands child links into one edge per recorded parent.
+  static List<ParentChildRelationship> _toParentChildRelationships(
+    ({List<FamiliesV2Data> families, List<FamilyChildrenV2Data> links})
+        snapshot,
   ) {
-    final relationships = <Relationship>[];
-    final linksByFamily = <String, List<FamilyChildrenV2Data>>{};
-    for (final link in links) {
-      linksByFamily.putIfAbsent(link.familyId, () => []).add(link);
-    }
-
-    for (final family in families) {
-      if (family.husbandId != null && family.wifeId != null) {
-        relationships.add(
-          Relationship(
-            id: family.id,
-            treeId: treeId,
-            personId: family.husbandId!,
-            relatedPersonId: family.wifeId!,
-            relationshipType: 'spouse',
-            createdAt: family.createdAt,
-          ),
-        );
-      }
-
-      final parentIds = [
+    final parentIdsByFamily = <String, List<String>>{};
+    for (final family in snapshot.families) {
+      parentIdsByFamily[family.id] = [
         if (family.husbandId != null) family.husbandId!,
         if (family.wifeId != null) family.wifeId!,
       ];
-      for (final link in linksByFamily[family.id] ?? const <FamilyChildrenV2Data>[]) {
-        for (final parentId in parentIds) {
-          relationships.add(
-            Relationship(
-              id: link.id,
-              treeId: treeId,
-              personId: parentId,
-              relatedPersonId: link.childId,
-              relationshipType: 'parent_child',
-              createdAt: link.createdAt,
-            ),
-          );
-        }
+    }
+
+    final edges = <ParentChildRelationship>[];
+    for (final link in snapshot.links) {
+      final parentIds = parentIdsByFamily[link.familyId];
+      if (parentIds == null) continue; // family belongs to another tree
+      for (final parentId in parentIds) {
+        edges.add(
+          ParentChildRelationship(
+            linkId: link.id,
+            familyId: link.familyId,
+            parentId: parentId,
+            childId: link.childId,
+            relationshipType: link.relationshipType,
+            birthOrder: link.birthOrder,
+          ),
+        );
       }
     }
-    return relationships;
+    return edges;
   }
 
   Future<List<GenealogyPerson>> getParents(String childId) {

@@ -4,6 +4,7 @@ part of 'events_dao.dart';
 
 // ignore_for_file: type=lint
 mixin _$EventsDaoMixin on DatabaseAccessor<AppDatabase> {
+  $FamilyTreesTable get familyTrees => attachedDatabase.familyTrees;
   $GenealogyPersonsTable get genealogyPersons =>
       attachedDatabase.genealogyPersons;
   $EventsTable get events => attachedDatabase.events;
@@ -13,6 +14,8 @@ mixin _$EventsDaoMixin on DatabaseAccessor<AppDatabase> {
 class EventsDaoManager {
   final _$EventsDaoMixin _db;
   EventsDaoManager(this._db);
+  $$FamilyTreesTableTableManager get familyTrees =>
+      $$FamilyTreesTableTableManager(_db.attachedDatabase, _db.familyTrees);
   $$GenealogyPersonsTableTableManager get genealogyPersons =>
       $$GenealogyPersonsTableTableManager(
         _db.attachedDatabase,

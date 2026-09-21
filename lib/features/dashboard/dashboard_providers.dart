@@ -2,50 +2,66 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../data/database/app_database.dart';
+import '../../data/models/relationship_edges.dart';
 import '../../data/providers/relationship_repository_provider.dart';
 import '../people/people_providers.dart';
 import 'birthday_models.dart';
 import 'dashboard_models.dart';
 
-final relationshipsByTreeProvider = StreamProvider<List<Relationship>>((ref) {
+final partnershipsByTreeProvider = StreamProvider<List<Partnership>>((ref) {
   final repository = ref.watch(relationshipRepositoryProvider);
-  return repository.watchRelationshipsByTree(AppConstants.defaultTreeId);
+  return repository.watchPartnerships(AppConstants.defaultTreeId);
+});
+
+final parentChildRelationshipsByTreeProvider =
+    StreamProvider<List<ParentChildRelationship>>((ref) {
+  final repository = ref.watch(relationshipRepositoryProvider);
+  return repository.watchParentChildRelationships(AppConstants.defaultTreeId);
 });
 
 final dashboardStatsProvider = Provider<AsyncValue<DashboardStats>>((ref) {
   final peopleAsync = ref.watch(peopleListProvider);
-  final relationshipsAsync = ref.watch(relationshipsByTreeProvider);
+  final partnershipsAsync = ref.watch(partnershipsByTreeProvider);
+  final parentChildAsync = ref.watch(parentChildRelationshipsByTreeProvider);
 
   return peopleAsync.when(
     loading: () => const AsyncValue.loading(),
     error: (error, stackTrace) => AsyncValue.error(error, stackTrace),
     data: (people) {
-      return relationshipsAsync.when(
+      return partnershipsAsync.when(
         loading: () => const AsyncValue.loading(),
         error: (error, stackTrace) => AsyncValue.error(error, stackTrace),
-        data: (relationships) {
-          final membersWithPhotos = people.where((person) {
-            final path = person.profilePhotoPath;
-            return path != null && path.trim().isNotEmpty;
-          }).length;
+        data: (partnerships) {
+          return parentChildAsync.when(
+            loading: () => const AsyncValue.loading(),
+            error: (error, stackTrace) => AsyncValue.error(error, stackTrace),
+            data: (parentChildEdges) {
+              final membersWithPhotos = people.where((person) {
+                final path = person.profilePhotoPath;
+                return path != null && path.trim().isNotEmpty;
+              }).length;
 
-          final livingMembers = people
-              .where((person) => person.isLiving)
-              .length;
-          final deceasedMembers = people
-              .where((person) => !person.isLiving)
-              .length;
+              final livingMembers = people
+                  .where((person) => person.isLiving)
+                  .length;
+              final deceasedMembers = people
+                  .where((person) => !person.isLiving)
+                  .length;
 
-          return AsyncValue.data(
-            DashboardStats(
-              totalMembers: people.length,
-              totalRelationships: relationships.length,
-              membersWithPhotos: membersWithPhotos,
-              missingPhotos: people.length - membersWithPhotos,
-              livingMembers: livingMembers,
-              deceasedMembers: deceasedMembers,
-              upcomingBirthdays: _countUpcomingBirthdays(people),
-            ),
+              return AsyncValue.data(
+                DashboardStats(
+                  totalMembers: people.length,
+                  // Partnerships plus one edge per recorded parent.
+                  totalRelationships:
+                      partnerships.length + parentChildEdges.length,
+                  membersWithPhotos: membersWithPhotos,
+                  missingPhotos: people.length - membersWithPhotos,
+                  livingMembers: livingMembers,
+                  deceasedMembers: deceasedMembers,
+                  upcomingBirthdays: _countUpcomingBirthdays(people),
+                ),
+              );
+            },
           );
         },
       );

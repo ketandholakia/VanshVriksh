@@ -187,6 +187,14 @@ class FamilyTree extends DataClass implements Insertable<FamilyTree> {
   final String id;
   final String treeName;
   final String? description;
+
+  /// The person the tree is conceptually rooted at.
+  ///
+  /// Deliberately **not** a foreign key: `genealogy_persons.tree_id` already
+  /// references this table, and drift resolves that table-level cycle by
+  /// dropping one of the two constraints — which silently removed the mandatory
+  /// ownership key on people. Ownership is the constraint that matters, so this
+  /// optional pointer is validated in the repository/migration instead.
   final String? rootPersonId;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -799,6 +807,9 @@ class $GenealogyPersonsTable extends GenealogyPersons
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES family_trees (id) ON DELETE RESTRICT',
+    ),
   );
   static const VerificationMeta _uuidMeta = const VerificationMeta('uuid');
   @override
@@ -809,18 +820,6 @@ class $GenealogyPersonsTable extends GenealogyPersons
     type: DriftSqlType.string,
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
-  );
-  static const VerificationMeta _syncStatusMeta = const VerificationMeta(
-    'syncStatus',
-  );
-  @override
-  late final GeneratedColumn<String> syncStatus = GeneratedColumn<String>(
-    'sync_status',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-    defaultValue: const Constant('pending'),
   );
   static const VerificationMeta _isDeletedMeta = const VerificationMeta(
     'isDeleted',
@@ -861,29 +860,6 @@ class $GenealogyPersonsTable extends GenealogyPersons
     requiredDuringInsert: false,
     defaultValue: currentDateAndTime,
   );
-  static const VerificationMeta _lastSyncedAtMeta = const VerificationMeta(
-    'lastSyncedAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> lastSyncedAt = GeneratedColumn<DateTime>(
-    'last_synced_at',
-    aliasedName,
-    true,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _versionMeta = const VerificationMeta(
-    'version',
-  );
-  @override
-  late final GeneratedColumn<int> version = GeneratedColumn<int>(
-    'version',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(1),
-  );
   static const VerificationMeta _mergedIntoIdMeta = const VerificationMeta(
     'mergedIntoId',
   );
@@ -894,6 +870,9 @@ class $GenealogyPersonsTable extends GenealogyPersons
     true,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES genealogy_persons (id) ON DELETE SET NULL',
+    ),
   );
   @override
   List<GeneratedColumn> get $columns => [
@@ -931,12 +910,9 @@ class $GenealogyPersonsTable extends GenealogyPersons
     privacyLevel,
     treeId,
     uuid,
-    syncStatus,
     isDeleted,
     createdAt,
     updatedAt,
-    lastSyncedAt,
-    version,
     mergedIntoId,
   ];
   @override
@@ -1201,12 +1177,6 @@ class $GenealogyPersonsTable extends GenealogyPersons
     } else if (isInserting) {
       context.missing(_uuidMeta);
     }
-    if (data.containsKey('sync_status')) {
-      context.handle(
-        _syncStatusMeta,
-        syncStatus.isAcceptableOrUnknown(data['sync_status']!, _syncStatusMeta),
-      );
-    }
     if (data.containsKey('is_deleted')) {
       context.handle(
         _isDeletedMeta,
@@ -1223,21 +1193,6 @@ class $GenealogyPersonsTable extends GenealogyPersons
       context.handle(
         _updatedAtMeta,
         updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
-      );
-    }
-    if (data.containsKey('last_synced_at')) {
-      context.handle(
-        _lastSyncedAtMeta,
-        lastSyncedAt.isAcceptableOrUnknown(
-          data['last_synced_at']!,
-          _lastSyncedAtMeta,
-        ),
-      );
-    }
-    if (data.containsKey('version')) {
-      context.handle(
-        _versionMeta,
-        version.isAcceptableOrUnknown(data['version']!, _versionMeta),
       );
     }
     if (data.containsKey('merged_into_id')) {
@@ -1394,10 +1349,6 @@ class $GenealogyPersonsTable extends GenealogyPersons
         DriftSqlType.string,
         data['${effectivePrefix}uuid'],
       )!,
-      syncStatus: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}sync_status'],
-      )!,
       isDeleted: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_deleted'],
@@ -1409,14 +1360,6 @@ class $GenealogyPersonsTable extends GenealogyPersons
       updatedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
-      )!,
-      lastSyncedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}last_synced_at'],
-      ),
-      version: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}version'],
       )!,
       mergedIntoId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
@@ -1464,14 +1407,17 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
   final String? ethnicity;
   final bool isPrivate;
   final int privacyLevel;
+
+  /// Owning tree. Mandatory, integrity checked.
   final String treeId;
+
+  /// Stable external identity.
   final String uuid;
-  final String syncStatus;
   final bool isDeleted;
   final DateTime createdAt;
   final DateTime updatedAt;
-  final DateTime? lastSyncedAt;
-  final int version;
+
+  /// Set when this person was merged into another person.
   final String? mergedIntoId;
   const GenealogyPerson({
     required this.id,
@@ -1508,12 +1454,9 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
     required this.privacyLevel,
     required this.treeId,
     required this.uuid,
-    required this.syncStatus,
     required this.isDeleted,
     required this.createdAt,
     required this.updatedAt,
-    this.lastSyncedAt,
-    required this.version,
     this.mergedIntoId,
   });
   @override
@@ -1603,14 +1546,9 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
     map['privacy_level'] = Variable<int>(privacyLevel);
     map['tree_id'] = Variable<String>(treeId);
     map['uuid'] = Variable<String>(uuid);
-    map['sync_status'] = Variable<String>(syncStatus);
     map['is_deleted'] = Variable<bool>(isDeleted);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
-    if (!nullToAbsent || lastSyncedAt != null) {
-      map['last_synced_at'] = Variable<DateTime>(lastSyncedAt);
-    }
-    map['version'] = Variable<int>(version);
     if (!nullToAbsent || mergedIntoId != null) {
       map['merged_into_id'] = Variable<String>(mergedIntoId);
     }
@@ -1703,14 +1641,9 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
       privacyLevel: Value(privacyLevel),
       treeId: Value(treeId),
       uuid: Value(uuid),
-      syncStatus: Value(syncStatus),
       isDeleted: Value(isDeleted),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
-      lastSyncedAt: lastSyncedAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(lastSyncedAt),
-      version: Value(version),
       mergedIntoId: mergedIntoId == null && nullToAbsent
           ? const Value.absent()
           : Value(mergedIntoId),
@@ -1763,12 +1696,9 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
       privacyLevel: serializer.fromJson<int>(json['privacyLevel']),
       treeId: serializer.fromJson<String>(json['treeId']),
       uuid: serializer.fromJson<String>(json['uuid']),
-      syncStatus: serializer.fromJson<String>(json['syncStatus']),
       isDeleted: serializer.fromJson<bool>(json['isDeleted']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
-      lastSyncedAt: serializer.fromJson<DateTime?>(json['lastSyncedAt']),
-      version: serializer.fromJson<int>(json['version']),
       mergedIntoId: serializer.fromJson<String?>(json['mergedIntoId']),
     );
   }
@@ -1810,12 +1740,9 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
       'privacyLevel': serializer.toJson<int>(privacyLevel),
       'treeId': serializer.toJson<String>(treeId),
       'uuid': serializer.toJson<String>(uuid),
-      'syncStatus': serializer.toJson<String>(syncStatus),
       'isDeleted': serializer.toJson<bool>(isDeleted),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
-      'lastSyncedAt': serializer.toJson<DateTime?>(lastSyncedAt),
-      'version': serializer.toJson<int>(version),
       'mergedIntoId': serializer.toJson<String?>(mergedIntoId),
     };
   }
@@ -1855,12 +1782,9 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
     int? privacyLevel,
     String? treeId,
     String? uuid,
-    String? syncStatus,
     bool? isDeleted,
     DateTime? createdAt,
     DateTime? updatedAt,
-    Value<DateTime?> lastSyncedAt = const Value.absent(),
-    int? version,
     Value<String?> mergedIntoId = const Value.absent(),
   }) => GenealogyPerson(
     id: id ?? this.id,
@@ -1915,12 +1839,9 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
     privacyLevel: privacyLevel ?? this.privacyLevel,
     treeId: treeId ?? this.treeId,
     uuid: uuid ?? this.uuid,
-    syncStatus: syncStatus ?? this.syncStatus,
     isDeleted: isDeleted ?? this.isDeleted,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
-    lastSyncedAt: lastSyncedAt.present ? lastSyncedAt.value : this.lastSyncedAt,
-    version: version ?? this.version,
     mergedIntoId: mergedIntoId.present ? mergedIntoId.value : this.mergedIntoId,
   );
   GenealogyPerson copyWithCompanion(GenealogyPersonsCompanion data) {
@@ -1993,16 +1914,9 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
           : this.privacyLevel,
       treeId: data.treeId.present ? data.treeId.value : this.treeId,
       uuid: data.uuid.present ? data.uuid.value : this.uuid,
-      syncStatus: data.syncStatus.present
-          ? data.syncStatus.value
-          : this.syncStatus,
       isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
-      lastSyncedAt: data.lastSyncedAt.present
-          ? data.lastSyncedAt.value
-          : this.lastSyncedAt,
-      version: data.version.present ? data.version.value : this.version,
       mergedIntoId: data.mergedIntoId.present
           ? data.mergedIntoId.value
           : this.mergedIntoId,
@@ -2046,12 +1960,9 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
           ..write('privacyLevel: $privacyLevel, ')
           ..write('treeId: $treeId, ')
           ..write('uuid: $uuid, ')
-          ..write('syncStatus: $syncStatus, ')
           ..write('isDeleted: $isDeleted, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('lastSyncedAt: $lastSyncedAt, ')
-          ..write('version: $version, ')
           ..write('mergedIntoId: $mergedIntoId')
           ..write(')'))
         .toString();
@@ -2093,12 +2004,9 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
     privacyLevel,
     treeId,
     uuid,
-    syncStatus,
     isDeleted,
     createdAt,
     updatedAt,
-    lastSyncedAt,
-    version,
     mergedIntoId,
   ]);
   @override
@@ -2139,12 +2047,9 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
           other.privacyLevel == this.privacyLevel &&
           other.treeId == this.treeId &&
           other.uuid == this.uuid &&
-          other.syncStatus == this.syncStatus &&
           other.isDeleted == this.isDeleted &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
-          other.lastSyncedAt == this.lastSyncedAt &&
-          other.version == this.version &&
           other.mergedIntoId == this.mergedIntoId);
 }
 
@@ -2183,12 +2088,9 @@ class GenealogyPersonsCompanion extends UpdateCompanion<GenealogyPerson> {
   final Value<int> privacyLevel;
   final Value<String> treeId;
   final Value<String> uuid;
-  final Value<String> syncStatus;
   final Value<bool> isDeleted;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
-  final Value<DateTime?> lastSyncedAt;
-  final Value<int> version;
   final Value<String?> mergedIntoId;
   final Value<int> rowid;
   const GenealogyPersonsCompanion({
@@ -2226,12 +2128,9 @@ class GenealogyPersonsCompanion extends UpdateCompanion<GenealogyPerson> {
     this.privacyLevel = const Value.absent(),
     this.treeId = const Value.absent(),
     this.uuid = const Value.absent(),
-    this.syncStatus = const Value.absent(),
     this.isDeleted = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
-    this.lastSyncedAt = const Value.absent(),
-    this.version = const Value.absent(),
     this.mergedIntoId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -2270,12 +2169,9 @@ class GenealogyPersonsCompanion extends UpdateCompanion<GenealogyPerson> {
     this.privacyLevel = const Value.absent(),
     required String treeId,
     required String uuid,
-    this.syncStatus = const Value.absent(),
     this.isDeleted = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
-    this.lastSyncedAt = const Value.absent(),
-    this.version = const Value.absent(),
     this.mergedIntoId = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -2318,12 +2214,9 @@ class GenealogyPersonsCompanion extends UpdateCompanion<GenealogyPerson> {
     Expression<int>? privacyLevel,
     Expression<String>? treeId,
     Expression<String>? uuid,
-    Expression<String>? syncStatus,
     Expression<bool>? isDeleted,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
-    Expression<DateTime>? lastSyncedAt,
-    Expression<int>? version,
     Expression<String>? mergedIntoId,
     Expression<int>? rowid,
   }) {
@@ -2364,12 +2257,9 @@ class GenealogyPersonsCompanion extends UpdateCompanion<GenealogyPerson> {
       if (privacyLevel != null) 'privacy_level': privacyLevel,
       if (treeId != null) 'tree_id': treeId,
       if (uuid != null) 'uuid': uuid,
-      if (syncStatus != null) 'sync_status': syncStatus,
       if (isDeleted != null) 'is_deleted': isDeleted,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
-      if (lastSyncedAt != null) 'last_synced_at': lastSyncedAt,
-      if (version != null) 'version': version,
       if (mergedIntoId != null) 'merged_into_id': mergedIntoId,
       if (rowid != null) 'rowid': rowid,
     });
@@ -2410,12 +2300,9 @@ class GenealogyPersonsCompanion extends UpdateCompanion<GenealogyPerson> {
     Value<int>? privacyLevel,
     Value<String>? treeId,
     Value<String>? uuid,
-    Value<String>? syncStatus,
     Value<bool>? isDeleted,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
-    Value<DateTime?>? lastSyncedAt,
-    Value<int>? version,
     Value<String?>? mergedIntoId,
     Value<int>? rowid,
   }) {
@@ -2454,12 +2341,9 @@ class GenealogyPersonsCompanion extends UpdateCompanion<GenealogyPerson> {
       privacyLevel: privacyLevel ?? this.privacyLevel,
       treeId: treeId ?? this.treeId,
       uuid: uuid ?? this.uuid,
-      syncStatus: syncStatus ?? this.syncStatus,
       isDeleted: isDeleted ?? this.isDeleted,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
-      lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
-      version: version ?? this.version,
       mergedIntoId: mergedIntoId ?? this.mergedIntoId,
       rowid: rowid ?? this.rowid,
     );
@@ -2570,9 +2454,6 @@ class GenealogyPersonsCompanion extends UpdateCompanion<GenealogyPerson> {
     if (uuid.present) {
       map['uuid'] = Variable<String>(uuid.value);
     }
-    if (syncStatus.present) {
-      map['sync_status'] = Variable<String>(syncStatus.value);
-    }
     if (isDeleted.present) {
       map['is_deleted'] = Variable<bool>(isDeleted.value);
     }
@@ -2581,12 +2462,6 @@ class GenealogyPersonsCompanion extends UpdateCompanion<GenealogyPerson> {
     }
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
-    }
-    if (lastSyncedAt.present) {
-      map['last_synced_at'] = Variable<DateTime>(lastSyncedAt.value);
-    }
-    if (version.present) {
-      map['version'] = Variable<int>(version.value);
     }
     if (mergedIntoId.present) {
       map['merged_into_id'] = Variable<String>(mergedIntoId.value);
@@ -2634,6171 +2509,10 @@ class GenealogyPersonsCompanion extends UpdateCompanion<GenealogyPerson> {
           ..write('privacyLevel: $privacyLevel, ')
           ..write('treeId: $treeId, ')
           ..write('uuid: $uuid, ')
-          ..write('syncStatus: $syncStatus, ')
           ..write('isDeleted: $isDeleted, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('lastSyncedAt: $lastSyncedAt, ')
-          ..write('version: $version, ')
           ..write('mergedIntoId: $mergedIntoId, ')
-          ..write('rowid: $rowid')
-          ..write(')'))
-        .toString();
-  }
-}
-
-class $SurnameEventsTable extends SurnameEvents
-    with TableInfo<$SurnameEventsTable, SurnameEvent> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $SurnameEventsTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _idMeta = const VerificationMeta('id');
-  @override
-  late final GeneratedColumn<String> id = GeneratedColumn<String>(
-    'id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _personIdMeta = const VerificationMeta(
-    'personId',
-  );
-  @override
-  late final GeneratedColumn<String> personId = GeneratedColumn<String>(
-    'person_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES genealogy_persons (id)',
-    ),
-  );
-  static const VerificationMeta _surnameMeta = const VerificationMeta(
-    'surname',
-  );
-  @override
-  late final GeneratedColumn<String> surname = GeneratedColumn<String>(
-    'surname',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _surnameTypeMeta = const VerificationMeta(
-    'surnameType',
-  );
-  @override
-  late final GeneratedColumn<String> surnameType = GeneratedColumn<String>(
-    'surname_type',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _startDateMeta = const VerificationMeta(
-    'startDate',
-  );
-  @override
-  late final GeneratedColumn<String> startDate = GeneratedColumn<String>(
-    'start_date',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _startDateQualifierMeta =
-      const VerificationMeta('startDateQualifier');
-  @override
-  late final GeneratedColumn<String> startDateQualifier =
-      GeneratedColumn<String>(
-        'start_date_qualifier',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _endDateMeta = const VerificationMeta(
-    'endDate',
-  );
-  @override
-  late final GeneratedColumn<String> endDate = GeneratedColumn<String>(
-    'end_date',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _endDateQualifierMeta = const VerificationMeta(
-    'endDateQualifier',
-  );
-  @override
-  late final GeneratedColumn<String> endDateQualifier = GeneratedColumn<String>(
-    'end_date_qualifier',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _relatedEventIdMeta = const VerificationMeta(
-    'relatedEventId',
-  );
-  @override
-  late final GeneratedColumn<String> relatedEventId = GeneratedColumn<String>(
-    'related_event_id',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _relatedPersonIdMeta = const VerificationMeta(
-    'relatedPersonId',
-  );
-  @override
-  late final GeneratedColumn<String> relatedPersonId = GeneratedColumn<String>(
-    'related_person_id',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _locationMeta = const VerificationMeta(
-    'location',
-  );
-  @override
-  late final GeneratedColumn<String> location = GeneratedColumn<String>(
-    'location',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _legalDocumentMeta = const VerificationMeta(
-    'legalDocument',
-  );
-  @override
-  late final GeneratedColumn<String> legalDocument = GeneratedColumn<String>(
-    'legal_document',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _notesMeta = const VerificationMeta('notes');
-  @override
-  late final GeneratedColumn<String> notes = GeneratedColumn<String>(
-    'notes',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
-    'sortOrder',
-  );
-  @override
-  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
-    'sort_order',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-    defaultValue: const Constant(0),
-  );
-  static const VerificationMeta _isPrimaryMeta = const VerificationMeta(
-    'isPrimary',
-  );
-  @override
-  late final GeneratedColumn<bool> isPrimary = GeneratedColumn<bool>(
-    'is_primary',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("is_primary" IN (0, 1))',
-    ),
-    defaultValue: const Constant(false),
-  );
-  static const VerificationMeta _uuidMeta = const VerificationMeta('uuid');
-  @override
-  late final GeneratedColumn<String> uuid = GeneratedColumn<String>(
-    'uuid',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
-  );
-  static const VerificationMeta _syncStatusMeta = const VerificationMeta(
-    'syncStatus',
-  );
-  @override
-  late final GeneratedColumn<String> syncStatus = GeneratedColumn<String>(
-    'sync_status',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-    defaultValue: const Constant('pending'),
-  );
-  static const VerificationMeta _createdAtMeta = const VerificationMeta(
-    'createdAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
-    'created_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-    defaultValue: currentDateAndTime,
-  );
-  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
-    'updatedAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
-    'updated_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-    defaultValue: currentDateAndTime,
-  );
-  @override
-  List<GeneratedColumn> get $columns => [
-    id,
-    personId,
-    surname,
-    surnameType,
-    startDate,
-    startDateQualifier,
-    endDate,
-    endDateQualifier,
-    relatedEventId,
-    relatedPersonId,
-    location,
-    legalDocument,
-    notes,
-    sortOrder,
-    isPrimary,
-    uuid,
-    syncStatus,
-    createdAt,
-    updatedAt,
-  ];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'surname_events';
-  @override
-  VerificationContext validateIntegrity(
-    Insertable<SurnameEvent> instance, {
-    bool isInserting = false,
-  }) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('id')) {
-      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
-    } else if (isInserting) {
-      context.missing(_idMeta);
-    }
-    if (data.containsKey('person_id')) {
-      context.handle(
-        _personIdMeta,
-        personId.isAcceptableOrUnknown(data['person_id']!, _personIdMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_personIdMeta);
-    }
-    if (data.containsKey('surname')) {
-      context.handle(
-        _surnameMeta,
-        surname.isAcceptableOrUnknown(data['surname']!, _surnameMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_surnameMeta);
-    }
-    if (data.containsKey('surname_type')) {
-      context.handle(
-        _surnameTypeMeta,
-        surnameType.isAcceptableOrUnknown(
-          data['surname_type']!,
-          _surnameTypeMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_surnameTypeMeta);
-    }
-    if (data.containsKey('start_date')) {
-      context.handle(
-        _startDateMeta,
-        startDate.isAcceptableOrUnknown(data['start_date']!, _startDateMeta),
-      );
-    }
-    if (data.containsKey('start_date_qualifier')) {
-      context.handle(
-        _startDateQualifierMeta,
-        startDateQualifier.isAcceptableOrUnknown(
-          data['start_date_qualifier']!,
-          _startDateQualifierMeta,
-        ),
-      );
-    }
-    if (data.containsKey('end_date')) {
-      context.handle(
-        _endDateMeta,
-        endDate.isAcceptableOrUnknown(data['end_date']!, _endDateMeta),
-      );
-    }
-    if (data.containsKey('end_date_qualifier')) {
-      context.handle(
-        _endDateQualifierMeta,
-        endDateQualifier.isAcceptableOrUnknown(
-          data['end_date_qualifier']!,
-          _endDateQualifierMeta,
-        ),
-      );
-    }
-    if (data.containsKey('related_event_id')) {
-      context.handle(
-        _relatedEventIdMeta,
-        relatedEventId.isAcceptableOrUnknown(
-          data['related_event_id']!,
-          _relatedEventIdMeta,
-        ),
-      );
-    }
-    if (data.containsKey('related_person_id')) {
-      context.handle(
-        _relatedPersonIdMeta,
-        relatedPersonId.isAcceptableOrUnknown(
-          data['related_person_id']!,
-          _relatedPersonIdMeta,
-        ),
-      );
-    }
-    if (data.containsKey('location')) {
-      context.handle(
-        _locationMeta,
-        location.isAcceptableOrUnknown(data['location']!, _locationMeta),
-      );
-    }
-    if (data.containsKey('legal_document')) {
-      context.handle(
-        _legalDocumentMeta,
-        legalDocument.isAcceptableOrUnknown(
-          data['legal_document']!,
-          _legalDocumentMeta,
-        ),
-      );
-    }
-    if (data.containsKey('notes')) {
-      context.handle(
-        _notesMeta,
-        notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
-      );
-    }
-    if (data.containsKey('sort_order')) {
-      context.handle(
-        _sortOrderMeta,
-        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
-      );
-    }
-    if (data.containsKey('is_primary')) {
-      context.handle(
-        _isPrimaryMeta,
-        isPrimary.isAcceptableOrUnknown(data['is_primary']!, _isPrimaryMeta),
-      );
-    }
-    if (data.containsKey('uuid')) {
-      context.handle(
-        _uuidMeta,
-        uuid.isAcceptableOrUnknown(data['uuid']!, _uuidMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_uuidMeta);
-    }
-    if (data.containsKey('sync_status')) {
-      context.handle(
-        _syncStatusMeta,
-        syncStatus.isAcceptableOrUnknown(data['sync_status']!, _syncStatusMeta),
-      );
-    }
-    if (data.containsKey('created_at')) {
-      context.handle(
-        _createdAtMeta,
-        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
-      );
-    }
-    if (data.containsKey('updated_at')) {
-      context.handle(
-        _updatedAtMeta,
-        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
-      );
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {id};
-  @override
-  SurnameEvent map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return SurnameEvent(
-      id: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}id'],
-      )!,
-      personId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}person_id'],
-      )!,
-      surname: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}surname'],
-      )!,
-      surnameType: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}surname_type'],
-      )!,
-      startDate: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}start_date'],
-      ),
-      startDateQualifier: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}start_date_qualifier'],
-      ),
-      endDate: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}end_date'],
-      ),
-      endDateQualifier: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}end_date_qualifier'],
-      ),
-      relatedEventId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}related_event_id'],
-      ),
-      relatedPersonId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}related_person_id'],
-      ),
-      location: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}location'],
-      ),
-      legalDocument: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}legal_document'],
-      ),
-      notes: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}notes'],
-      ),
-      sortOrder: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}sort_order'],
-      )!,
-      isPrimary: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}is_primary'],
-      )!,
-      uuid: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}uuid'],
-      )!,
-      syncStatus: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}sync_status'],
-      )!,
-      createdAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}created_at'],
-      )!,
-      updatedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}updated_at'],
-      )!,
-    );
-  }
-
-  @override
-  $SurnameEventsTable createAlias(String alias) {
-    return $SurnameEventsTable(attachedDatabase, alias);
-  }
-}
-
-class SurnameEvent extends DataClass implements Insertable<SurnameEvent> {
-  final String id;
-  final String personId;
-  final String surname;
-  final String surnameType;
-  final String? startDate;
-  final String? startDateQualifier;
-  final String? endDate;
-  final String? endDateQualifier;
-  final String? relatedEventId;
-  final String? relatedPersonId;
-  final String? location;
-  final String? legalDocument;
-  final String? notes;
-  final int sortOrder;
-  final bool isPrimary;
-  final String uuid;
-  final String syncStatus;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-  const SurnameEvent({
-    required this.id,
-    required this.personId,
-    required this.surname,
-    required this.surnameType,
-    this.startDate,
-    this.startDateQualifier,
-    this.endDate,
-    this.endDateQualifier,
-    this.relatedEventId,
-    this.relatedPersonId,
-    this.location,
-    this.legalDocument,
-    this.notes,
-    required this.sortOrder,
-    required this.isPrimary,
-    required this.uuid,
-    required this.syncStatus,
-    required this.createdAt,
-    required this.updatedAt,
-  });
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['id'] = Variable<String>(id);
-    map['person_id'] = Variable<String>(personId);
-    map['surname'] = Variable<String>(surname);
-    map['surname_type'] = Variable<String>(surnameType);
-    if (!nullToAbsent || startDate != null) {
-      map['start_date'] = Variable<String>(startDate);
-    }
-    if (!nullToAbsent || startDateQualifier != null) {
-      map['start_date_qualifier'] = Variable<String>(startDateQualifier);
-    }
-    if (!nullToAbsent || endDate != null) {
-      map['end_date'] = Variable<String>(endDate);
-    }
-    if (!nullToAbsent || endDateQualifier != null) {
-      map['end_date_qualifier'] = Variable<String>(endDateQualifier);
-    }
-    if (!nullToAbsent || relatedEventId != null) {
-      map['related_event_id'] = Variable<String>(relatedEventId);
-    }
-    if (!nullToAbsent || relatedPersonId != null) {
-      map['related_person_id'] = Variable<String>(relatedPersonId);
-    }
-    if (!nullToAbsent || location != null) {
-      map['location'] = Variable<String>(location);
-    }
-    if (!nullToAbsent || legalDocument != null) {
-      map['legal_document'] = Variable<String>(legalDocument);
-    }
-    if (!nullToAbsent || notes != null) {
-      map['notes'] = Variable<String>(notes);
-    }
-    map['sort_order'] = Variable<int>(sortOrder);
-    map['is_primary'] = Variable<bool>(isPrimary);
-    map['uuid'] = Variable<String>(uuid);
-    map['sync_status'] = Variable<String>(syncStatus);
-    map['created_at'] = Variable<DateTime>(createdAt);
-    map['updated_at'] = Variable<DateTime>(updatedAt);
-    return map;
-  }
-
-  SurnameEventsCompanion toCompanion(bool nullToAbsent) {
-    return SurnameEventsCompanion(
-      id: Value(id),
-      personId: Value(personId),
-      surname: Value(surname),
-      surnameType: Value(surnameType),
-      startDate: startDate == null && nullToAbsent
-          ? const Value.absent()
-          : Value(startDate),
-      startDateQualifier: startDateQualifier == null && nullToAbsent
-          ? const Value.absent()
-          : Value(startDateQualifier),
-      endDate: endDate == null && nullToAbsent
-          ? const Value.absent()
-          : Value(endDate),
-      endDateQualifier: endDateQualifier == null && nullToAbsent
-          ? const Value.absent()
-          : Value(endDateQualifier),
-      relatedEventId: relatedEventId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(relatedEventId),
-      relatedPersonId: relatedPersonId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(relatedPersonId),
-      location: location == null && nullToAbsent
-          ? const Value.absent()
-          : Value(location),
-      legalDocument: legalDocument == null && nullToAbsent
-          ? const Value.absent()
-          : Value(legalDocument),
-      notes: notes == null && nullToAbsent
-          ? const Value.absent()
-          : Value(notes),
-      sortOrder: Value(sortOrder),
-      isPrimary: Value(isPrimary),
-      uuid: Value(uuid),
-      syncStatus: Value(syncStatus),
-      createdAt: Value(createdAt),
-      updatedAt: Value(updatedAt),
-    );
-  }
-
-  factory SurnameEvent.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return SurnameEvent(
-      id: serializer.fromJson<String>(json['id']),
-      personId: serializer.fromJson<String>(json['personId']),
-      surname: serializer.fromJson<String>(json['surname']),
-      surnameType: serializer.fromJson<String>(json['surnameType']),
-      startDate: serializer.fromJson<String?>(json['startDate']),
-      startDateQualifier: serializer.fromJson<String?>(
-        json['startDateQualifier'],
-      ),
-      endDate: serializer.fromJson<String?>(json['endDate']),
-      endDateQualifier: serializer.fromJson<String?>(json['endDateQualifier']),
-      relatedEventId: serializer.fromJson<String?>(json['relatedEventId']),
-      relatedPersonId: serializer.fromJson<String?>(json['relatedPersonId']),
-      location: serializer.fromJson<String?>(json['location']),
-      legalDocument: serializer.fromJson<String?>(json['legalDocument']),
-      notes: serializer.fromJson<String?>(json['notes']),
-      sortOrder: serializer.fromJson<int>(json['sortOrder']),
-      isPrimary: serializer.fromJson<bool>(json['isPrimary']),
-      uuid: serializer.fromJson<String>(json['uuid']),
-      syncStatus: serializer.fromJson<String>(json['syncStatus']),
-      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
-      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'id': serializer.toJson<String>(id),
-      'personId': serializer.toJson<String>(personId),
-      'surname': serializer.toJson<String>(surname),
-      'surnameType': serializer.toJson<String>(surnameType),
-      'startDate': serializer.toJson<String?>(startDate),
-      'startDateQualifier': serializer.toJson<String?>(startDateQualifier),
-      'endDate': serializer.toJson<String?>(endDate),
-      'endDateQualifier': serializer.toJson<String?>(endDateQualifier),
-      'relatedEventId': serializer.toJson<String?>(relatedEventId),
-      'relatedPersonId': serializer.toJson<String?>(relatedPersonId),
-      'location': serializer.toJson<String?>(location),
-      'legalDocument': serializer.toJson<String?>(legalDocument),
-      'notes': serializer.toJson<String?>(notes),
-      'sortOrder': serializer.toJson<int>(sortOrder),
-      'isPrimary': serializer.toJson<bool>(isPrimary),
-      'uuid': serializer.toJson<String>(uuid),
-      'syncStatus': serializer.toJson<String>(syncStatus),
-      'createdAt': serializer.toJson<DateTime>(createdAt),
-      'updatedAt': serializer.toJson<DateTime>(updatedAt),
-    };
-  }
-
-  SurnameEvent copyWith({
-    String? id,
-    String? personId,
-    String? surname,
-    String? surnameType,
-    Value<String?> startDate = const Value.absent(),
-    Value<String?> startDateQualifier = const Value.absent(),
-    Value<String?> endDate = const Value.absent(),
-    Value<String?> endDateQualifier = const Value.absent(),
-    Value<String?> relatedEventId = const Value.absent(),
-    Value<String?> relatedPersonId = const Value.absent(),
-    Value<String?> location = const Value.absent(),
-    Value<String?> legalDocument = const Value.absent(),
-    Value<String?> notes = const Value.absent(),
-    int? sortOrder,
-    bool? isPrimary,
-    String? uuid,
-    String? syncStatus,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  }) => SurnameEvent(
-    id: id ?? this.id,
-    personId: personId ?? this.personId,
-    surname: surname ?? this.surname,
-    surnameType: surnameType ?? this.surnameType,
-    startDate: startDate.present ? startDate.value : this.startDate,
-    startDateQualifier: startDateQualifier.present
-        ? startDateQualifier.value
-        : this.startDateQualifier,
-    endDate: endDate.present ? endDate.value : this.endDate,
-    endDateQualifier: endDateQualifier.present
-        ? endDateQualifier.value
-        : this.endDateQualifier,
-    relatedEventId: relatedEventId.present
-        ? relatedEventId.value
-        : this.relatedEventId,
-    relatedPersonId: relatedPersonId.present
-        ? relatedPersonId.value
-        : this.relatedPersonId,
-    location: location.present ? location.value : this.location,
-    legalDocument: legalDocument.present
-        ? legalDocument.value
-        : this.legalDocument,
-    notes: notes.present ? notes.value : this.notes,
-    sortOrder: sortOrder ?? this.sortOrder,
-    isPrimary: isPrimary ?? this.isPrimary,
-    uuid: uuid ?? this.uuid,
-    syncStatus: syncStatus ?? this.syncStatus,
-    createdAt: createdAt ?? this.createdAt,
-    updatedAt: updatedAt ?? this.updatedAt,
-  );
-  SurnameEvent copyWithCompanion(SurnameEventsCompanion data) {
-    return SurnameEvent(
-      id: data.id.present ? data.id.value : this.id,
-      personId: data.personId.present ? data.personId.value : this.personId,
-      surname: data.surname.present ? data.surname.value : this.surname,
-      surnameType: data.surnameType.present
-          ? data.surnameType.value
-          : this.surnameType,
-      startDate: data.startDate.present ? data.startDate.value : this.startDate,
-      startDateQualifier: data.startDateQualifier.present
-          ? data.startDateQualifier.value
-          : this.startDateQualifier,
-      endDate: data.endDate.present ? data.endDate.value : this.endDate,
-      endDateQualifier: data.endDateQualifier.present
-          ? data.endDateQualifier.value
-          : this.endDateQualifier,
-      relatedEventId: data.relatedEventId.present
-          ? data.relatedEventId.value
-          : this.relatedEventId,
-      relatedPersonId: data.relatedPersonId.present
-          ? data.relatedPersonId.value
-          : this.relatedPersonId,
-      location: data.location.present ? data.location.value : this.location,
-      legalDocument: data.legalDocument.present
-          ? data.legalDocument.value
-          : this.legalDocument,
-      notes: data.notes.present ? data.notes.value : this.notes,
-      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
-      isPrimary: data.isPrimary.present ? data.isPrimary.value : this.isPrimary,
-      uuid: data.uuid.present ? data.uuid.value : this.uuid,
-      syncStatus: data.syncStatus.present
-          ? data.syncStatus.value
-          : this.syncStatus,
-      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
-      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('SurnameEvent(')
-          ..write('id: $id, ')
-          ..write('personId: $personId, ')
-          ..write('surname: $surname, ')
-          ..write('surnameType: $surnameType, ')
-          ..write('startDate: $startDate, ')
-          ..write('startDateQualifier: $startDateQualifier, ')
-          ..write('endDate: $endDate, ')
-          ..write('endDateQualifier: $endDateQualifier, ')
-          ..write('relatedEventId: $relatedEventId, ')
-          ..write('relatedPersonId: $relatedPersonId, ')
-          ..write('location: $location, ')
-          ..write('legalDocument: $legalDocument, ')
-          ..write('notes: $notes, ')
-          ..write('sortOrder: $sortOrder, ')
-          ..write('isPrimary: $isPrimary, ')
-          ..write('uuid: $uuid, ')
-          ..write('syncStatus: $syncStatus, ')
-          ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    id,
-    personId,
-    surname,
-    surnameType,
-    startDate,
-    startDateQualifier,
-    endDate,
-    endDateQualifier,
-    relatedEventId,
-    relatedPersonId,
-    location,
-    legalDocument,
-    notes,
-    sortOrder,
-    isPrimary,
-    uuid,
-    syncStatus,
-    createdAt,
-    updatedAt,
-  );
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is SurnameEvent &&
-          other.id == this.id &&
-          other.personId == this.personId &&
-          other.surname == this.surname &&
-          other.surnameType == this.surnameType &&
-          other.startDate == this.startDate &&
-          other.startDateQualifier == this.startDateQualifier &&
-          other.endDate == this.endDate &&
-          other.endDateQualifier == this.endDateQualifier &&
-          other.relatedEventId == this.relatedEventId &&
-          other.relatedPersonId == this.relatedPersonId &&
-          other.location == this.location &&
-          other.legalDocument == this.legalDocument &&
-          other.notes == this.notes &&
-          other.sortOrder == this.sortOrder &&
-          other.isPrimary == this.isPrimary &&
-          other.uuid == this.uuid &&
-          other.syncStatus == this.syncStatus &&
-          other.createdAt == this.createdAt &&
-          other.updatedAt == this.updatedAt);
-}
-
-class SurnameEventsCompanion extends UpdateCompanion<SurnameEvent> {
-  final Value<String> id;
-  final Value<String> personId;
-  final Value<String> surname;
-  final Value<String> surnameType;
-  final Value<String?> startDate;
-  final Value<String?> startDateQualifier;
-  final Value<String?> endDate;
-  final Value<String?> endDateQualifier;
-  final Value<String?> relatedEventId;
-  final Value<String?> relatedPersonId;
-  final Value<String?> location;
-  final Value<String?> legalDocument;
-  final Value<String?> notes;
-  final Value<int> sortOrder;
-  final Value<bool> isPrimary;
-  final Value<String> uuid;
-  final Value<String> syncStatus;
-  final Value<DateTime> createdAt;
-  final Value<DateTime> updatedAt;
-  final Value<int> rowid;
-  const SurnameEventsCompanion({
-    this.id = const Value.absent(),
-    this.personId = const Value.absent(),
-    this.surname = const Value.absent(),
-    this.surnameType = const Value.absent(),
-    this.startDate = const Value.absent(),
-    this.startDateQualifier = const Value.absent(),
-    this.endDate = const Value.absent(),
-    this.endDateQualifier = const Value.absent(),
-    this.relatedEventId = const Value.absent(),
-    this.relatedPersonId = const Value.absent(),
-    this.location = const Value.absent(),
-    this.legalDocument = const Value.absent(),
-    this.notes = const Value.absent(),
-    this.sortOrder = const Value.absent(),
-    this.isPrimary = const Value.absent(),
-    this.uuid = const Value.absent(),
-    this.syncStatus = const Value.absent(),
-    this.createdAt = const Value.absent(),
-    this.updatedAt = const Value.absent(),
-    this.rowid = const Value.absent(),
-  });
-  SurnameEventsCompanion.insert({
-    required String id,
-    required String personId,
-    required String surname,
-    required String surnameType,
-    this.startDate = const Value.absent(),
-    this.startDateQualifier = const Value.absent(),
-    this.endDate = const Value.absent(),
-    this.endDateQualifier = const Value.absent(),
-    this.relatedEventId = const Value.absent(),
-    this.relatedPersonId = const Value.absent(),
-    this.location = const Value.absent(),
-    this.legalDocument = const Value.absent(),
-    this.notes = const Value.absent(),
-    this.sortOrder = const Value.absent(),
-    this.isPrimary = const Value.absent(),
-    required String uuid,
-    this.syncStatus = const Value.absent(),
-    this.createdAt = const Value.absent(),
-    this.updatedAt = const Value.absent(),
-    this.rowid = const Value.absent(),
-  }) : id = Value(id),
-       personId = Value(personId),
-       surname = Value(surname),
-       surnameType = Value(surnameType),
-       uuid = Value(uuid);
-  static Insertable<SurnameEvent> custom({
-    Expression<String>? id,
-    Expression<String>? personId,
-    Expression<String>? surname,
-    Expression<String>? surnameType,
-    Expression<String>? startDate,
-    Expression<String>? startDateQualifier,
-    Expression<String>? endDate,
-    Expression<String>? endDateQualifier,
-    Expression<String>? relatedEventId,
-    Expression<String>? relatedPersonId,
-    Expression<String>? location,
-    Expression<String>? legalDocument,
-    Expression<String>? notes,
-    Expression<int>? sortOrder,
-    Expression<bool>? isPrimary,
-    Expression<String>? uuid,
-    Expression<String>? syncStatus,
-    Expression<DateTime>? createdAt,
-    Expression<DateTime>? updatedAt,
-    Expression<int>? rowid,
-  }) {
-    return RawValuesInsertable({
-      if (id != null) 'id': id,
-      if (personId != null) 'person_id': personId,
-      if (surname != null) 'surname': surname,
-      if (surnameType != null) 'surname_type': surnameType,
-      if (startDate != null) 'start_date': startDate,
-      if (startDateQualifier != null)
-        'start_date_qualifier': startDateQualifier,
-      if (endDate != null) 'end_date': endDate,
-      if (endDateQualifier != null) 'end_date_qualifier': endDateQualifier,
-      if (relatedEventId != null) 'related_event_id': relatedEventId,
-      if (relatedPersonId != null) 'related_person_id': relatedPersonId,
-      if (location != null) 'location': location,
-      if (legalDocument != null) 'legal_document': legalDocument,
-      if (notes != null) 'notes': notes,
-      if (sortOrder != null) 'sort_order': sortOrder,
-      if (isPrimary != null) 'is_primary': isPrimary,
-      if (uuid != null) 'uuid': uuid,
-      if (syncStatus != null) 'sync_status': syncStatus,
-      if (createdAt != null) 'created_at': createdAt,
-      if (updatedAt != null) 'updated_at': updatedAt,
-      if (rowid != null) 'rowid': rowid,
-    });
-  }
-
-  SurnameEventsCompanion copyWith({
-    Value<String>? id,
-    Value<String>? personId,
-    Value<String>? surname,
-    Value<String>? surnameType,
-    Value<String?>? startDate,
-    Value<String?>? startDateQualifier,
-    Value<String?>? endDate,
-    Value<String?>? endDateQualifier,
-    Value<String?>? relatedEventId,
-    Value<String?>? relatedPersonId,
-    Value<String?>? location,
-    Value<String?>? legalDocument,
-    Value<String?>? notes,
-    Value<int>? sortOrder,
-    Value<bool>? isPrimary,
-    Value<String>? uuid,
-    Value<String>? syncStatus,
-    Value<DateTime>? createdAt,
-    Value<DateTime>? updatedAt,
-    Value<int>? rowid,
-  }) {
-    return SurnameEventsCompanion(
-      id: id ?? this.id,
-      personId: personId ?? this.personId,
-      surname: surname ?? this.surname,
-      surnameType: surnameType ?? this.surnameType,
-      startDate: startDate ?? this.startDate,
-      startDateQualifier: startDateQualifier ?? this.startDateQualifier,
-      endDate: endDate ?? this.endDate,
-      endDateQualifier: endDateQualifier ?? this.endDateQualifier,
-      relatedEventId: relatedEventId ?? this.relatedEventId,
-      relatedPersonId: relatedPersonId ?? this.relatedPersonId,
-      location: location ?? this.location,
-      legalDocument: legalDocument ?? this.legalDocument,
-      notes: notes ?? this.notes,
-      sortOrder: sortOrder ?? this.sortOrder,
-      isPrimary: isPrimary ?? this.isPrimary,
-      uuid: uuid ?? this.uuid,
-      syncStatus: syncStatus ?? this.syncStatus,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-      rowid: rowid ?? this.rowid,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (id.present) {
-      map['id'] = Variable<String>(id.value);
-    }
-    if (personId.present) {
-      map['person_id'] = Variable<String>(personId.value);
-    }
-    if (surname.present) {
-      map['surname'] = Variable<String>(surname.value);
-    }
-    if (surnameType.present) {
-      map['surname_type'] = Variable<String>(surnameType.value);
-    }
-    if (startDate.present) {
-      map['start_date'] = Variable<String>(startDate.value);
-    }
-    if (startDateQualifier.present) {
-      map['start_date_qualifier'] = Variable<String>(startDateQualifier.value);
-    }
-    if (endDate.present) {
-      map['end_date'] = Variable<String>(endDate.value);
-    }
-    if (endDateQualifier.present) {
-      map['end_date_qualifier'] = Variable<String>(endDateQualifier.value);
-    }
-    if (relatedEventId.present) {
-      map['related_event_id'] = Variable<String>(relatedEventId.value);
-    }
-    if (relatedPersonId.present) {
-      map['related_person_id'] = Variable<String>(relatedPersonId.value);
-    }
-    if (location.present) {
-      map['location'] = Variable<String>(location.value);
-    }
-    if (legalDocument.present) {
-      map['legal_document'] = Variable<String>(legalDocument.value);
-    }
-    if (notes.present) {
-      map['notes'] = Variable<String>(notes.value);
-    }
-    if (sortOrder.present) {
-      map['sort_order'] = Variable<int>(sortOrder.value);
-    }
-    if (isPrimary.present) {
-      map['is_primary'] = Variable<bool>(isPrimary.value);
-    }
-    if (uuid.present) {
-      map['uuid'] = Variable<String>(uuid.value);
-    }
-    if (syncStatus.present) {
-      map['sync_status'] = Variable<String>(syncStatus.value);
-    }
-    if (createdAt.present) {
-      map['created_at'] = Variable<DateTime>(createdAt.value);
-    }
-    if (updatedAt.present) {
-      map['updated_at'] = Variable<DateTime>(updatedAt.value);
-    }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('SurnameEventsCompanion(')
-          ..write('id: $id, ')
-          ..write('personId: $personId, ')
-          ..write('surname: $surname, ')
-          ..write('surnameType: $surnameType, ')
-          ..write('startDate: $startDate, ')
-          ..write('startDateQualifier: $startDateQualifier, ')
-          ..write('endDate: $endDate, ')
-          ..write('endDateQualifier: $endDateQualifier, ')
-          ..write('relatedEventId: $relatedEventId, ')
-          ..write('relatedPersonId: $relatedPersonId, ')
-          ..write('location: $location, ')
-          ..write('legalDocument: $legalDocument, ')
-          ..write('notes: $notes, ')
-          ..write('sortOrder: $sortOrder, ')
-          ..write('isPrimary: $isPrimary, ')
-          ..write('uuid: $uuid, ')
-          ..write('syncStatus: $syncStatus, ')
-          ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt, ')
-          ..write('rowid: $rowid')
-          ..write(')'))
-        .toString();
-  }
-}
-
-class $FamiliesV2Table extends FamiliesV2
-    with TableInfo<$FamiliesV2Table, FamiliesV2Data> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $FamiliesV2Table(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _idMeta = const VerificationMeta('id');
-  @override
-  late final GeneratedColumn<String> id = GeneratedColumn<String>(
-    'id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _husbandIdMeta = const VerificationMeta(
-    'husbandId',
-  );
-  @override
-  late final GeneratedColumn<String> husbandId = GeneratedColumn<String>(
-    'husband_id',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES genealogy_persons (id)',
-    ),
-  );
-  static const VerificationMeta _wifeIdMeta = const VerificationMeta('wifeId');
-  @override
-  late final GeneratedColumn<String> wifeId = GeneratedColumn<String>(
-    'wife_id',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES genealogy_persons (id)',
-    ),
-  );
-  static const VerificationMeta _marriageDateMeta = const VerificationMeta(
-    'marriageDate',
-  );
-  @override
-  late final GeneratedColumn<DateTime> marriageDate = GeneratedColumn<DateTime>(
-    'marriage_date',
-    aliasedName,
-    true,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _marriageDateQualifierMeta =
-      const VerificationMeta('marriageDateQualifier');
-  @override
-  late final GeneratedColumn<String> marriageDateQualifier =
-      GeneratedColumn<String>(
-        'marriage_date_qualifier',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _marriagePlaceMeta = const VerificationMeta(
-    'marriagePlace',
-  );
-  @override
-  late final GeneratedColumn<String> marriagePlace = GeneratedColumn<String>(
-    'marriage_place',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _marriagePlaceLatMeta = const VerificationMeta(
-    'marriagePlaceLat',
-  );
-  @override
-  late final GeneratedColumn<double> marriagePlaceLat = GeneratedColumn<double>(
-    'marriage_place_lat',
-    aliasedName,
-    true,
-    type: DriftSqlType.double,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _marriagePlaceLngMeta = const VerificationMeta(
-    'marriagePlaceLng',
-  );
-  @override
-  late final GeneratedColumn<double> marriagePlaceLng = GeneratedColumn<double>(
-    'marriage_place_lng',
-    aliasedName,
-    true,
-    type: DriftSqlType.double,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _wifeTookHusbandNameMeta =
-      const VerificationMeta('wifeTookHusbandName');
-  @override
-  late final GeneratedColumn<bool> wifeTookHusbandName = GeneratedColumn<bool>(
-    'wife_took_husband_name',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("wife_took_husband_name" IN (0, 1))',
-    ),
-    defaultValue: const Constant(false),
-  );
-  static const VerificationMeta _husbandTookWifeNameMeta =
-      const VerificationMeta('husbandTookWifeName');
-  @override
-  late final GeneratedColumn<bool> husbandTookWifeName = GeneratedColumn<bool>(
-    'husband_took_wife_name',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("husband_took_wife_name" IN (0, 1))',
-    ),
-    defaultValue: const Constant(false),
-  );
-  static const VerificationMeta _hyphenatedSurnameMeta = const VerificationMeta(
-    'hyphenatedSurname',
-  );
-  @override
-  late final GeneratedColumn<bool> hyphenatedSurname = GeneratedColumn<bool>(
-    'hyphenated_surname',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("hyphenated_surname" IN (0, 1))',
-    ),
-    defaultValue: const Constant(false),
-  );
-  static const VerificationMeta _customSurnameChangeMeta =
-      const VerificationMeta('customSurnameChange');
-  @override
-  late final GeneratedColumn<String> customSurnameChange =
-      GeneratedColumn<String>(
-        'custom_surname_change',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _noNameChangeMeta = const VerificationMeta(
-    'noNameChange',
-  );
-  @override
-  late final GeneratedColumn<bool> noNameChange = GeneratedColumn<bool>(
-    'no_name_change',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("no_name_change" IN (0, 1))',
-    ),
-    defaultValue: const Constant(false),
-  );
-  static const VerificationMeta _wifeMarriedSurnameMeta =
-      const VerificationMeta('wifeMarriedSurname');
-  @override
-  late final GeneratedColumn<String> wifeMarriedSurname =
-      GeneratedColumn<String>(
-        'wife_married_surname',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _wifeNameChangeTypeMeta =
-      const VerificationMeta('wifeNameChangeType');
-  @override
-  late final GeneratedColumn<String> wifeNameChangeType =
-      GeneratedColumn<String>(
-        'wife_name_change_type',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _husbandMarriedSurnameMeta =
-      const VerificationMeta('husbandMarriedSurname');
-  @override
-  late final GeneratedColumn<String> husbandMarriedSurname =
-      GeneratedColumn<String>(
-        'husband_married_surname',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _husbandNameChangeTypeMeta =
-      const VerificationMeta('husbandNameChangeType');
-  @override
-  late final GeneratedColumn<String> husbandNameChangeType =
-      GeneratedColumn<String>(
-        'husband_name_change_type',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _divorceDateMeta = const VerificationMeta(
-    'divorceDate',
-  );
-  @override
-  late final GeneratedColumn<DateTime> divorceDate = GeneratedColumn<DateTime>(
-    'divorce_date',
-    aliasedName,
-    true,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _divorceDateQualifierMeta =
-      const VerificationMeta('divorceDateQualifier');
-  @override
-  late final GeneratedColumn<String> divorceDateQualifier =
-      GeneratedColumn<String>(
-        'divorce_date_qualifier',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _divorcePlaceMeta = const VerificationMeta(
-    'divorcePlace',
-  );
-  @override
-  late final GeneratedColumn<String> divorcePlace = GeneratedColumn<String>(
-    'divorce_place',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _wifeRevertedToMaidenMeta =
-      const VerificationMeta('wifeRevertedToMaiden');
-  @override
-  late final GeneratedColumn<bool> wifeRevertedToMaiden = GeneratedColumn<bool>(
-    'wife_reverted_to_maiden',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("wife_reverted_to_maiden" IN (0, 1))',
-    ),
-    defaultValue: const Constant(false),
-  );
-  static const VerificationMeta _husbandRevertedNameMeta =
-      const VerificationMeta('husbandRevertedName');
-  @override
-  late final GeneratedColumn<bool> husbandRevertedName = GeneratedColumn<bool>(
-    'husband_reverted_name',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("husband_reverted_name" IN (0, 1))',
-    ),
-    defaultValue: const Constant(false),
-  );
-  static const VerificationMeta _relationshipTypeMeta = const VerificationMeta(
-    'relationshipType',
-  );
-  @override
-  late final GeneratedColumn<String> relationshipType = GeneratedColumn<String>(
-    'relationship_type',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-    defaultValue: const Constant('marriage'),
-  );
-  static const VerificationMeta _isPrimaryMarriageMeta = const VerificationMeta(
-    'isPrimaryMarriage',
-  );
-  @override
-  late final GeneratedColumn<bool> isPrimaryMarriage = GeneratedColumn<bool>(
-    'is_primary_marriage',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("is_primary_marriage" IN (0, 1))',
-    ),
-    defaultValue: const Constant(false),
-  );
-  static const VerificationMeta _notesMeta = const VerificationMeta('notes');
-  @override
-  late final GeneratedColumn<String> notes = GeneratedColumn<String>(
-    'notes',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _privateNotesMeta = const VerificationMeta(
-    'privateNotes',
-  );
-  @override
-  late final GeneratedColumn<String> privateNotes = GeneratedColumn<String>(
-    'private_notes',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _uuidMeta = const VerificationMeta('uuid');
-  @override
-  late final GeneratedColumn<String> uuid = GeneratedColumn<String>(
-    'uuid',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
-  );
-  static const VerificationMeta _syncStatusMeta = const VerificationMeta(
-    'syncStatus',
-  );
-  @override
-  late final GeneratedColumn<String> syncStatus = GeneratedColumn<String>(
-    'sync_status',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-    defaultValue: const Constant('pending'),
-  );
-  static const VerificationMeta _isDeletedMeta = const VerificationMeta(
-    'isDeleted',
-  );
-  @override
-  late final GeneratedColumn<bool> isDeleted = GeneratedColumn<bool>(
-    'is_deleted',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("is_deleted" IN (0, 1))',
-    ),
-    defaultValue: const Constant(false),
-  );
-  static const VerificationMeta _createdAtMeta = const VerificationMeta(
-    'createdAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
-    'created_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-    defaultValue: currentDateAndTime,
-  );
-  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
-    'updatedAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
-    'updated_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-    defaultValue: currentDateAndTime,
-  );
-  @override
-  List<GeneratedColumn> get $columns => [
-    id,
-    husbandId,
-    wifeId,
-    marriageDate,
-    marriageDateQualifier,
-    marriagePlace,
-    marriagePlaceLat,
-    marriagePlaceLng,
-    wifeTookHusbandName,
-    husbandTookWifeName,
-    hyphenatedSurname,
-    customSurnameChange,
-    noNameChange,
-    wifeMarriedSurname,
-    wifeNameChangeType,
-    husbandMarriedSurname,
-    husbandNameChangeType,
-    divorceDate,
-    divorceDateQualifier,
-    divorcePlace,
-    wifeRevertedToMaiden,
-    husbandRevertedName,
-    relationshipType,
-    isPrimaryMarriage,
-    notes,
-    privateNotes,
-    uuid,
-    syncStatus,
-    isDeleted,
-    createdAt,
-    updatedAt,
-  ];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'families_v2';
-  @override
-  VerificationContext validateIntegrity(
-    Insertable<FamiliesV2Data> instance, {
-    bool isInserting = false,
-  }) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('id')) {
-      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
-    } else if (isInserting) {
-      context.missing(_idMeta);
-    }
-    if (data.containsKey('husband_id')) {
-      context.handle(
-        _husbandIdMeta,
-        husbandId.isAcceptableOrUnknown(data['husband_id']!, _husbandIdMeta),
-      );
-    }
-    if (data.containsKey('wife_id')) {
-      context.handle(
-        _wifeIdMeta,
-        wifeId.isAcceptableOrUnknown(data['wife_id']!, _wifeIdMeta),
-      );
-    }
-    if (data.containsKey('marriage_date')) {
-      context.handle(
-        _marriageDateMeta,
-        marriageDate.isAcceptableOrUnknown(
-          data['marriage_date']!,
-          _marriageDateMeta,
-        ),
-      );
-    }
-    if (data.containsKey('marriage_date_qualifier')) {
-      context.handle(
-        _marriageDateQualifierMeta,
-        marriageDateQualifier.isAcceptableOrUnknown(
-          data['marriage_date_qualifier']!,
-          _marriageDateQualifierMeta,
-        ),
-      );
-    }
-    if (data.containsKey('marriage_place')) {
-      context.handle(
-        _marriagePlaceMeta,
-        marriagePlace.isAcceptableOrUnknown(
-          data['marriage_place']!,
-          _marriagePlaceMeta,
-        ),
-      );
-    }
-    if (data.containsKey('marriage_place_lat')) {
-      context.handle(
-        _marriagePlaceLatMeta,
-        marriagePlaceLat.isAcceptableOrUnknown(
-          data['marriage_place_lat']!,
-          _marriagePlaceLatMeta,
-        ),
-      );
-    }
-    if (data.containsKey('marriage_place_lng')) {
-      context.handle(
-        _marriagePlaceLngMeta,
-        marriagePlaceLng.isAcceptableOrUnknown(
-          data['marriage_place_lng']!,
-          _marriagePlaceLngMeta,
-        ),
-      );
-    }
-    if (data.containsKey('wife_took_husband_name')) {
-      context.handle(
-        _wifeTookHusbandNameMeta,
-        wifeTookHusbandName.isAcceptableOrUnknown(
-          data['wife_took_husband_name']!,
-          _wifeTookHusbandNameMeta,
-        ),
-      );
-    }
-    if (data.containsKey('husband_took_wife_name')) {
-      context.handle(
-        _husbandTookWifeNameMeta,
-        husbandTookWifeName.isAcceptableOrUnknown(
-          data['husband_took_wife_name']!,
-          _husbandTookWifeNameMeta,
-        ),
-      );
-    }
-    if (data.containsKey('hyphenated_surname')) {
-      context.handle(
-        _hyphenatedSurnameMeta,
-        hyphenatedSurname.isAcceptableOrUnknown(
-          data['hyphenated_surname']!,
-          _hyphenatedSurnameMeta,
-        ),
-      );
-    }
-    if (data.containsKey('custom_surname_change')) {
-      context.handle(
-        _customSurnameChangeMeta,
-        customSurnameChange.isAcceptableOrUnknown(
-          data['custom_surname_change']!,
-          _customSurnameChangeMeta,
-        ),
-      );
-    }
-    if (data.containsKey('no_name_change')) {
-      context.handle(
-        _noNameChangeMeta,
-        noNameChange.isAcceptableOrUnknown(
-          data['no_name_change']!,
-          _noNameChangeMeta,
-        ),
-      );
-    }
-    if (data.containsKey('wife_married_surname')) {
-      context.handle(
-        _wifeMarriedSurnameMeta,
-        wifeMarriedSurname.isAcceptableOrUnknown(
-          data['wife_married_surname']!,
-          _wifeMarriedSurnameMeta,
-        ),
-      );
-    }
-    if (data.containsKey('wife_name_change_type')) {
-      context.handle(
-        _wifeNameChangeTypeMeta,
-        wifeNameChangeType.isAcceptableOrUnknown(
-          data['wife_name_change_type']!,
-          _wifeNameChangeTypeMeta,
-        ),
-      );
-    }
-    if (data.containsKey('husband_married_surname')) {
-      context.handle(
-        _husbandMarriedSurnameMeta,
-        husbandMarriedSurname.isAcceptableOrUnknown(
-          data['husband_married_surname']!,
-          _husbandMarriedSurnameMeta,
-        ),
-      );
-    }
-    if (data.containsKey('husband_name_change_type')) {
-      context.handle(
-        _husbandNameChangeTypeMeta,
-        husbandNameChangeType.isAcceptableOrUnknown(
-          data['husband_name_change_type']!,
-          _husbandNameChangeTypeMeta,
-        ),
-      );
-    }
-    if (data.containsKey('divorce_date')) {
-      context.handle(
-        _divorceDateMeta,
-        divorceDate.isAcceptableOrUnknown(
-          data['divorce_date']!,
-          _divorceDateMeta,
-        ),
-      );
-    }
-    if (data.containsKey('divorce_date_qualifier')) {
-      context.handle(
-        _divorceDateQualifierMeta,
-        divorceDateQualifier.isAcceptableOrUnknown(
-          data['divorce_date_qualifier']!,
-          _divorceDateQualifierMeta,
-        ),
-      );
-    }
-    if (data.containsKey('divorce_place')) {
-      context.handle(
-        _divorcePlaceMeta,
-        divorcePlace.isAcceptableOrUnknown(
-          data['divorce_place']!,
-          _divorcePlaceMeta,
-        ),
-      );
-    }
-    if (data.containsKey('wife_reverted_to_maiden')) {
-      context.handle(
-        _wifeRevertedToMaidenMeta,
-        wifeRevertedToMaiden.isAcceptableOrUnknown(
-          data['wife_reverted_to_maiden']!,
-          _wifeRevertedToMaidenMeta,
-        ),
-      );
-    }
-    if (data.containsKey('husband_reverted_name')) {
-      context.handle(
-        _husbandRevertedNameMeta,
-        husbandRevertedName.isAcceptableOrUnknown(
-          data['husband_reverted_name']!,
-          _husbandRevertedNameMeta,
-        ),
-      );
-    }
-    if (data.containsKey('relationship_type')) {
-      context.handle(
-        _relationshipTypeMeta,
-        relationshipType.isAcceptableOrUnknown(
-          data['relationship_type']!,
-          _relationshipTypeMeta,
-        ),
-      );
-    }
-    if (data.containsKey('is_primary_marriage')) {
-      context.handle(
-        _isPrimaryMarriageMeta,
-        isPrimaryMarriage.isAcceptableOrUnknown(
-          data['is_primary_marriage']!,
-          _isPrimaryMarriageMeta,
-        ),
-      );
-    }
-    if (data.containsKey('notes')) {
-      context.handle(
-        _notesMeta,
-        notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
-      );
-    }
-    if (data.containsKey('private_notes')) {
-      context.handle(
-        _privateNotesMeta,
-        privateNotes.isAcceptableOrUnknown(
-          data['private_notes']!,
-          _privateNotesMeta,
-        ),
-      );
-    }
-    if (data.containsKey('uuid')) {
-      context.handle(
-        _uuidMeta,
-        uuid.isAcceptableOrUnknown(data['uuid']!, _uuidMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_uuidMeta);
-    }
-    if (data.containsKey('sync_status')) {
-      context.handle(
-        _syncStatusMeta,
-        syncStatus.isAcceptableOrUnknown(data['sync_status']!, _syncStatusMeta),
-      );
-    }
-    if (data.containsKey('is_deleted')) {
-      context.handle(
-        _isDeletedMeta,
-        isDeleted.isAcceptableOrUnknown(data['is_deleted']!, _isDeletedMeta),
-      );
-    }
-    if (data.containsKey('created_at')) {
-      context.handle(
-        _createdAtMeta,
-        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
-      );
-    }
-    if (data.containsKey('updated_at')) {
-      context.handle(
-        _updatedAtMeta,
-        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
-      );
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {id};
-  @override
-  FamiliesV2Data map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return FamiliesV2Data(
-      id: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}id'],
-      )!,
-      husbandId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}husband_id'],
-      ),
-      wifeId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}wife_id'],
-      ),
-      marriageDate: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}marriage_date'],
-      ),
-      marriageDateQualifier: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}marriage_date_qualifier'],
-      ),
-      marriagePlace: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}marriage_place'],
-      ),
-      marriagePlaceLat: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}marriage_place_lat'],
-      ),
-      marriagePlaceLng: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}marriage_place_lng'],
-      ),
-      wifeTookHusbandName: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}wife_took_husband_name'],
-      )!,
-      husbandTookWifeName: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}husband_took_wife_name'],
-      )!,
-      hyphenatedSurname: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}hyphenated_surname'],
-      )!,
-      customSurnameChange: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}custom_surname_change'],
-      ),
-      noNameChange: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}no_name_change'],
-      )!,
-      wifeMarriedSurname: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}wife_married_surname'],
-      ),
-      wifeNameChangeType: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}wife_name_change_type'],
-      ),
-      husbandMarriedSurname: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}husband_married_surname'],
-      ),
-      husbandNameChangeType: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}husband_name_change_type'],
-      ),
-      divorceDate: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}divorce_date'],
-      ),
-      divorceDateQualifier: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}divorce_date_qualifier'],
-      ),
-      divorcePlace: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}divorce_place'],
-      ),
-      wifeRevertedToMaiden: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}wife_reverted_to_maiden'],
-      )!,
-      husbandRevertedName: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}husband_reverted_name'],
-      )!,
-      relationshipType: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}relationship_type'],
-      )!,
-      isPrimaryMarriage: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}is_primary_marriage'],
-      )!,
-      notes: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}notes'],
-      ),
-      privateNotes: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}private_notes'],
-      ),
-      uuid: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}uuid'],
-      )!,
-      syncStatus: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}sync_status'],
-      )!,
-      isDeleted: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}is_deleted'],
-      )!,
-      createdAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}created_at'],
-      )!,
-      updatedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}updated_at'],
-      )!,
-    );
-  }
-
-  @override
-  $FamiliesV2Table createAlias(String alias) {
-    return $FamiliesV2Table(attachedDatabase, alias);
-  }
-}
-
-class FamiliesV2Data extends DataClass implements Insertable<FamiliesV2Data> {
-  final String id;
-  final String? husbandId;
-  final String? wifeId;
-  final DateTime? marriageDate;
-  final String? marriageDateQualifier;
-  final String? marriagePlace;
-  final double? marriagePlaceLat;
-  final double? marriagePlaceLng;
-  final bool wifeTookHusbandName;
-  final bool husbandTookWifeName;
-  final bool hyphenatedSurname;
-  final String? customSurnameChange;
-  final bool noNameChange;
-  final String? wifeMarriedSurname;
-  final String? wifeNameChangeType;
-  final String? husbandMarriedSurname;
-  final String? husbandNameChangeType;
-  final DateTime? divorceDate;
-  final String? divorceDateQualifier;
-  final String? divorcePlace;
-  final bool wifeRevertedToMaiden;
-  final bool husbandRevertedName;
-  final String relationshipType;
-  final bool isPrimaryMarriage;
-  final String? notes;
-  final String? privateNotes;
-  final String uuid;
-  final String syncStatus;
-  final bool isDeleted;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-  const FamiliesV2Data({
-    required this.id,
-    this.husbandId,
-    this.wifeId,
-    this.marriageDate,
-    this.marriageDateQualifier,
-    this.marriagePlace,
-    this.marriagePlaceLat,
-    this.marriagePlaceLng,
-    required this.wifeTookHusbandName,
-    required this.husbandTookWifeName,
-    required this.hyphenatedSurname,
-    this.customSurnameChange,
-    required this.noNameChange,
-    this.wifeMarriedSurname,
-    this.wifeNameChangeType,
-    this.husbandMarriedSurname,
-    this.husbandNameChangeType,
-    this.divorceDate,
-    this.divorceDateQualifier,
-    this.divorcePlace,
-    required this.wifeRevertedToMaiden,
-    required this.husbandRevertedName,
-    required this.relationshipType,
-    required this.isPrimaryMarriage,
-    this.notes,
-    this.privateNotes,
-    required this.uuid,
-    required this.syncStatus,
-    required this.isDeleted,
-    required this.createdAt,
-    required this.updatedAt,
-  });
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['id'] = Variable<String>(id);
-    if (!nullToAbsent || husbandId != null) {
-      map['husband_id'] = Variable<String>(husbandId);
-    }
-    if (!nullToAbsent || wifeId != null) {
-      map['wife_id'] = Variable<String>(wifeId);
-    }
-    if (!nullToAbsent || marriageDate != null) {
-      map['marriage_date'] = Variable<DateTime>(marriageDate);
-    }
-    if (!nullToAbsent || marriageDateQualifier != null) {
-      map['marriage_date_qualifier'] = Variable<String>(marriageDateQualifier);
-    }
-    if (!nullToAbsent || marriagePlace != null) {
-      map['marriage_place'] = Variable<String>(marriagePlace);
-    }
-    if (!nullToAbsent || marriagePlaceLat != null) {
-      map['marriage_place_lat'] = Variable<double>(marriagePlaceLat);
-    }
-    if (!nullToAbsent || marriagePlaceLng != null) {
-      map['marriage_place_lng'] = Variable<double>(marriagePlaceLng);
-    }
-    map['wife_took_husband_name'] = Variable<bool>(wifeTookHusbandName);
-    map['husband_took_wife_name'] = Variable<bool>(husbandTookWifeName);
-    map['hyphenated_surname'] = Variable<bool>(hyphenatedSurname);
-    if (!nullToAbsent || customSurnameChange != null) {
-      map['custom_surname_change'] = Variable<String>(customSurnameChange);
-    }
-    map['no_name_change'] = Variable<bool>(noNameChange);
-    if (!nullToAbsent || wifeMarriedSurname != null) {
-      map['wife_married_surname'] = Variable<String>(wifeMarriedSurname);
-    }
-    if (!nullToAbsent || wifeNameChangeType != null) {
-      map['wife_name_change_type'] = Variable<String>(wifeNameChangeType);
-    }
-    if (!nullToAbsent || husbandMarriedSurname != null) {
-      map['husband_married_surname'] = Variable<String>(husbandMarriedSurname);
-    }
-    if (!nullToAbsent || husbandNameChangeType != null) {
-      map['husband_name_change_type'] = Variable<String>(husbandNameChangeType);
-    }
-    if (!nullToAbsent || divorceDate != null) {
-      map['divorce_date'] = Variable<DateTime>(divorceDate);
-    }
-    if (!nullToAbsent || divorceDateQualifier != null) {
-      map['divorce_date_qualifier'] = Variable<String>(divorceDateQualifier);
-    }
-    if (!nullToAbsent || divorcePlace != null) {
-      map['divorce_place'] = Variable<String>(divorcePlace);
-    }
-    map['wife_reverted_to_maiden'] = Variable<bool>(wifeRevertedToMaiden);
-    map['husband_reverted_name'] = Variable<bool>(husbandRevertedName);
-    map['relationship_type'] = Variable<String>(relationshipType);
-    map['is_primary_marriage'] = Variable<bool>(isPrimaryMarriage);
-    if (!nullToAbsent || notes != null) {
-      map['notes'] = Variable<String>(notes);
-    }
-    if (!nullToAbsent || privateNotes != null) {
-      map['private_notes'] = Variable<String>(privateNotes);
-    }
-    map['uuid'] = Variable<String>(uuid);
-    map['sync_status'] = Variable<String>(syncStatus);
-    map['is_deleted'] = Variable<bool>(isDeleted);
-    map['created_at'] = Variable<DateTime>(createdAt);
-    map['updated_at'] = Variable<DateTime>(updatedAt);
-    return map;
-  }
-
-  FamiliesV2Companion toCompanion(bool nullToAbsent) {
-    return FamiliesV2Companion(
-      id: Value(id),
-      husbandId: husbandId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(husbandId),
-      wifeId: wifeId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(wifeId),
-      marriageDate: marriageDate == null && nullToAbsent
-          ? const Value.absent()
-          : Value(marriageDate),
-      marriageDateQualifier: marriageDateQualifier == null && nullToAbsent
-          ? const Value.absent()
-          : Value(marriageDateQualifier),
-      marriagePlace: marriagePlace == null && nullToAbsent
-          ? const Value.absent()
-          : Value(marriagePlace),
-      marriagePlaceLat: marriagePlaceLat == null && nullToAbsent
-          ? const Value.absent()
-          : Value(marriagePlaceLat),
-      marriagePlaceLng: marriagePlaceLng == null && nullToAbsent
-          ? const Value.absent()
-          : Value(marriagePlaceLng),
-      wifeTookHusbandName: Value(wifeTookHusbandName),
-      husbandTookWifeName: Value(husbandTookWifeName),
-      hyphenatedSurname: Value(hyphenatedSurname),
-      customSurnameChange: customSurnameChange == null && nullToAbsent
-          ? const Value.absent()
-          : Value(customSurnameChange),
-      noNameChange: Value(noNameChange),
-      wifeMarriedSurname: wifeMarriedSurname == null && nullToAbsent
-          ? const Value.absent()
-          : Value(wifeMarriedSurname),
-      wifeNameChangeType: wifeNameChangeType == null && nullToAbsent
-          ? const Value.absent()
-          : Value(wifeNameChangeType),
-      husbandMarriedSurname: husbandMarriedSurname == null && nullToAbsent
-          ? const Value.absent()
-          : Value(husbandMarriedSurname),
-      husbandNameChangeType: husbandNameChangeType == null && nullToAbsent
-          ? const Value.absent()
-          : Value(husbandNameChangeType),
-      divorceDate: divorceDate == null && nullToAbsent
-          ? const Value.absent()
-          : Value(divorceDate),
-      divorceDateQualifier: divorceDateQualifier == null && nullToAbsent
-          ? const Value.absent()
-          : Value(divorceDateQualifier),
-      divorcePlace: divorcePlace == null && nullToAbsent
-          ? const Value.absent()
-          : Value(divorcePlace),
-      wifeRevertedToMaiden: Value(wifeRevertedToMaiden),
-      husbandRevertedName: Value(husbandRevertedName),
-      relationshipType: Value(relationshipType),
-      isPrimaryMarriage: Value(isPrimaryMarriage),
-      notes: notes == null && nullToAbsent
-          ? const Value.absent()
-          : Value(notes),
-      privateNotes: privateNotes == null && nullToAbsent
-          ? const Value.absent()
-          : Value(privateNotes),
-      uuid: Value(uuid),
-      syncStatus: Value(syncStatus),
-      isDeleted: Value(isDeleted),
-      createdAt: Value(createdAt),
-      updatedAt: Value(updatedAt),
-    );
-  }
-
-  factory FamiliesV2Data.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return FamiliesV2Data(
-      id: serializer.fromJson<String>(json['id']),
-      husbandId: serializer.fromJson<String?>(json['husbandId']),
-      wifeId: serializer.fromJson<String?>(json['wifeId']),
-      marriageDate: serializer.fromJson<DateTime?>(json['marriageDate']),
-      marriageDateQualifier: serializer.fromJson<String?>(
-        json['marriageDateQualifier'],
-      ),
-      marriagePlace: serializer.fromJson<String?>(json['marriagePlace']),
-      marriagePlaceLat: serializer.fromJson<double?>(json['marriagePlaceLat']),
-      marriagePlaceLng: serializer.fromJson<double?>(json['marriagePlaceLng']),
-      wifeTookHusbandName: serializer.fromJson<bool>(
-        json['wifeTookHusbandName'],
-      ),
-      husbandTookWifeName: serializer.fromJson<bool>(
-        json['husbandTookWifeName'],
-      ),
-      hyphenatedSurname: serializer.fromJson<bool>(json['hyphenatedSurname']),
-      customSurnameChange: serializer.fromJson<String?>(
-        json['customSurnameChange'],
-      ),
-      noNameChange: serializer.fromJson<bool>(json['noNameChange']),
-      wifeMarriedSurname: serializer.fromJson<String?>(
-        json['wifeMarriedSurname'],
-      ),
-      wifeNameChangeType: serializer.fromJson<String?>(
-        json['wifeNameChangeType'],
-      ),
-      husbandMarriedSurname: serializer.fromJson<String?>(
-        json['husbandMarriedSurname'],
-      ),
-      husbandNameChangeType: serializer.fromJson<String?>(
-        json['husbandNameChangeType'],
-      ),
-      divorceDate: serializer.fromJson<DateTime?>(json['divorceDate']),
-      divorceDateQualifier: serializer.fromJson<String?>(
-        json['divorceDateQualifier'],
-      ),
-      divorcePlace: serializer.fromJson<String?>(json['divorcePlace']),
-      wifeRevertedToMaiden: serializer.fromJson<bool>(
-        json['wifeRevertedToMaiden'],
-      ),
-      husbandRevertedName: serializer.fromJson<bool>(
-        json['husbandRevertedName'],
-      ),
-      relationshipType: serializer.fromJson<String>(json['relationshipType']),
-      isPrimaryMarriage: serializer.fromJson<bool>(json['isPrimaryMarriage']),
-      notes: serializer.fromJson<String?>(json['notes']),
-      privateNotes: serializer.fromJson<String?>(json['privateNotes']),
-      uuid: serializer.fromJson<String>(json['uuid']),
-      syncStatus: serializer.fromJson<String>(json['syncStatus']),
-      isDeleted: serializer.fromJson<bool>(json['isDeleted']),
-      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
-      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'id': serializer.toJson<String>(id),
-      'husbandId': serializer.toJson<String?>(husbandId),
-      'wifeId': serializer.toJson<String?>(wifeId),
-      'marriageDate': serializer.toJson<DateTime?>(marriageDate),
-      'marriageDateQualifier': serializer.toJson<String?>(
-        marriageDateQualifier,
-      ),
-      'marriagePlace': serializer.toJson<String?>(marriagePlace),
-      'marriagePlaceLat': serializer.toJson<double?>(marriagePlaceLat),
-      'marriagePlaceLng': serializer.toJson<double?>(marriagePlaceLng),
-      'wifeTookHusbandName': serializer.toJson<bool>(wifeTookHusbandName),
-      'husbandTookWifeName': serializer.toJson<bool>(husbandTookWifeName),
-      'hyphenatedSurname': serializer.toJson<bool>(hyphenatedSurname),
-      'customSurnameChange': serializer.toJson<String?>(customSurnameChange),
-      'noNameChange': serializer.toJson<bool>(noNameChange),
-      'wifeMarriedSurname': serializer.toJson<String?>(wifeMarriedSurname),
-      'wifeNameChangeType': serializer.toJson<String?>(wifeNameChangeType),
-      'husbandMarriedSurname': serializer.toJson<String?>(
-        husbandMarriedSurname,
-      ),
-      'husbandNameChangeType': serializer.toJson<String?>(
-        husbandNameChangeType,
-      ),
-      'divorceDate': serializer.toJson<DateTime?>(divorceDate),
-      'divorceDateQualifier': serializer.toJson<String?>(divorceDateQualifier),
-      'divorcePlace': serializer.toJson<String?>(divorcePlace),
-      'wifeRevertedToMaiden': serializer.toJson<bool>(wifeRevertedToMaiden),
-      'husbandRevertedName': serializer.toJson<bool>(husbandRevertedName),
-      'relationshipType': serializer.toJson<String>(relationshipType),
-      'isPrimaryMarriage': serializer.toJson<bool>(isPrimaryMarriage),
-      'notes': serializer.toJson<String?>(notes),
-      'privateNotes': serializer.toJson<String?>(privateNotes),
-      'uuid': serializer.toJson<String>(uuid),
-      'syncStatus': serializer.toJson<String>(syncStatus),
-      'isDeleted': serializer.toJson<bool>(isDeleted),
-      'createdAt': serializer.toJson<DateTime>(createdAt),
-      'updatedAt': serializer.toJson<DateTime>(updatedAt),
-    };
-  }
-
-  FamiliesV2Data copyWith({
-    String? id,
-    Value<String?> husbandId = const Value.absent(),
-    Value<String?> wifeId = const Value.absent(),
-    Value<DateTime?> marriageDate = const Value.absent(),
-    Value<String?> marriageDateQualifier = const Value.absent(),
-    Value<String?> marriagePlace = const Value.absent(),
-    Value<double?> marriagePlaceLat = const Value.absent(),
-    Value<double?> marriagePlaceLng = const Value.absent(),
-    bool? wifeTookHusbandName,
-    bool? husbandTookWifeName,
-    bool? hyphenatedSurname,
-    Value<String?> customSurnameChange = const Value.absent(),
-    bool? noNameChange,
-    Value<String?> wifeMarriedSurname = const Value.absent(),
-    Value<String?> wifeNameChangeType = const Value.absent(),
-    Value<String?> husbandMarriedSurname = const Value.absent(),
-    Value<String?> husbandNameChangeType = const Value.absent(),
-    Value<DateTime?> divorceDate = const Value.absent(),
-    Value<String?> divorceDateQualifier = const Value.absent(),
-    Value<String?> divorcePlace = const Value.absent(),
-    bool? wifeRevertedToMaiden,
-    bool? husbandRevertedName,
-    String? relationshipType,
-    bool? isPrimaryMarriage,
-    Value<String?> notes = const Value.absent(),
-    Value<String?> privateNotes = const Value.absent(),
-    String? uuid,
-    String? syncStatus,
-    bool? isDeleted,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  }) => FamiliesV2Data(
-    id: id ?? this.id,
-    husbandId: husbandId.present ? husbandId.value : this.husbandId,
-    wifeId: wifeId.present ? wifeId.value : this.wifeId,
-    marriageDate: marriageDate.present ? marriageDate.value : this.marriageDate,
-    marriageDateQualifier: marriageDateQualifier.present
-        ? marriageDateQualifier.value
-        : this.marriageDateQualifier,
-    marriagePlace: marriagePlace.present
-        ? marriagePlace.value
-        : this.marriagePlace,
-    marriagePlaceLat: marriagePlaceLat.present
-        ? marriagePlaceLat.value
-        : this.marriagePlaceLat,
-    marriagePlaceLng: marriagePlaceLng.present
-        ? marriagePlaceLng.value
-        : this.marriagePlaceLng,
-    wifeTookHusbandName: wifeTookHusbandName ?? this.wifeTookHusbandName,
-    husbandTookWifeName: husbandTookWifeName ?? this.husbandTookWifeName,
-    hyphenatedSurname: hyphenatedSurname ?? this.hyphenatedSurname,
-    customSurnameChange: customSurnameChange.present
-        ? customSurnameChange.value
-        : this.customSurnameChange,
-    noNameChange: noNameChange ?? this.noNameChange,
-    wifeMarriedSurname: wifeMarriedSurname.present
-        ? wifeMarriedSurname.value
-        : this.wifeMarriedSurname,
-    wifeNameChangeType: wifeNameChangeType.present
-        ? wifeNameChangeType.value
-        : this.wifeNameChangeType,
-    husbandMarriedSurname: husbandMarriedSurname.present
-        ? husbandMarriedSurname.value
-        : this.husbandMarriedSurname,
-    husbandNameChangeType: husbandNameChangeType.present
-        ? husbandNameChangeType.value
-        : this.husbandNameChangeType,
-    divorceDate: divorceDate.present ? divorceDate.value : this.divorceDate,
-    divorceDateQualifier: divorceDateQualifier.present
-        ? divorceDateQualifier.value
-        : this.divorceDateQualifier,
-    divorcePlace: divorcePlace.present ? divorcePlace.value : this.divorcePlace,
-    wifeRevertedToMaiden: wifeRevertedToMaiden ?? this.wifeRevertedToMaiden,
-    husbandRevertedName: husbandRevertedName ?? this.husbandRevertedName,
-    relationshipType: relationshipType ?? this.relationshipType,
-    isPrimaryMarriage: isPrimaryMarriage ?? this.isPrimaryMarriage,
-    notes: notes.present ? notes.value : this.notes,
-    privateNotes: privateNotes.present ? privateNotes.value : this.privateNotes,
-    uuid: uuid ?? this.uuid,
-    syncStatus: syncStatus ?? this.syncStatus,
-    isDeleted: isDeleted ?? this.isDeleted,
-    createdAt: createdAt ?? this.createdAt,
-    updatedAt: updatedAt ?? this.updatedAt,
-  );
-  FamiliesV2Data copyWithCompanion(FamiliesV2Companion data) {
-    return FamiliesV2Data(
-      id: data.id.present ? data.id.value : this.id,
-      husbandId: data.husbandId.present ? data.husbandId.value : this.husbandId,
-      wifeId: data.wifeId.present ? data.wifeId.value : this.wifeId,
-      marriageDate: data.marriageDate.present
-          ? data.marriageDate.value
-          : this.marriageDate,
-      marriageDateQualifier: data.marriageDateQualifier.present
-          ? data.marriageDateQualifier.value
-          : this.marriageDateQualifier,
-      marriagePlace: data.marriagePlace.present
-          ? data.marriagePlace.value
-          : this.marriagePlace,
-      marriagePlaceLat: data.marriagePlaceLat.present
-          ? data.marriagePlaceLat.value
-          : this.marriagePlaceLat,
-      marriagePlaceLng: data.marriagePlaceLng.present
-          ? data.marriagePlaceLng.value
-          : this.marriagePlaceLng,
-      wifeTookHusbandName: data.wifeTookHusbandName.present
-          ? data.wifeTookHusbandName.value
-          : this.wifeTookHusbandName,
-      husbandTookWifeName: data.husbandTookWifeName.present
-          ? data.husbandTookWifeName.value
-          : this.husbandTookWifeName,
-      hyphenatedSurname: data.hyphenatedSurname.present
-          ? data.hyphenatedSurname.value
-          : this.hyphenatedSurname,
-      customSurnameChange: data.customSurnameChange.present
-          ? data.customSurnameChange.value
-          : this.customSurnameChange,
-      noNameChange: data.noNameChange.present
-          ? data.noNameChange.value
-          : this.noNameChange,
-      wifeMarriedSurname: data.wifeMarriedSurname.present
-          ? data.wifeMarriedSurname.value
-          : this.wifeMarriedSurname,
-      wifeNameChangeType: data.wifeNameChangeType.present
-          ? data.wifeNameChangeType.value
-          : this.wifeNameChangeType,
-      husbandMarriedSurname: data.husbandMarriedSurname.present
-          ? data.husbandMarriedSurname.value
-          : this.husbandMarriedSurname,
-      husbandNameChangeType: data.husbandNameChangeType.present
-          ? data.husbandNameChangeType.value
-          : this.husbandNameChangeType,
-      divorceDate: data.divorceDate.present
-          ? data.divorceDate.value
-          : this.divorceDate,
-      divorceDateQualifier: data.divorceDateQualifier.present
-          ? data.divorceDateQualifier.value
-          : this.divorceDateQualifier,
-      divorcePlace: data.divorcePlace.present
-          ? data.divorcePlace.value
-          : this.divorcePlace,
-      wifeRevertedToMaiden: data.wifeRevertedToMaiden.present
-          ? data.wifeRevertedToMaiden.value
-          : this.wifeRevertedToMaiden,
-      husbandRevertedName: data.husbandRevertedName.present
-          ? data.husbandRevertedName.value
-          : this.husbandRevertedName,
-      relationshipType: data.relationshipType.present
-          ? data.relationshipType.value
-          : this.relationshipType,
-      isPrimaryMarriage: data.isPrimaryMarriage.present
-          ? data.isPrimaryMarriage.value
-          : this.isPrimaryMarriage,
-      notes: data.notes.present ? data.notes.value : this.notes,
-      privateNotes: data.privateNotes.present
-          ? data.privateNotes.value
-          : this.privateNotes,
-      uuid: data.uuid.present ? data.uuid.value : this.uuid,
-      syncStatus: data.syncStatus.present
-          ? data.syncStatus.value
-          : this.syncStatus,
-      isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
-      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
-      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('FamiliesV2Data(')
-          ..write('id: $id, ')
-          ..write('husbandId: $husbandId, ')
-          ..write('wifeId: $wifeId, ')
-          ..write('marriageDate: $marriageDate, ')
-          ..write('marriageDateQualifier: $marriageDateQualifier, ')
-          ..write('marriagePlace: $marriagePlace, ')
-          ..write('marriagePlaceLat: $marriagePlaceLat, ')
-          ..write('marriagePlaceLng: $marriagePlaceLng, ')
-          ..write('wifeTookHusbandName: $wifeTookHusbandName, ')
-          ..write('husbandTookWifeName: $husbandTookWifeName, ')
-          ..write('hyphenatedSurname: $hyphenatedSurname, ')
-          ..write('customSurnameChange: $customSurnameChange, ')
-          ..write('noNameChange: $noNameChange, ')
-          ..write('wifeMarriedSurname: $wifeMarriedSurname, ')
-          ..write('wifeNameChangeType: $wifeNameChangeType, ')
-          ..write('husbandMarriedSurname: $husbandMarriedSurname, ')
-          ..write('husbandNameChangeType: $husbandNameChangeType, ')
-          ..write('divorceDate: $divorceDate, ')
-          ..write('divorceDateQualifier: $divorceDateQualifier, ')
-          ..write('divorcePlace: $divorcePlace, ')
-          ..write('wifeRevertedToMaiden: $wifeRevertedToMaiden, ')
-          ..write('husbandRevertedName: $husbandRevertedName, ')
-          ..write('relationshipType: $relationshipType, ')
-          ..write('isPrimaryMarriage: $isPrimaryMarriage, ')
-          ..write('notes: $notes, ')
-          ..write('privateNotes: $privateNotes, ')
-          ..write('uuid: $uuid, ')
-          ..write('syncStatus: $syncStatus, ')
-          ..write('isDeleted: $isDeleted, ')
-          ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode => Object.hashAll([
-    id,
-    husbandId,
-    wifeId,
-    marriageDate,
-    marriageDateQualifier,
-    marriagePlace,
-    marriagePlaceLat,
-    marriagePlaceLng,
-    wifeTookHusbandName,
-    husbandTookWifeName,
-    hyphenatedSurname,
-    customSurnameChange,
-    noNameChange,
-    wifeMarriedSurname,
-    wifeNameChangeType,
-    husbandMarriedSurname,
-    husbandNameChangeType,
-    divorceDate,
-    divorceDateQualifier,
-    divorcePlace,
-    wifeRevertedToMaiden,
-    husbandRevertedName,
-    relationshipType,
-    isPrimaryMarriage,
-    notes,
-    privateNotes,
-    uuid,
-    syncStatus,
-    isDeleted,
-    createdAt,
-    updatedAt,
-  ]);
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is FamiliesV2Data &&
-          other.id == this.id &&
-          other.husbandId == this.husbandId &&
-          other.wifeId == this.wifeId &&
-          other.marriageDate == this.marriageDate &&
-          other.marriageDateQualifier == this.marriageDateQualifier &&
-          other.marriagePlace == this.marriagePlace &&
-          other.marriagePlaceLat == this.marriagePlaceLat &&
-          other.marriagePlaceLng == this.marriagePlaceLng &&
-          other.wifeTookHusbandName == this.wifeTookHusbandName &&
-          other.husbandTookWifeName == this.husbandTookWifeName &&
-          other.hyphenatedSurname == this.hyphenatedSurname &&
-          other.customSurnameChange == this.customSurnameChange &&
-          other.noNameChange == this.noNameChange &&
-          other.wifeMarriedSurname == this.wifeMarriedSurname &&
-          other.wifeNameChangeType == this.wifeNameChangeType &&
-          other.husbandMarriedSurname == this.husbandMarriedSurname &&
-          other.husbandNameChangeType == this.husbandNameChangeType &&
-          other.divorceDate == this.divorceDate &&
-          other.divorceDateQualifier == this.divorceDateQualifier &&
-          other.divorcePlace == this.divorcePlace &&
-          other.wifeRevertedToMaiden == this.wifeRevertedToMaiden &&
-          other.husbandRevertedName == this.husbandRevertedName &&
-          other.relationshipType == this.relationshipType &&
-          other.isPrimaryMarriage == this.isPrimaryMarriage &&
-          other.notes == this.notes &&
-          other.privateNotes == this.privateNotes &&
-          other.uuid == this.uuid &&
-          other.syncStatus == this.syncStatus &&
-          other.isDeleted == this.isDeleted &&
-          other.createdAt == this.createdAt &&
-          other.updatedAt == this.updatedAt);
-}
-
-class FamiliesV2Companion extends UpdateCompanion<FamiliesV2Data> {
-  final Value<String> id;
-  final Value<String?> husbandId;
-  final Value<String?> wifeId;
-  final Value<DateTime?> marriageDate;
-  final Value<String?> marriageDateQualifier;
-  final Value<String?> marriagePlace;
-  final Value<double?> marriagePlaceLat;
-  final Value<double?> marriagePlaceLng;
-  final Value<bool> wifeTookHusbandName;
-  final Value<bool> husbandTookWifeName;
-  final Value<bool> hyphenatedSurname;
-  final Value<String?> customSurnameChange;
-  final Value<bool> noNameChange;
-  final Value<String?> wifeMarriedSurname;
-  final Value<String?> wifeNameChangeType;
-  final Value<String?> husbandMarriedSurname;
-  final Value<String?> husbandNameChangeType;
-  final Value<DateTime?> divorceDate;
-  final Value<String?> divorceDateQualifier;
-  final Value<String?> divorcePlace;
-  final Value<bool> wifeRevertedToMaiden;
-  final Value<bool> husbandRevertedName;
-  final Value<String> relationshipType;
-  final Value<bool> isPrimaryMarriage;
-  final Value<String?> notes;
-  final Value<String?> privateNotes;
-  final Value<String> uuid;
-  final Value<String> syncStatus;
-  final Value<bool> isDeleted;
-  final Value<DateTime> createdAt;
-  final Value<DateTime> updatedAt;
-  final Value<int> rowid;
-  const FamiliesV2Companion({
-    this.id = const Value.absent(),
-    this.husbandId = const Value.absent(),
-    this.wifeId = const Value.absent(),
-    this.marriageDate = const Value.absent(),
-    this.marriageDateQualifier = const Value.absent(),
-    this.marriagePlace = const Value.absent(),
-    this.marriagePlaceLat = const Value.absent(),
-    this.marriagePlaceLng = const Value.absent(),
-    this.wifeTookHusbandName = const Value.absent(),
-    this.husbandTookWifeName = const Value.absent(),
-    this.hyphenatedSurname = const Value.absent(),
-    this.customSurnameChange = const Value.absent(),
-    this.noNameChange = const Value.absent(),
-    this.wifeMarriedSurname = const Value.absent(),
-    this.wifeNameChangeType = const Value.absent(),
-    this.husbandMarriedSurname = const Value.absent(),
-    this.husbandNameChangeType = const Value.absent(),
-    this.divorceDate = const Value.absent(),
-    this.divorceDateQualifier = const Value.absent(),
-    this.divorcePlace = const Value.absent(),
-    this.wifeRevertedToMaiden = const Value.absent(),
-    this.husbandRevertedName = const Value.absent(),
-    this.relationshipType = const Value.absent(),
-    this.isPrimaryMarriage = const Value.absent(),
-    this.notes = const Value.absent(),
-    this.privateNotes = const Value.absent(),
-    this.uuid = const Value.absent(),
-    this.syncStatus = const Value.absent(),
-    this.isDeleted = const Value.absent(),
-    this.createdAt = const Value.absent(),
-    this.updatedAt = const Value.absent(),
-    this.rowid = const Value.absent(),
-  });
-  FamiliesV2Companion.insert({
-    required String id,
-    this.husbandId = const Value.absent(),
-    this.wifeId = const Value.absent(),
-    this.marriageDate = const Value.absent(),
-    this.marriageDateQualifier = const Value.absent(),
-    this.marriagePlace = const Value.absent(),
-    this.marriagePlaceLat = const Value.absent(),
-    this.marriagePlaceLng = const Value.absent(),
-    this.wifeTookHusbandName = const Value.absent(),
-    this.husbandTookWifeName = const Value.absent(),
-    this.hyphenatedSurname = const Value.absent(),
-    this.customSurnameChange = const Value.absent(),
-    this.noNameChange = const Value.absent(),
-    this.wifeMarriedSurname = const Value.absent(),
-    this.wifeNameChangeType = const Value.absent(),
-    this.husbandMarriedSurname = const Value.absent(),
-    this.husbandNameChangeType = const Value.absent(),
-    this.divorceDate = const Value.absent(),
-    this.divorceDateQualifier = const Value.absent(),
-    this.divorcePlace = const Value.absent(),
-    this.wifeRevertedToMaiden = const Value.absent(),
-    this.husbandRevertedName = const Value.absent(),
-    this.relationshipType = const Value.absent(),
-    this.isPrimaryMarriage = const Value.absent(),
-    this.notes = const Value.absent(),
-    this.privateNotes = const Value.absent(),
-    required String uuid,
-    this.syncStatus = const Value.absent(),
-    this.isDeleted = const Value.absent(),
-    this.createdAt = const Value.absent(),
-    this.updatedAt = const Value.absent(),
-    this.rowid = const Value.absent(),
-  }) : id = Value(id),
-       uuid = Value(uuid);
-  static Insertable<FamiliesV2Data> custom({
-    Expression<String>? id,
-    Expression<String>? husbandId,
-    Expression<String>? wifeId,
-    Expression<DateTime>? marriageDate,
-    Expression<String>? marriageDateQualifier,
-    Expression<String>? marriagePlace,
-    Expression<double>? marriagePlaceLat,
-    Expression<double>? marriagePlaceLng,
-    Expression<bool>? wifeTookHusbandName,
-    Expression<bool>? husbandTookWifeName,
-    Expression<bool>? hyphenatedSurname,
-    Expression<String>? customSurnameChange,
-    Expression<bool>? noNameChange,
-    Expression<String>? wifeMarriedSurname,
-    Expression<String>? wifeNameChangeType,
-    Expression<String>? husbandMarriedSurname,
-    Expression<String>? husbandNameChangeType,
-    Expression<DateTime>? divorceDate,
-    Expression<String>? divorceDateQualifier,
-    Expression<String>? divorcePlace,
-    Expression<bool>? wifeRevertedToMaiden,
-    Expression<bool>? husbandRevertedName,
-    Expression<String>? relationshipType,
-    Expression<bool>? isPrimaryMarriage,
-    Expression<String>? notes,
-    Expression<String>? privateNotes,
-    Expression<String>? uuid,
-    Expression<String>? syncStatus,
-    Expression<bool>? isDeleted,
-    Expression<DateTime>? createdAt,
-    Expression<DateTime>? updatedAt,
-    Expression<int>? rowid,
-  }) {
-    return RawValuesInsertable({
-      if (id != null) 'id': id,
-      if (husbandId != null) 'husband_id': husbandId,
-      if (wifeId != null) 'wife_id': wifeId,
-      if (marriageDate != null) 'marriage_date': marriageDate,
-      if (marriageDateQualifier != null)
-        'marriage_date_qualifier': marriageDateQualifier,
-      if (marriagePlace != null) 'marriage_place': marriagePlace,
-      if (marriagePlaceLat != null) 'marriage_place_lat': marriagePlaceLat,
-      if (marriagePlaceLng != null) 'marriage_place_lng': marriagePlaceLng,
-      if (wifeTookHusbandName != null)
-        'wife_took_husband_name': wifeTookHusbandName,
-      if (husbandTookWifeName != null)
-        'husband_took_wife_name': husbandTookWifeName,
-      if (hyphenatedSurname != null) 'hyphenated_surname': hyphenatedSurname,
-      if (customSurnameChange != null)
-        'custom_surname_change': customSurnameChange,
-      if (noNameChange != null) 'no_name_change': noNameChange,
-      if (wifeMarriedSurname != null)
-        'wife_married_surname': wifeMarriedSurname,
-      if (wifeNameChangeType != null)
-        'wife_name_change_type': wifeNameChangeType,
-      if (husbandMarriedSurname != null)
-        'husband_married_surname': husbandMarriedSurname,
-      if (husbandNameChangeType != null)
-        'husband_name_change_type': husbandNameChangeType,
-      if (divorceDate != null) 'divorce_date': divorceDate,
-      if (divorceDateQualifier != null)
-        'divorce_date_qualifier': divorceDateQualifier,
-      if (divorcePlace != null) 'divorce_place': divorcePlace,
-      if (wifeRevertedToMaiden != null)
-        'wife_reverted_to_maiden': wifeRevertedToMaiden,
-      if (husbandRevertedName != null)
-        'husband_reverted_name': husbandRevertedName,
-      if (relationshipType != null) 'relationship_type': relationshipType,
-      if (isPrimaryMarriage != null) 'is_primary_marriage': isPrimaryMarriage,
-      if (notes != null) 'notes': notes,
-      if (privateNotes != null) 'private_notes': privateNotes,
-      if (uuid != null) 'uuid': uuid,
-      if (syncStatus != null) 'sync_status': syncStatus,
-      if (isDeleted != null) 'is_deleted': isDeleted,
-      if (createdAt != null) 'created_at': createdAt,
-      if (updatedAt != null) 'updated_at': updatedAt,
-      if (rowid != null) 'rowid': rowid,
-    });
-  }
-
-  FamiliesV2Companion copyWith({
-    Value<String>? id,
-    Value<String?>? husbandId,
-    Value<String?>? wifeId,
-    Value<DateTime?>? marriageDate,
-    Value<String?>? marriageDateQualifier,
-    Value<String?>? marriagePlace,
-    Value<double?>? marriagePlaceLat,
-    Value<double?>? marriagePlaceLng,
-    Value<bool>? wifeTookHusbandName,
-    Value<bool>? husbandTookWifeName,
-    Value<bool>? hyphenatedSurname,
-    Value<String?>? customSurnameChange,
-    Value<bool>? noNameChange,
-    Value<String?>? wifeMarriedSurname,
-    Value<String?>? wifeNameChangeType,
-    Value<String?>? husbandMarriedSurname,
-    Value<String?>? husbandNameChangeType,
-    Value<DateTime?>? divorceDate,
-    Value<String?>? divorceDateQualifier,
-    Value<String?>? divorcePlace,
-    Value<bool>? wifeRevertedToMaiden,
-    Value<bool>? husbandRevertedName,
-    Value<String>? relationshipType,
-    Value<bool>? isPrimaryMarriage,
-    Value<String?>? notes,
-    Value<String?>? privateNotes,
-    Value<String>? uuid,
-    Value<String>? syncStatus,
-    Value<bool>? isDeleted,
-    Value<DateTime>? createdAt,
-    Value<DateTime>? updatedAt,
-    Value<int>? rowid,
-  }) {
-    return FamiliesV2Companion(
-      id: id ?? this.id,
-      husbandId: husbandId ?? this.husbandId,
-      wifeId: wifeId ?? this.wifeId,
-      marriageDate: marriageDate ?? this.marriageDate,
-      marriageDateQualifier:
-          marriageDateQualifier ?? this.marriageDateQualifier,
-      marriagePlace: marriagePlace ?? this.marriagePlace,
-      marriagePlaceLat: marriagePlaceLat ?? this.marriagePlaceLat,
-      marriagePlaceLng: marriagePlaceLng ?? this.marriagePlaceLng,
-      wifeTookHusbandName: wifeTookHusbandName ?? this.wifeTookHusbandName,
-      husbandTookWifeName: husbandTookWifeName ?? this.husbandTookWifeName,
-      hyphenatedSurname: hyphenatedSurname ?? this.hyphenatedSurname,
-      customSurnameChange: customSurnameChange ?? this.customSurnameChange,
-      noNameChange: noNameChange ?? this.noNameChange,
-      wifeMarriedSurname: wifeMarriedSurname ?? this.wifeMarriedSurname,
-      wifeNameChangeType: wifeNameChangeType ?? this.wifeNameChangeType,
-      husbandMarriedSurname:
-          husbandMarriedSurname ?? this.husbandMarriedSurname,
-      husbandNameChangeType:
-          husbandNameChangeType ?? this.husbandNameChangeType,
-      divorceDate: divorceDate ?? this.divorceDate,
-      divorceDateQualifier: divorceDateQualifier ?? this.divorceDateQualifier,
-      divorcePlace: divorcePlace ?? this.divorcePlace,
-      wifeRevertedToMaiden: wifeRevertedToMaiden ?? this.wifeRevertedToMaiden,
-      husbandRevertedName: husbandRevertedName ?? this.husbandRevertedName,
-      relationshipType: relationshipType ?? this.relationshipType,
-      isPrimaryMarriage: isPrimaryMarriage ?? this.isPrimaryMarriage,
-      notes: notes ?? this.notes,
-      privateNotes: privateNotes ?? this.privateNotes,
-      uuid: uuid ?? this.uuid,
-      syncStatus: syncStatus ?? this.syncStatus,
-      isDeleted: isDeleted ?? this.isDeleted,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-      rowid: rowid ?? this.rowid,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (id.present) {
-      map['id'] = Variable<String>(id.value);
-    }
-    if (husbandId.present) {
-      map['husband_id'] = Variable<String>(husbandId.value);
-    }
-    if (wifeId.present) {
-      map['wife_id'] = Variable<String>(wifeId.value);
-    }
-    if (marriageDate.present) {
-      map['marriage_date'] = Variable<DateTime>(marriageDate.value);
-    }
-    if (marriageDateQualifier.present) {
-      map['marriage_date_qualifier'] = Variable<String>(
-        marriageDateQualifier.value,
-      );
-    }
-    if (marriagePlace.present) {
-      map['marriage_place'] = Variable<String>(marriagePlace.value);
-    }
-    if (marriagePlaceLat.present) {
-      map['marriage_place_lat'] = Variable<double>(marriagePlaceLat.value);
-    }
-    if (marriagePlaceLng.present) {
-      map['marriage_place_lng'] = Variable<double>(marriagePlaceLng.value);
-    }
-    if (wifeTookHusbandName.present) {
-      map['wife_took_husband_name'] = Variable<bool>(wifeTookHusbandName.value);
-    }
-    if (husbandTookWifeName.present) {
-      map['husband_took_wife_name'] = Variable<bool>(husbandTookWifeName.value);
-    }
-    if (hyphenatedSurname.present) {
-      map['hyphenated_surname'] = Variable<bool>(hyphenatedSurname.value);
-    }
-    if (customSurnameChange.present) {
-      map['custom_surname_change'] = Variable<String>(
-        customSurnameChange.value,
-      );
-    }
-    if (noNameChange.present) {
-      map['no_name_change'] = Variable<bool>(noNameChange.value);
-    }
-    if (wifeMarriedSurname.present) {
-      map['wife_married_surname'] = Variable<String>(wifeMarriedSurname.value);
-    }
-    if (wifeNameChangeType.present) {
-      map['wife_name_change_type'] = Variable<String>(wifeNameChangeType.value);
-    }
-    if (husbandMarriedSurname.present) {
-      map['husband_married_surname'] = Variable<String>(
-        husbandMarriedSurname.value,
-      );
-    }
-    if (husbandNameChangeType.present) {
-      map['husband_name_change_type'] = Variable<String>(
-        husbandNameChangeType.value,
-      );
-    }
-    if (divorceDate.present) {
-      map['divorce_date'] = Variable<DateTime>(divorceDate.value);
-    }
-    if (divorceDateQualifier.present) {
-      map['divorce_date_qualifier'] = Variable<String>(
-        divorceDateQualifier.value,
-      );
-    }
-    if (divorcePlace.present) {
-      map['divorce_place'] = Variable<String>(divorcePlace.value);
-    }
-    if (wifeRevertedToMaiden.present) {
-      map['wife_reverted_to_maiden'] = Variable<bool>(
-        wifeRevertedToMaiden.value,
-      );
-    }
-    if (husbandRevertedName.present) {
-      map['husband_reverted_name'] = Variable<bool>(husbandRevertedName.value);
-    }
-    if (relationshipType.present) {
-      map['relationship_type'] = Variable<String>(relationshipType.value);
-    }
-    if (isPrimaryMarriage.present) {
-      map['is_primary_marriage'] = Variable<bool>(isPrimaryMarriage.value);
-    }
-    if (notes.present) {
-      map['notes'] = Variable<String>(notes.value);
-    }
-    if (privateNotes.present) {
-      map['private_notes'] = Variable<String>(privateNotes.value);
-    }
-    if (uuid.present) {
-      map['uuid'] = Variable<String>(uuid.value);
-    }
-    if (syncStatus.present) {
-      map['sync_status'] = Variable<String>(syncStatus.value);
-    }
-    if (isDeleted.present) {
-      map['is_deleted'] = Variable<bool>(isDeleted.value);
-    }
-    if (createdAt.present) {
-      map['created_at'] = Variable<DateTime>(createdAt.value);
-    }
-    if (updatedAt.present) {
-      map['updated_at'] = Variable<DateTime>(updatedAt.value);
-    }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('FamiliesV2Companion(')
-          ..write('id: $id, ')
-          ..write('husbandId: $husbandId, ')
-          ..write('wifeId: $wifeId, ')
-          ..write('marriageDate: $marriageDate, ')
-          ..write('marriageDateQualifier: $marriageDateQualifier, ')
-          ..write('marriagePlace: $marriagePlace, ')
-          ..write('marriagePlaceLat: $marriagePlaceLat, ')
-          ..write('marriagePlaceLng: $marriagePlaceLng, ')
-          ..write('wifeTookHusbandName: $wifeTookHusbandName, ')
-          ..write('husbandTookWifeName: $husbandTookWifeName, ')
-          ..write('hyphenatedSurname: $hyphenatedSurname, ')
-          ..write('customSurnameChange: $customSurnameChange, ')
-          ..write('noNameChange: $noNameChange, ')
-          ..write('wifeMarriedSurname: $wifeMarriedSurname, ')
-          ..write('wifeNameChangeType: $wifeNameChangeType, ')
-          ..write('husbandMarriedSurname: $husbandMarriedSurname, ')
-          ..write('husbandNameChangeType: $husbandNameChangeType, ')
-          ..write('divorceDate: $divorceDate, ')
-          ..write('divorceDateQualifier: $divorceDateQualifier, ')
-          ..write('divorcePlace: $divorcePlace, ')
-          ..write('wifeRevertedToMaiden: $wifeRevertedToMaiden, ')
-          ..write('husbandRevertedName: $husbandRevertedName, ')
-          ..write('relationshipType: $relationshipType, ')
-          ..write('isPrimaryMarriage: $isPrimaryMarriage, ')
-          ..write('notes: $notes, ')
-          ..write('privateNotes: $privateNotes, ')
-          ..write('uuid: $uuid, ')
-          ..write('syncStatus: $syncStatus, ')
-          ..write('isDeleted: $isDeleted, ')
-          ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt, ')
-          ..write('rowid: $rowid')
-          ..write(')'))
-        .toString();
-  }
-}
-
-class $FamilyChildrenV2Table extends FamilyChildrenV2
-    with TableInfo<$FamilyChildrenV2Table, FamilyChildrenV2Data> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $FamilyChildrenV2Table(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _idMeta = const VerificationMeta('id');
-  @override
-  late final GeneratedColumn<String> id = GeneratedColumn<String>(
-    'id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _familyIdMeta = const VerificationMeta(
-    'familyId',
-  );
-  @override
-  late final GeneratedColumn<String> familyId = GeneratedColumn<String>(
-    'family_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES families_v2 (id)',
-    ),
-  );
-  static const VerificationMeta _childIdMeta = const VerificationMeta(
-    'childId',
-  );
-  @override
-  late final GeneratedColumn<String> childId = GeneratedColumn<String>(
-    'child_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES genealogy_persons (id)',
-    ),
-  );
-  static const VerificationMeta _birthOrderMeta = const VerificationMeta(
-    'birthOrder',
-  );
-  @override
-  late final GeneratedColumn<int> birthOrder = GeneratedColumn<int>(
-    'birth_order',
-    aliasedName,
-    true,
-    type: DriftSqlType.int,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _relationshipTypeMeta = const VerificationMeta(
-    'relationshipType',
-  );
-  @override
-  late final GeneratedColumn<String> relationshipType = GeneratedColumn<String>(
-    'relationship_type',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-    defaultValue: const Constant('biological'),
-  );
-  static const VerificationMeta _childSurnameAtBirthMeta =
-      const VerificationMeta('childSurnameAtBirth');
-  @override
-  late final GeneratedColumn<String> childSurnameAtBirth =
-      GeneratedColumn<String>(
-        'child_surname_at_birth',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _paternalRelationshipMeta =
-      const VerificationMeta('paternalRelationship');
-  @override
-  late final GeneratedColumn<String> paternalRelationship =
-      GeneratedColumn<String>(
-        'paternal_relationship',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _maternalRelationshipMeta =
-      const VerificationMeta('maternalRelationship');
-  @override
-  late final GeneratedColumn<String> maternalRelationship =
-      GeneratedColumn<String>(
-        'maternal_relationship',
-        aliasedName,
-        true,
-        type: DriftSqlType.string,
-        requiredDuringInsert: false,
-      );
-  static const VerificationMeta _notesMeta = const VerificationMeta('notes');
-  @override
-  late final GeneratedColumn<String> notes = GeneratedColumn<String>(
-    'notes',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _uuidMeta = const VerificationMeta('uuid');
-  @override
-  late final GeneratedColumn<String> uuid = GeneratedColumn<String>(
-    'uuid',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
-  );
-  static const VerificationMeta _syncStatusMeta = const VerificationMeta(
-    'syncStatus',
-  );
-  @override
-  late final GeneratedColumn<String> syncStatus = GeneratedColumn<String>(
-    'sync_status',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-    defaultValue: const Constant('pending'),
-  );
-  static const VerificationMeta _isDeletedMeta = const VerificationMeta(
-    'isDeleted',
-  );
-  @override
-  late final GeneratedColumn<bool> isDeleted = GeneratedColumn<bool>(
-    'is_deleted',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("is_deleted" IN (0, 1))',
-    ),
-    defaultValue: const Constant(false),
-  );
-  static const VerificationMeta _createdAtMeta = const VerificationMeta(
-    'createdAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
-    'created_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-    defaultValue: currentDateAndTime,
-  );
-  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
-    'updatedAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
-    'updated_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-    defaultValue: currentDateAndTime,
-  );
-  @override
-  List<GeneratedColumn> get $columns => [
-    id,
-    familyId,
-    childId,
-    birthOrder,
-    relationshipType,
-    childSurnameAtBirth,
-    paternalRelationship,
-    maternalRelationship,
-    notes,
-    uuid,
-    syncStatus,
-    isDeleted,
-    createdAt,
-    updatedAt,
-  ];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'family_children_v2';
-  @override
-  VerificationContext validateIntegrity(
-    Insertable<FamilyChildrenV2Data> instance, {
-    bool isInserting = false,
-  }) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('id')) {
-      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
-    } else if (isInserting) {
-      context.missing(_idMeta);
-    }
-    if (data.containsKey('family_id')) {
-      context.handle(
-        _familyIdMeta,
-        familyId.isAcceptableOrUnknown(data['family_id']!, _familyIdMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_familyIdMeta);
-    }
-    if (data.containsKey('child_id')) {
-      context.handle(
-        _childIdMeta,
-        childId.isAcceptableOrUnknown(data['child_id']!, _childIdMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_childIdMeta);
-    }
-    if (data.containsKey('birth_order')) {
-      context.handle(
-        _birthOrderMeta,
-        birthOrder.isAcceptableOrUnknown(data['birth_order']!, _birthOrderMeta),
-      );
-    }
-    if (data.containsKey('relationship_type')) {
-      context.handle(
-        _relationshipTypeMeta,
-        relationshipType.isAcceptableOrUnknown(
-          data['relationship_type']!,
-          _relationshipTypeMeta,
-        ),
-      );
-    }
-    if (data.containsKey('child_surname_at_birth')) {
-      context.handle(
-        _childSurnameAtBirthMeta,
-        childSurnameAtBirth.isAcceptableOrUnknown(
-          data['child_surname_at_birth']!,
-          _childSurnameAtBirthMeta,
-        ),
-      );
-    }
-    if (data.containsKey('paternal_relationship')) {
-      context.handle(
-        _paternalRelationshipMeta,
-        paternalRelationship.isAcceptableOrUnknown(
-          data['paternal_relationship']!,
-          _paternalRelationshipMeta,
-        ),
-      );
-    }
-    if (data.containsKey('maternal_relationship')) {
-      context.handle(
-        _maternalRelationshipMeta,
-        maternalRelationship.isAcceptableOrUnknown(
-          data['maternal_relationship']!,
-          _maternalRelationshipMeta,
-        ),
-      );
-    }
-    if (data.containsKey('notes')) {
-      context.handle(
-        _notesMeta,
-        notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
-      );
-    }
-    if (data.containsKey('uuid')) {
-      context.handle(
-        _uuidMeta,
-        uuid.isAcceptableOrUnknown(data['uuid']!, _uuidMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_uuidMeta);
-    }
-    if (data.containsKey('sync_status')) {
-      context.handle(
-        _syncStatusMeta,
-        syncStatus.isAcceptableOrUnknown(data['sync_status']!, _syncStatusMeta),
-      );
-    }
-    if (data.containsKey('is_deleted')) {
-      context.handle(
-        _isDeletedMeta,
-        isDeleted.isAcceptableOrUnknown(data['is_deleted']!, _isDeletedMeta),
-      );
-    }
-    if (data.containsKey('created_at')) {
-      context.handle(
-        _createdAtMeta,
-        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
-      );
-    }
-    if (data.containsKey('updated_at')) {
-      context.handle(
-        _updatedAtMeta,
-        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
-      );
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {id};
-  @override
-  FamilyChildrenV2Data map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return FamilyChildrenV2Data(
-      id: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}id'],
-      )!,
-      familyId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}family_id'],
-      )!,
-      childId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}child_id'],
-      )!,
-      birthOrder: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}birth_order'],
-      ),
-      relationshipType: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}relationship_type'],
-      )!,
-      childSurnameAtBirth: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}child_surname_at_birth'],
-      ),
-      paternalRelationship: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}paternal_relationship'],
-      ),
-      maternalRelationship: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}maternal_relationship'],
-      ),
-      notes: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}notes'],
-      ),
-      uuid: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}uuid'],
-      )!,
-      syncStatus: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}sync_status'],
-      )!,
-      isDeleted: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}is_deleted'],
-      )!,
-      createdAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}created_at'],
-      )!,
-      updatedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}updated_at'],
-      )!,
-    );
-  }
-
-  @override
-  $FamilyChildrenV2Table createAlias(String alias) {
-    return $FamilyChildrenV2Table(attachedDatabase, alias);
-  }
-}
-
-class FamilyChildrenV2Data extends DataClass
-    implements Insertable<FamilyChildrenV2Data> {
-  final String id;
-  final String familyId;
-  final String childId;
-  final int? birthOrder;
-  final String relationshipType;
-  final String? childSurnameAtBirth;
-  final String? paternalRelationship;
-  final String? maternalRelationship;
-  final String? notes;
-  final String uuid;
-  final String syncStatus;
-  final bool isDeleted;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-  const FamilyChildrenV2Data({
-    required this.id,
-    required this.familyId,
-    required this.childId,
-    this.birthOrder,
-    required this.relationshipType,
-    this.childSurnameAtBirth,
-    this.paternalRelationship,
-    this.maternalRelationship,
-    this.notes,
-    required this.uuid,
-    required this.syncStatus,
-    required this.isDeleted,
-    required this.createdAt,
-    required this.updatedAt,
-  });
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['id'] = Variable<String>(id);
-    map['family_id'] = Variable<String>(familyId);
-    map['child_id'] = Variable<String>(childId);
-    if (!nullToAbsent || birthOrder != null) {
-      map['birth_order'] = Variable<int>(birthOrder);
-    }
-    map['relationship_type'] = Variable<String>(relationshipType);
-    if (!nullToAbsent || childSurnameAtBirth != null) {
-      map['child_surname_at_birth'] = Variable<String>(childSurnameAtBirth);
-    }
-    if (!nullToAbsent || paternalRelationship != null) {
-      map['paternal_relationship'] = Variable<String>(paternalRelationship);
-    }
-    if (!nullToAbsent || maternalRelationship != null) {
-      map['maternal_relationship'] = Variable<String>(maternalRelationship);
-    }
-    if (!nullToAbsent || notes != null) {
-      map['notes'] = Variable<String>(notes);
-    }
-    map['uuid'] = Variable<String>(uuid);
-    map['sync_status'] = Variable<String>(syncStatus);
-    map['is_deleted'] = Variable<bool>(isDeleted);
-    map['created_at'] = Variable<DateTime>(createdAt);
-    map['updated_at'] = Variable<DateTime>(updatedAt);
-    return map;
-  }
-
-  FamilyChildrenV2Companion toCompanion(bool nullToAbsent) {
-    return FamilyChildrenV2Companion(
-      id: Value(id),
-      familyId: Value(familyId),
-      childId: Value(childId),
-      birthOrder: birthOrder == null && nullToAbsent
-          ? const Value.absent()
-          : Value(birthOrder),
-      relationshipType: Value(relationshipType),
-      childSurnameAtBirth: childSurnameAtBirth == null && nullToAbsent
-          ? const Value.absent()
-          : Value(childSurnameAtBirth),
-      paternalRelationship: paternalRelationship == null && nullToAbsent
-          ? const Value.absent()
-          : Value(paternalRelationship),
-      maternalRelationship: maternalRelationship == null && nullToAbsent
-          ? const Value.absent()
-          : Value(maternalRelationship),
-      notes: notes == null && nullToAbsent
-          ? const Value.absent()
-          : Value(notes),
-      uuid: Value(uuid),
-      syncStatus: Value(syncStatus),
-      isDeleted: Value(isDeleted),
-      createdAt: Value(createdAt),
-      updatedAt: Value(updatedAt),
-    );
-  }
-
-  factory FamilyChildrenV2Data.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return FamilyChildrenV2Data(
-      id: serializer.fromJson<String>(json['id']),
-      familyId: serializer.fromJson<String>(json['familyId']),
-      childId: serializer.fromJson<String>(json['childId']),
-      birthOrder: serializer.fromJson<int?>(json['birthOrder']),
-      relationshipType: serializer.fromJson<String>(json['relationshipType']),
-      childSurnameAtBirth: serializer.fromJson<String?>(
-        json['childSurnameAtBirth'],
-      ),
-      paternalRelationship: serializer.fromJson<String?>(
-        json['paternalRelationship'],
-      ),
-      maternalRelationship: serializer.fromJson<String?>(
-        json['maternalRelationship'],
-      ),
-      notes: serializer.fromJson<String?>(json['notes']),
-      uuid: serializer.fromJson<String>(json['uuid']),
-      syncStatus: serializer.fromJson<String>(json['syncStatus']),
-      isDeleted: serializer.fromJson<bool>(json['isDeleted']),
-      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
-      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'id': serializer.toJson<String>(id),
-      'familyId': serializer.toJson<String>(familyId),
-      'childId': serializer.toJson<String>(childId),
-      'birthOrder': serializer.toJson<int?>(birthOrder),
-      'relationshipType': serializer.toJson<String>(relationshipType),
-      'childSurnameAtBirth': serializer.toJson<String?>(childSurnameAtBirth),
-      'paternalRelationship': serializer.toJson<String?>(paternalRelationship),
-      'maternalRelationship': serializer.toJson<String?>(maternalRelationship),
-      'notes': serializer.toJson<String?>(notes),
-      'uuid': serializer.toJson<String>(uuid),
-      'syncStatus': serializer.toJson<String>(syncStatus),
-      'isDeleted': serializer.toJson<bool>(isDeleted),
-      'createdAt': serializer.toJson<DateTime>(createdAt),
-      'updatedAt': serializer.toJson<DateTime>(updatedAt),
-    };
-  }
-
-  FamilyChildrenV2Data copyWith({
-    String? id,
-    String? familyId,
-    String? childId,
-    Value<int?> birthOrder = const Value.absent(),
-    String? relationshipType,
-    Value<String?> childSurnameAtBirth = const Value.absent(),
-    Value<String?> paternalRelationship = const Value.absent(),
-    Value<String?> maternalRelationship = const Value.absent(),
-    Value<String?> notes = const Value.absent(),
-    String? uuid,
-    String? syncStatus,
-    bool? isDeleted,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  }) => FamilyChildrenV2Data(
-    id: id ?? this.id,
-    familyId: familyId ?? this.familyId,
-    childId: childId ?? this.childId,
-    birthOrder: birthOrder.present ? birthOrder.value : this.birthOrder,
-    relationshipType: relationshipType ?? this.relationshipType,
-    childSurnameAtBirth: childSurnameAtBirth.present
-        ? childSurnameAtBirth.value
-        : this.childSurnameAtBirth,
-    paternalRelationship: paternalRelationship.present
-        ? paternalRelationship.value
-        : this.paternalRelationship,
-    maternalRelationship: maternalRelationship.present
-        ? maternalRelationship.value
-        : this.maternalRelationship,
-    notes: notes.present ? notes.value : this.notes,
-    uuid: uuid ?? this.uuid,
-    syncStatus: syncStatus ?? this.syncStatus,
-    isDeleted: isDeleted ?? this.isDeleted,
-    createdAt: createdAt ?? this.createdAt,
-    updatedAt: updatedAt ?? this.updatedAt,
-  );
-  FamilyChildrenV2Data copyWithCompanion(FamilyChildrenV2Companion data) {
-    return FamilyChildrenV2Data(
-      id: data.id.present ? data.id.value : this.id,
-      familyId: data.familyId.present ? data.familyId.value : this.familyId,
-      childId: data.childId.present ? data.childId.value : this.childId,
-      birthOrder: data.birthOrder.present
-          ? data.birthOrder.value
-          : this.birthOrder,
-      relationshipType: data.relationshipType.present
-          ? data.relationshipType.value
-          : this.relationshipType,
-      childSurnameAtBirth: data.childSurnameAtBirth.present
-          ? data.childSurnameAtBirth.value
-          : this.childSurnameAtBirth,
-      paternalRelationship: data.paternalRelationship.present
-          ? data.paternalRelationship.value
-          : this.paternalRelationship,
-      maternalRelationship: data.maternalRelationship.present
-          ? data.maternalRelationship.value
-          : this.maternalRelationship,
-      notes: data.notes.present ? data.notes.value : this.notes,
-      uuid: data.uuid.present ? data.uuid.value : this.uuid,
-      syncStatus: data.syncStatus.present
-          ? data.syncStatus.value
-          : this.syncStatus,
-      isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
-      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
-      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('FamilyChildrenV2Data(')
-          ..write('id: $id, ')
-          ..write('familyId: $familyId, ')
-          ..write('childId: $childId, ')
-          ..write('birthOrder: $birthOrder, ')
-          ..write('relationshipType: $relationshipType, ')
-          ..write('childSurnameAtBirth: $childSurnameAtBirth, ')
-          ..write('paternalRelationship: $paternalRelationship, ')
-          ..write('maternalRelationship: $maternalRelationship, ')
-          ..write('notes: $notes, ')
-          ..write('uuid: $uuid, ')
-          ..write('syncStatus: $syncStatus, ')
-          ..write('isDeleted: $isDeleted, ')
-          ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    id,
-    familyId,
-    childId,
-    birthOrder,
-    relationshipType,
-    childSurnameAtBirth,
-    paternalRelationship,
-    maternalRelationship,
-    notes,
-    uuid,
-    syncStatus,
-    isDeleted,
-    createdAt,
-    updatedAt,
-  );
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is FamilyChildrenV2Data &&
-          other.id == this.id &&
-          other.familyId == this.familyId &&
-          other.childId == this.childId &&
-          other.birthOrder == this.birthOrder &&
-          other.relationshipType == this.relationshipType &&
-          other.childSurnameAtBirth == this.childSurnameAtBirth &&
-          other.paternalRelationship == this.paternalRelationship &&
-          other.maternalRelationship == this.maternalRelationship &&
-          other.notes == this.notes &&
-          other.uuid == this.uuid &&
-          other.syncStatus == this.syncStatus &&
-          other.isDeleted == this.isDeleted &&
-          other.createdAt == this.createdAt &&
-          other.updatedAt == this.updatedAt);
-}
-
-class FamilyChildrenV2Companion extends UpdateCompanion<FamilyChildrenV2Data> {
-  final Value<String> id;
-  final Value<String> familyId;
-  final Value<String> childId;
-  final Value<int?> birthOrder;
-  final Value<String> relationshipType;
-  final Value<String?> childSurnameAtBirth;
-  final Value<String?> paternalRelationship;
-  final Value<String?> maternalRelationship;
-  final Value<String?> notes;
-  final Value<String> uuid;
-  final Value<String> syncStatus;
-  final Value<bool> isDeleted;
-  final Value<DateTime> createdAt;
-  final Value<DateTime> updatedAt;
-  final Value<int> rowid;
-  const FamilyChildrenV2Companion({
-    this.id = const Value.absent(),
-    this.familyId = const Value.absent(),
-    this.childId = const Value.absent(),
-    this.birthOrder = const Value.absent(),
-    this.relationshipType = const Value.absent(),
-    this.childSurnameAtBirth = const Value.absent(),
-    this.paternalRelationship = const Value.absent(),
-    this.maternalRelationship = const Value.absent(),
-    this.notes = const Value.absent(),
-    this.uuid = const Value.absent(),
-    this.syncStatus = const Value.absent(),
-    this.isDeleted = const Value.absent(),
-    this.createdAt = const Value.absent(),
-    this.updatedAt = const Value.absent(),
-    this.rowid = const Value.absent(),
-  });
-  FamilyChildrenV2Companion.insert({
-    required String id,
-    required String familyId,
-    required String childId,
-    this.birthOrder = const Value.absent(),
-    this.relationshipType = const Value.absent(),
-    this.childSurnameAtBirth = const Value.absent(),
-    this.paternalRelationship = const Value.absent(),
-    this.maternalRelationship = const Value.absent(),
-    this.notes = const Value.absent(),
-    required String uuid,
-    this.syncStatus = const Value.absent(),
-    this.isDeleted = const Value.absent(),
-    this.createdAt = const Value.absent(),
-    this.updatedAt = const Value.absent(),
-    this.rowid = const Value.absent(),
-  }) : id = Value(id),
-       familyId = Value(familyId),
-       childId = Value(childId),
-       uuid = Value(uuid);
-  static Insertable<FamilyChildrenV2Data> custom({
-    Expression<String>? id,
-    Expression<String>? familyId,
-    Expression<String>? childId,
-    Expression<int>? birthOrder,
-    Expression<String>? relationshipType,
-    Expression<String>? childSurnameAtBirth,
-    Expression<String>? paternalRelationship,
-    Expression<String>? maternalRelationship,
-    Expression<String>? notes,
-    Expression<String>? uuid,
-    Expression<String>? syncStatus,
-    Expression<bool>? isDeleted,
-    Expression<DateTime>? createdAt,
-    Expression<DateTime>? updatedAt,
-    Expression<int>? rowid,
-  }) {
-    return RawValuesInsertable({
-      if (id != null) 'id': id,
-      if (familyId != null) 'family_id': familyId,
-      if (childId != null) 'child_id': childId,
-      if (birthOrder != null) 'birth_order': birthOrder,
-      if (relationshipType != null) 'relationship_type': relationshipType,
-      if (childSurnameAtBirth != null)
-        'child_surname_at_birth': childSurnameAtBirth,
-      if (paternalRelationship != null)
-        'paternal_relationship': paternalRelationship,
-      if (maternalRelationship != null)
-        'maternal_relationship': maternalRelationship,
-      if (notes != null) 'notes': notes,
-      if (uuid != null) 'uuid': uuid,
-      if (syncStatus != null) 'sync_status': syncStatus,
-      if (isDeleted != null) 'is_deleted': isDeleted,
-      if (createdAt != null) 'created_at': createdAt,
-      if (updatedAt != null) 'updated_at': updatedAt,
-      if (rowid != null) 'rowid': rowid,
-    });
-  }
-
-  FamilyChildrenV2Companion copyWith({
-    Value<String>? id,
-    Value<String>? familyId,
-    Value<String>? childId,
-    Value<int?>? birthOrder,
-    Value<String>? relationshipType,
-    Value<String?>? childSurnameAtBirth,
-    Value<String?>? paternalRelationship,
-    Value<String?>? maternalRelationship,
-    Value<String?>? notes,
-    Value<String>? uuid,
-    Value<String>? syncStatus,
-    Value<bool>? isDeleted,
-    Value<DateTime>? createdAt,
-    Value<DateTime>? updatedAt,
-    Value<int>? rowid,
-  }) {
-    return FamilyChildrenV2Companion(
-      id: id ?? this.id,
-      familyId: familyId ?? this.familyId,
-      childId: childId ?? this.childId,
-      birthOrder: birthOrder ?? this.birthOrder,
-      relationshipType: relationshipType ?? this.relationshipType,
-      childSurnameAtBirth: childSurnameAtBirth ?? this.childSurnameAtBirth,
-      paternalRelationship: paternalRelationship ?? this.paternalRelationship,
-      maternalRelationship: maternalRelationship ?? this.maternalRelationship,
-      notes: notes ?? this.notes,
-      uuid: uuid ?? this.uuid,
-      syncStatus: syncStatus ?? this.syncStatus,
-      isDeleted: isDeleted ?? this.isDeleted,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-      rowid: rowid ?? this.rowid,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (id.present) {
-      map['id'] = Variable<String>(id.value);
-    }
-    if (familyId.present) {
-      map['family_id'] = Variable<String>(familyId.value);
-    }
-    if (childId.present) {
-      map['child_id'] = Variable<String>(childId.value);
-    }
-    if (birthOrder.present) {
-      map['birth_order'] = Variable<int>(birthOrder.value);
-    }
-    if (relationshipType.present) {
-      map['relationship_type'] = Variable<String>(relationshipType.value);
-    }
-    if (childSurnameAtBirth.present) {
-      map['child_surname_at_birth'] = Variable<String>(
-        childSurnameAtBirth.value,
-      );
-    }
-    if (paternalRelationship.present) {
-      map['paternal_relationship'] = Variable<String>(
-        paternalRelationship.value,
-      );
-    }
-    if (maternalRelationship.present) {
-      map['maternal_relationship'] = Variable<String>(
-        maternalRelationship.value,
-      );
-    }
-    if (notes.present) {
-      map['notes'] = Variable<String>(notes.value);
-    }
-    if (uuid.present) {
-      map['uuid'] = Variable<String>(uuid.value);
-    }
-    if (syncStatus.present) {
-      map['sync_status'] = Variable<String>(syncStatus.value);
-    }
-    if (isDeleted.present) {
-      map['is_deleted'] = Variable<bool>(isDeleted.value);
-    }
-    if (createdAt.present) {
-      map['created_at'] = Variable<DateTime>(createdAt.value);
-    }
-    if (updatedAt.present) {
-      map['updated_at'] = Variable<DateTime>(updatedAt.value);
-    }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('FamilyChildrenV2Companion(')
-          ..write('id: $id, ')
-          ..write('familyId: $familyId, ')
-          ..write('childId: $childId, ')
-          ..write('birthOrder: $birthOrder, ')
-          ..write('relationshipType: $relationshipType, ')
-          ..write('childSurnameAtBirth: $childSurnameAtBirth, ')
-          ..write('paternalRelationship: $paternalRelationship, ')
-          ..write('maternalRelationship: $maternalRelationship, ')
-          ..write('notes: $notes, ')
-          ..write('uuid: $uuid, ')
-          ..write('syncStatus: $syncStatus, ')
-          ..write('isDeleted: $isDeleted, ')
-          ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt, ')
-          ..write('rowid: $rowid')
-          ..write(')'))
-        .toString();
-  }
-}
-
-class $PersonsTable extends Persons with TableInfo<$PersonsTable, Person> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $PersonsTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _idMeta = const VerificationMeta('id');
-  @override
-  late final GeneratedColumn<String> id = GeneratedColumn<String>(
-    'id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _treeIdMeta = const VerificationMeta('treeId');
-  @override
-  late final GeneratedColumn<String> treeId = GeneratedColumn<String>(
-    'tree_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES family_trees (id)',
-    ),
-  );
-  static const VerificationMeta _fullNameMeta = const VerificationMeta(
-    'fullName',
-  );
-  @override
-  late final GeneratedColumn<String> fullName = GeneratedColumn<String>(
-    'full_name',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _firstNameMeta = const VerificationMeta(
-    'firstName',
-  );
-  @override
-  late final GeneratedColumn<String> firstName = GeneratedColumn<String>(
-    'first_name',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _middleNameMeta = const VerificationMeta(
-    'middleName',
-  );
-  @override
-  late final GeneratedColumn<String> middleName = GeneratedColumn<String>(
-    'middle_name',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _lastNameMeta = const VerificationMeta(
-    'lastName',
-  );
-  @override
-  late final GeneratedColumn<String> lastName = GeneratedColumn<String>(
-    'last_name',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _birthSurnameMeta = const VerificationMeta(
-    'birthSurname',
-  );
-  @override
-  late final GeneratedColumn<String> birthSurname = GeneratedColumn<String>(
-    'birth_surname',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _marriedSurnameMeta = const VerificationMeta(
-    'marriedSurname',
-  );
-  @override
-  late final GeneratedColumn<String> marriedSurname = GeneratedColumn<String>(
-    'married_surname',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _prefixMeta = const VerificationMeta('prefix');
-  @override
-  late final GeneratedColumn<String> prefix = GeneratedColumn<String>(
-    'prefix',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _suffixMeta = const VerificationMeta('suffix');
-  @override
-  late final GeneratedColumn<String> suffix = GeneratedColumn<String>(
-    'suffix',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _nicknameMeta = const VerificationMeta(
-    'nickname',
-  );
-  @override
-  late final GeneratedColumn<String> nickname = GeneratedColumn<String>(
-    'nickname',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _genderMeta = const VerificationMeta('gender');
-  @override
-  late final GeneratedColumn<String> gender = GeneratedColumn<String>(
-    'gender',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _birthDateMeta = const VerificationMeta(
-    'birthDate',
-  );
-  @override
-  late final GeneratedColumn<DateTime> birthDate = GeneratedColumn<DateTime>(
-    'birth_date',
-    aliasedName,
-    true,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _birthDateDisplayMeta = const VerificationMeta(
-    'birthDateDisplay',
-  );
-  @override
-  late final GeneratedColumn<String> birthDateDisplay = GeneratedColumn<String>(
-    'birth_date_display',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _birthDateSortMeta = const VerificationMeta(
-    'birthDateSort',
-  );
-  @override
-  late final GeneratedColumn<double> birthDateSort = GeneratedColumn<double>(
-    'birth_date_sort',
-    aliasedName,
-    true,
-    type: DriftSqlType.double,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _deathDateMeta = const VerificationMeta(
-    'deathDate',
-  );
-  @override
-  late final GeneratedColumn<DateTime> deathDate = GeneratedColumn<DateTime>(
-    'death_date',
-    aliasedName,
-    true,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _deathDateDisplayMeta = const VerificationMeta(
-    'deathDateDisplay',
-  );
-  @override
-  late final GeneratedColumn<String> deathDateDisplay = GeneratedColumn<String>(
-    'death_date_display',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _deathDateSortMeta = const VerificationMeta(
-    'deathDateSort',
-  );
-  @override
-  late final GeneratedColumn<double> deathDateSort = GeneratedColumn<double>(
-    'death_date_sort',
-    aliasedName,
-    true,
-    type: DriftSqlType.double,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _birthPlaceMeta = const VerificationMeta(
-    'birthPlace',
-  );
-  @override
-  late final GeneratedColumn<String> birthPlace = GeneratedColumn<String>(
-    'birth_place',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _currentPlaceMeta = const VerificationMeta(
-    'currentPlace',
-  );
-  @override
-  late final GeneratedColumn<String> currentPlace = GeneratedColumn<String>(
-    'current_place',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _profilePhotoPathMeta = const VerificationMeta(
-    'profilePhotoPath',
-  );
-  @override
-  late final GeneratedColumn<String> profilePhotoPath = GeneratedColumn<String>(
-    'profile_photo_path',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _bioMeta = const VerificationMeta('bio');
-  @override
-  late final GeneratedColumn<String> bio = GeneratedColumn<String>(
-    'bio',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _notesMeta = const VerificationMeta('notes');
-  @override
-  late final GeneratedColumn<String> notes = GeneratedColumn<String>(
-    'notes',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _privateMeta = const VerificationMeta(
-    'private',
-  );
-  @override
-  late final GeneratedColumn<bool> private = GeneratedColumn<bool>(
-    'private',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("private" IN (0, 1))',
-    ),
-    defaultValue: const Constant(false),
-  );
-  static const VerificationMeta _isLivingMeta = const VerificationMeta(
-    'isLiving',
-  );
-  @override
-  late final GeneratedColumn<bool> isLiving = GeneratedColumn<bool>(
-    'is_living',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("is_living" IN (0, 1))',
-    ),
-    defaultValue: const Constant(true),
-  );
-  static const VerificationMeta _createdAtMeta = const VerificationMeta(
-    'createdAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
-    'created_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
-    'updatedAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
-    'updated_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: true,
-  );
-  @override
-  List<GeneratedColumn> get $columns => [
-    id,
-    treeId,
-    fullName,
-    firstName,
-    middleName,
-    lastName,
-    birthSurname,
-    marriedSurname,
-    prefix,
-    suffix,
-    nickname,
-    gender,
-    birthDate,
-    birthDateDisplay,
-    birthDateSort,
-    deathDate,
-    deathDateDisplay,
-    deathDateSort,
-    birthPlace,
-    currentPlace,
-    profilePhotoPath,
-    bio,
-    notes,
-    private,
-    isLiving,
-    createdAt,
-    updatedAt,
-  ];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'persons';
-  @override
-  VerificationContext validateIntegrity(
-    Insertable<Person> instance, {
-    bool isInserting = false,
-  }) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('id')) {
-      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
-    } else if (isInserting) {
-      context.missing(_idMeta);
-    }
-    if (data.containsKey('tree_id')) {
-      context.handle(
-        _treeIdMeta,
-        treeId.isAcceptableOrUnknown(data['tree_id']!, _treeIdMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_treeIdMeta);
-    }
-    if (data.containsKey('full_name')) {
-      context.handle(
-        _fullNameMeta,
-        fullName.isAcceptableOrUnknown(data['full_name']!, _fullNameMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_fullNameMeta);
-    }
-    if (data.containsKey('first_name')) {
-      context.handle(
-        _firstNameMeta,
-        firstName.isAcceptableOrUnknown(data['first_name']!, _firstNameMeta),
-      );
-    }
-    if (data.containsKey('middle_name')) {
-      context.handle(
-        _middleNameMeta,
-        middleName.isAcceptableOrUnknown(data['middle_name']!, _middleNameMeta),
-      );
-    }
-    if (data.containsKey('last_name')) {
-      context.handle(
-        _lastNameMeta,
-        lastName.isAcceptableOrUnknown(data['last_name']!, _lastNameMeta),
-      );
-    }
-    if (data.containsKey('birth_surname')) {
-      context.handle(
-        _birthSurnameMeta,
-        birthSurname.isAcceptableOrUnknown(
-          data['birth_surname']!,
-          _birthSurnameMeta,
-        ),
-      );
-    }
-    if (data.containsKey('married_surname')) {
-      context.handle(
-        _marriedSurnameMeta,
-        marriedSurname.isAcceptableOrUnknown(
-          data['married_surname']!,
-          _marriedSurnameMeta,
-        ),
-      );
-    }
-    if (data.containsKey('prefix')) {
-      context.handle(
-        _prefixMeta,
-        prefix.isAcceptableOrUnknown(data['prefix']!, _prefixMeta),
-      );
-    }
-    if (data.containsKey('suffix')) {
-      context.handle(
-        _suffixMeta,
-        suffix.isAcceptableOrUnknown(data['suffix']!, _suffixMeta),
-      );
-    }
-    if (data.containsKey('nickname')) {
-      context.handle(
-        _nicknameMeta,
-        nickname.isAcceptableOrUnknown(data['nickname']!, _nicknameMeta),
-      );
-    }
-    if (data.containsKey('gender')) {
-      context.handle(
-        _genderMeta,
-        gender.isAcceptableOrUnknown(data['gender']!, _genderMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_genderMeta);
-    }
-    if (data.containsKey('birth_date')) {
-      context.handle(
-        _birthDateMeta,
-        birthDate.isAcceptableOrUnknown(data['birth_date']!, _birthDateMeta),
-      );
-    }
-    if (data.containsKey('birth_date_display')) {
-      context.handle(
-        _birthDateDisplayMeta,
-        birthDateDisplay.isAcceptableOrUnknown(
-          data['birth_date_display']!,
-          _birthDateDisplayMeta,
-        ),
-      );
-    }
-    if (data.containsKey('birth_date_sort')) {
-      context.handle(
-        _birthDateSortMeta,
-        birthDateSort.isAcceptableOrUnknown(
-          data['birth_date_sort']!,
-          _birthDateSortMeta,
-        ),
-      );
-    }
-    if (data.containsKey('death_date')) {
-      context.handle(
-        _deathDateMeta,
-        deathDate.isAcceptableOrUnknown(data['death_date']!, _deathDateMeta),
-      );
-    }
-    if (data.containsKey('death_date_display')) {
-      context.handle(
-        _deathDateDisplayMeta,
-        deathDateDisplay.isAcceptableOrUnknown(
-          data['death_date_display']!,
-          _deathDateDisplayMeta,
-        ),
-      );
-    }
-    if (data.containsKey('death_date_sort')) {
-      context.handle(
-        _deathDateSortMeta,
-        deathDateSort.isAcceptableOrUnknown(
-          data['death_date_sort']!,
-          _deathDateSortMeta,
-        ),
-      );
-    }
-    if (data.containsKey('birth_place')) {
-      context.handle(
-        _birthPlaceMeta,
-        birthPlace.isAcceptableOrUnknown(data['birth_place']!, _birthPlaceMeta),
-      );
-    }
-    if (data.containsKey('current_place')) {
-      context.handle(
-        _currentPlaceMeta,
-        currentPlace.isAcceptableOrUnknown(
-          data['current_place']!,
-          _currentPlaceMeta,
-        ),
-      );
-    }
-    if (data.containsKey('profile_photo_path')) {
-      context.handle(
-        _profilePhotoPathMeta,
-        profilePhotoPath.isAcceptableOrUnknown(
-          data['profile_photo_path']!,
-          _profilePhotoPathMeta,
-        ),
-      );
-    }
-    if (data.containsKey('bio')) {
-      context.handle(
-        _bioMeta,
-        bio.isAcceptableOrUnknown(data['bio']!, _bioMeta),
-      );
-    }
-    if (data.containsKey('notes')) {
-      context.handle(
-        _notesMeta,
-        notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
-      );
-    }
-    if (data.containsKey('private')) {
-      context.handle(
-        _privateMeta,
-        private.isAcceptableOrUnknown(data['private']!, _privateMeta),
-      );
-    }
-    if (data.containsKey('is_living')) {
-      context.handle(
-        _isLivingMeta,
-        isLiving.isAcceptableOrUnknown(data['is_living']!, _isLivingMeta),
-      );
-    }
-    if (data.containsKey('created_at')) {
-      context.handle(
-        _createdAtMeta,
-        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_createdAtMeta);
-    }
-    if (data.containsKey('updated_at')) {
-      context.handle(
-        _updatedAtMeta,
-        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_updatedAtMeta);
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {id};
-  @override
-  Person map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return Person(
-      id: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}id'],
-      )!,
-      treeId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}tree_id'],
-      )!,
-      fullName: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}full_name'],
-      )!,
-      firstName: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}first_name'],
-      ),
-      middleName: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}middle_name'],
-      ),
-      lastName: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}last_name'],
-      ),
-      birthSurname: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}birth_surname'],
-      ),
-      marriedSurname: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}married_surname'],
-      ),
-      prefix: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}prefix'],
-      ),
-      suffix: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}suffix'],
-      ),
-      nickname: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}nickname'],
-      ),
-      gender: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}gender'],
-      )!,
-      birthDate: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}birth_date'],
-      ),
-      birthDateDisplay: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}birth_date_display'],
-      ),
-      birthDateSort: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}birth_date_sort'],
-      ),
-      deathDate: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}death_date'],
-      ),
-      deathDateDisplay: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}death_date_display'],
-      ),
-      deathDateSort: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}death_date_sort'],
-      ),
-      birthPlace: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}birth_place'],
-      ),
-      currentPlace: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}current_place'],
-      ),
-      profilePhotoPath: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}profile_photo_path'],
-      ),
-      bio: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}bio'],
-      ),
-      notes: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}notes'],
-      ),
-      private: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}private'],
-      )!,
-      isLiving: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}is_living'],
-      )!,
-      createdAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}created_at'],
-      )!,
-      updatedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}updated_at'],
-      )!,
-    );
-  }
-
-  @override
-  $PersonsTable createAlias(String alias) {
-    return $PersonsTable(attachedDatabase, alias);
-  }
-}
-
-class Person extends DataClass implements Insertable<Person> {
-  final String id;
-  final String treeId;
-  final String fullName;
-  final String? firstName;
-  final String? middleName;
-  final String? lastName;
-  final String? birthSurname;
-  final String? marriedSurname;
-  final String? prefix;
-  final String? suffix;
-  final String? nickname;
-  final String gender;
-  final DateTime? birthDate;
-  final String? birthDateDisplay;
-  final double? birthDateSort;
-  final DateTime? deathDate;
-  final String? deathDateDisplay;
-  final double? deathDateSort;
-  final String? birthPlace;
-  final String? currentPlace;
-  final String? profilePhotoPath;
-  final String? bio;
-  final String? notes;
-  final bool private;
-  final bool isLiving;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-  const Person({
-    required this.id,
-    required this.treeId,
-    required this.fullName,
-    this.firstName,
-    this.middleName,
-    this.lastName,
-    this.birthSurname,
-    this.marriedSurname,
-    this.prefix,
-    this.suffix,
-    this.nickname,
-    required this.gender,
-    this.birthDate,
-    this.birthDateDisplay,
-    this.birthDateSort,
-    this.deathDate,
-    this.deathDateDisplay,
-    this.deathDateSort,
-    this.birthPlace,
-    this.currentPlace,
-    this.profilePhotoPath,
-    this.bio,
-    this.notes,
-    required this.private,
-    required this.isLiving,
-    required this.createdAt,
-    required this.updatedAt,
-  });
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['id'] = Variable<String>(id);
-    map['tree_id'] = Variable<String>(treeId);
-    map['full_name'] = Variable<String>(fullName);
-    if (!nullToAbsent || firstName != null) {
-      map['first_name'] = Variable<String>(firstName);
-    }
-    if (!nullToAbsent || middleName != null) {
-      map['middle_name'] = Variable<String>(middleName);
-    }
-    if (!nullToAbsent || lastName != null) {
-      map['last_name'] = Variable<String>(lastName);
-    }
-    if (!nullToAbsent || birthSurname != null) {
-      map['birth_surname'] = Variable<String>(birthSurname);
-    }
-    if (!nullToAbsent || marriedSurname != null) {
-      map['married_surname'] = Variable<String>(marriedSurname);
-    }
-    if (!nullToAbsent || prefix != null) {
-      map['prefix'] = Variable<String>(prefix);
-    }
-    if (!nullToAbsent || suffix != null) {
-      map['suffix'] = Variable<String>(suffix);
-    }
-    if (!nullToAbsent || nickname != null) {
-      map['nickname'] = Variable<String>(nickname);
-    }
-    map['gender'] = Variable<String>(gender);
-    if (!nullToAbsent || birthDate != null) {
-      map['birth_date'] = Variable<DateTime>(birthDate);
-    }
-    if (!nullToAbsent || birthDateDisplay != null) {
-      map['birth_date_display'] = Variable<String>(birthDateDisplay);
-    }
-    if (!nullToAbsent || birthDateSort != null) {
-      map['birth_date_sort'] = Variable<double>(birthDateSort);
-    }
-    if (!nullToAbsent || deathDate != null) {
-      map['death_date'] = Variable<DateTime>(deathDate);
-    }
-    if (!nullToAbsent || deathDateDisplay != null) {
-      map['death_date_display'] = Variable<String>(deathDateDisplay);
-    }
-    if (!nullToAbsent || deathDateSort != null) {
-      map['death_date_sort'] = Variable<double>(deathDateSort);
-    }
-    if (!nullToAbsent || birthPlace != null) {
-      map['birth_place'] = Variable<String>(birthPlace);
-    }
-    if (!nullToAbsent || currentPlace != null) {
-      map['current_place'] = Variable<String>(currentPlace);
-    }
-    if (!nullToAbsent || profilePhotoPath != null) {
-      map['profile_photo_path'] = Variable<String>(profilePhotoPath);
-    }
-    if (!nullToAbsent || bio != null) {
-      map['bio'] = Variable<String>(bio);
-    }
-    if (!nullToAbsent || notes != null) {
-      map['notes'] = Variable<String>(notes);
-    }
-    map['private'] = Variable<bool>(private);
-    map['is_living'] = Variable<bool>(isLiving);
-    map['created_at'] = Variable<DateTime>(createdAt);
-    map['updated_at'] = Variable<DateTime>(updatedAt);
-    return map;
-  }
-
-  PersonsCompanion toCompanion(bool nullToAbsent) {
-    return PersonsCompanion(
-      id: Value(id),
-      treeId: Value(treeId),
-      fullName: Value(fullName),
-      firstName: firstName == null && nullToAbsent
-          ? const Value.absent()
-          : Value(firstName),
-      middleName: middleName == null && nullToAbsent
-          ? const Value.absent()
-          : Value(middleName),
-      lastName: lastName == null && nullToAbsent
-          ? const Value.absent()
-          : Value(lastName),
-      birthSurname: birthSurname == null && nullToAbsent
-          ? const Value.absent()
-          : Value(birthSurname),
-      marriedSurname: marriedSurname == null && nullToAbsent
-          ? const Value.absent()
-          : Value(marriedSurname),
-      prefix: prefix == null && nullToAbsent
-          ? const Value.absent()
-          : Value(prefix),
-      suffix: suffix == null && nullToAbsent
-          ? const Value.absent()
-          : Value(suffix),
-      nickname: nickname == null && nullToAbsent
-          ? const Value.absent()
-          : Value(nickname),
-      gender: Value(gender),
-      birthDate: birthDate == null && nullToAbsent
-          ? const Value.absent()
-          : Value(birthDate),
-      birthDateDisplay: birthDateDisplay == null && nullToAbsent
-          ? const Value.absent()
-          : Value(birthDateDisplay),
-      birthDateSort: birthDateSort == null && nullToAbsent
-          ? const Value.absent()
-          : Value(birthDateSort),
-      deathDate: deathDate == null && nullToAbsent
-          ? const Value.absent()
-          : Value(deathDate),
-      deathDateDisplay: deathDateDisplay == null && nullToAbsent
-          ? const Value.absent()
-          : Value(deathDateDisplay),
-      deathDateSort: deathDateSort == null && nullToAbsent
-          ? const Value.absent()
-          : Value(deathDateSort),
-      birthPlace: birthPlace == null && nullToAbsent
-          ? const Value.absent()
-          : Value(birthPlace),
-      currentPlace: currentPlace == null && nullToAbsent
-          ? const Value.absent()
-          : Value(currentPlace),
-      profilePhotoPath: profilePhotoPath == null && nullToAbsent
-          ? const Value.absent()
-          : Value(profilePhotoPath),
-      bio: bio == null && nullToAbsent ? const Value.absent() : Value(bio),
-      notes: notes == null && nullToAbsent
-          ? const Value.absent()
-          : Value(notes),
-      private: Value(private),
-      isLiving: Value(isLiving),
-      createdAt: Value(createdAt),
-      updatedAt: Value(updatedAt),
-    );
-  }
-
-  factory Person.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return Person(
-      id: serializer.fromJson<String>(json['id']),
-      treeId: serializer.fromJson<String>(json['treeId']),
-      fullName: serializer.fromJson<String>(json['fullName']),
-      firstName: serializer.fromJson<String?>(json['firstName']),
-      middleName: serializer.fromJson<String?>(json['middleName']),
-      lastName: serializer.fromJson<String?>(json['lastName']),
-      birthSurname: serializer.fromJson<String?>(json['birthSurname']),
-      marriedSurname: serializer.fromJson<String?>(json['marriedSurname']),
-      prefix: serializer.fromJson<String?>(json['prefix']),
-      suffix: serializer.fromJson<String?>(json['suffix']),
-      nickname: serializer.fromJson<String?>(json['nickname']),
-      gender: serializer.fromJson<String>(json['gender']),
-      birthDate: serializer.fromJson<DateTime?>(json['birthDate']),
-      birthDateDisplay: serializer.fromJson<String?>(json['birthDateDisplay']),
-      birthDateSort: serializer.fromJson<double?>(json['birthDateSort']),
-      deathDate: serializer.fromJson<DateTime?>(json['deathDate']),
-      deathDateDisplay: serializer.fromJson<String?>(json['deathDateDisplay']),
-      deathDateSort: serializer.fromJson<double?>(json['deathDateSort']),
-      birthPlace: serializer.fromJson<String?>(json['birthPlace']),
-      currentPlace: serializer.fromJson<String?>(json['currentPlace']),
-      profilePhotoPath: serializer.fromJson<String?>(json['profilePhotoPath']),
-      bio: serializer.fromJson<String?>(json['bio']),
-      notes: serializer.fromJson<String?>(json['notes']),
-      private: serializer.fromJson<bool>(json['private']),
-      isLiving: serializer.fromJson<bool>(json['isLiving']),
-      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
-      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'id': serializer.toJson<String>(id),
-      'treeId': serializer.toJson<String>(treeId),
-      'fullName': serializer.toJson<String>(fullName),
-      'firstName': serializer.toJson<String?>(firstName),
-      'middleName': serializer.toJson<String?>(middleName),
-      'lastName': serializer.toJson<String?>(lastName),
-      'birthSurname': serializer.toJson<String?>(birthSurname),
-      'marriedSurname': serializer.toJson<String?>(marriedSurname),
-      'prefix': serializer.toJson<String?>(prefix),
-      'suffix': serializer.toJson<String?>(suffix),
-      'nickname': serializer.toJson<String?>(nickname),
-      'gender': serializer.toJson<String>(gender),
-      'birthDate': serializer.toJson<DateTime?>(birthDate),
-      'birthDateDisplay': serializer.toJson<String?>(birthDateDisplay),
-      'birthDateSort': serializer.toJson<double?>(birthDateSort),
-      'deathDate': serializer.toJson<DateTime?>(deathDate),
-      'deathDateDisplay': serializer.toJson<String?>(deathDateDisplay),
-      'deathDateSort': serializer.toJson<double?>(deathDateSort),
-      'birthPlace': serializer.toJson<String?>(birthPlace),
-      'currentPlace': serializer.toJson<String?>(currentPlace),
-      'profilePhotoPath': serializer.toJson<String?>(profilePhotoPath),
-      'bio': serializer.toJson<String?>(bio),
-      'notes': serializer.toJson<String?>(notes),
-      'private': serializer.toJson<bool>(private),
-      'isLiving': serializer.toJson<bool>(isLiving),
-      'createdAt': serializer.toJson<DateTime>(createdAt),
-      'updatedAt': serializer.toJson<DateTime>(updatedAt),
-    };
-  }
-
-  Person copyWith({
-    String? id,
-    String? treeId,
-    String? fullName,
-    Value<String?> firstName = const Value.absent(),
-    Value<String?> middleName = const Value.absent(),
-    Value<String?> lastName = const Value.absent(),
-    Value<String?> birthSurname = const Value.absent(),
-    Value<String?> marriedSurname = const Value.absent(),
-    Value<String?> prefix = const Value.absent(),
-    Value<String?> suffix = const Value.absent(),
-    Value<String?> nickname = const Value.absent(),
-    String? gender,
-    Value<DateTime?> birthDate = const Value.absent(),
-    Value<String?> birthDateDisplay = const Value.absent(),
-    Value<double?> birthDateSort = const Value.absent(),
-    Value<DateTime?> deathDate = const Value.absent(),
-    Value<String?> deathDateDisplay = const Value.absent(),
-    Value<double?> deathDateSort = const Value.absent(),
-    Value<String?> birthPlace = const Value.absent(),
-    Value<String?> currentPlace = const Value.absent(),
-    Value<String?> profilePhotoPath = const Value.absent(),
-    Value<String?> bio = const Value.absent(),
-    Value<String?> notes = const Value.absent(),
-    bool? private,
-    bool? isLiving,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  }) => Person(
-    id: id ?? this.id,
-    treeId: treeId ?? this.treeId,
-    fullName: fullName ?? this.fullName,
-    firstName: firstName.present ? firstName.value : this.firstName,
-    middleName: middleName.present ? middleName.value : this.middleName,
-    lastName: lastName.present ? lastName.value : this.lastName,
-    birthSurname: birthSurname.present ? birthSurname.value : this.birthSurname,
-    marriedSurname: marriedSurname.present
-        ? marriedSurname.value
-        : this.marriedSurname,
-    prefix: prefix.present ? prefix.value : this.prefix,
-    suffix: suffix.present ? suffix.value : this.suffix,
-    nickname: nickname.present ? nickname.value : this.nickname,
-    gender: gender ?? this.gender,
-    birthDate: birthDate.present ? birthDate.value : this.birthDate,
-    birthDateDisplay: birthDateDisplay.present
-        ? birthDateDisplay.value
-        : this.birthDateDisplay,
-    birthDateSort: birthDateSort.present
-        ? birthDateSort.value
-        : this.birthDateSort,
-    deathDate: deathDate.present ? deathDate.value : this.deathDate,
-    deathDateDisplay: deathDateDisplay.present
-        ? deathDateDisplay.value
-        : this.deathDateDisplay,
-    deathDateSort: deathDateSort.present
-        ? deathDateSort.value
-        : this.deathDateSort,
-    birthPlace: birthPlace.present ? birthPlace.value : this.birthPlace,
-    currentPlace: currentPlace.present ? currentPlace.value : this.currentPlace,
-    profilePhotoPath: profilePhotoPath.present
-        ? profilePhotoPath.value
-        : this.profilePhotoPath,
-    bio: bio.present ? bio.value : this.bio,
-    notes: notes.present ? notes.value : this.notes,
-    private: private ?? this.private,
-    isLiving: isLiving ?? this.isLiving,
-    createdAt: createdAt ?? this.createdAt,
-    updatedAt: updatedAt ?? this.updatedAt,
-  );
-  Person copyWithCompanion(PersonsCompanion data) {
-    return Person(
-      id: data.id.present ? data.id.value : this.id,
-      treeId: data.treeId.present ? data.treeId.value : this.treeId,
-      fullName: data.fullName.present ? data.fullName.value : this.fullName,
-      firstName: data.firstName.present ? data.firstName.value : this.firstName,
-      middleName: data.middleName.present
-          ? data.middleName.value
-          : this.middleName,
-      lastName: data.lastName.present ? data.lastName.value : this.lastName,
-      birthSurname: data.birthSurname.present
-          ? data.birthSurname.value
-          : this.birthSurname,
-      marriedSurname: data.marriedSurname.present
-          ? data.marriedSurname.value
-          : this.marriedSurname,
-      prefix: data.prefix.present ? data.prefix.value : this.prefix,
-      suffix: data.suffix.present ? data.suffix.value : this.suffix,
-      nickname: data.nickname.present ? data.nickname.value : this.nickname,
-      gender: data.gender.present ? data.gender.value : this.gender,
-      birthDate: data.birthDate.present ? data.birthDate.value : this.birthDate,
-      birthDateDisplay: data.birthDateDisplay.present
-          ? data.birthDateDisplay.value
-          : this.birthDateDisplay,
-      birthDateSort: data.birthDateSort.present
-          ? data.birthDateSort.value
-          : this.birthDateSort,
-      deathDate: data.deathDate.present ? data.deathDate.value : this.deathDate,
-      deathDateDisplay: data.deathDateDisplay.present
-          ? data.deathDateDisplay.value
-          : this.deathDateDisplay,
-      deathDateSort: data.deathDateSort.present
-          ? data.deathDateSort.value
-          : this.deathDateSort,
-      birthPlace: data.birthPlace.present
-          ? data.birthPlace.value
-          : this.birthPlace,
-      currentPlace: data.currentPlace.present
-          ? data.currentPlace.value
-          : this.currentPlace,
-      profilePhotoPath: data.profilePhotoPath.present
-          ? data.profilePhotoPath.value
-          : this.profilePhotoPath,
-      bio: data.bio.present ? data.bio.value : this.bio,
-      notes: data.notes.present ? data.notes.value : this.notes,
-      private: data.private.present ? data.private.value : this.private,
-      isLiving: data.isLiving.present ? data.isLiving.value : this.isLiving,
-      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
-      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('Person(')
-          ..write('id: $id, ')
-          ..write('treeId: $treeId, ')
-          ..write('fullName: $fullName, ')
-          ..write('firstName: $firstName, ')
-          ..write('middleName: $middleName, ')
-          ..write('lastName: $lastName, ')
-          ..write('birthSurname: $birthSurname, ')
-          ..write('marriedSurname: $marriedSurname, ')
-          ..write('prefix: $prefix, ')
-          ..write('suffix: $suffix, ')
-          ..write('nickname: $nickname, ')
-          ..write('gender: $gender, ')
-          ..write('birthDate: $birthDate, ')
-          ..write('birthDateDisplay: $birthDateDisplay, ')
-          ..write('birthDateSort: $birthDateSort, ')
-          ..write('deathDate: $deathDate, ')
-          ..write('deathDateDisplay: $deathDateDisplay, ')
-          ..write('deathDateSort: $deathDateSort, ')
-          ..write('birthPlace: $birthPlace, ')
-          ..write('currentPlace: $currentPlace, ')
-          ..write('profilePhotoPath: $profilePhotoPath, ')
-          ..write('bio: $bio, ')
-          ..write('notes: $notes, ')
-          ..write('private: $private, ')
-          ..write('isLiving: $isLiving, ')
-          ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode => Object.hashAll([
-    id,
-    treeId,
-    fullName,
-    firstName,
-    middleName,
-    lastName,
-    birthSurname,
-    marriedSurname,
-    prefix,
-    suffix,
-    nickname,
-    gender,
-    birthDate,
-    birthDateDisplay,
-    birthDateSort,
-    deathDate,
-    deathDateDisplay,
-    deathDateSort,
-    birthPlace,
-    currentPlace,
-    profilePhotoPath,
-    bio,
-    notes,
-    private,
-    isLiving,
-    createdAt,
-    updatedAt,
-  ]);
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is Person &&
-          other.id == this.id &&
-          other.treeId == this.treeId &&
-          other.fullName == this.fullName &&
-          other.firstName == this.firstName &&
-          other.middleName == this.middleName &&
-          other.lastName == this.lastName &&
-          other.birthSurname == this.birthSurname &&
-          other.marriedSurname == this.marriedSurname &&
-          other.prefix == this.prefix &&
-          other.suffix == this.suffix &&
-          other.nickname == this.nickname &&
-          other.gender == this.gender &&
-          other.birthDate == this.birthDate &&
-          other.birthDateDisplay == this.birthDateDisplay &&
-          other.birthDateSort == this.birthDateSort &&
-          other.deathDate == this.deathDate &&
-          other.deathDateDisplay == this.deathDateDisplay &&
-          other.deathDateSort == this.deathDateSort &&
-          other.birthPlace == this.birthPlace &&
-          other.currentPlace == this.currentPlace &&
-          other.profilePhotoPath == this.profilePhotoPath &&
-          other.bio == this.bio &&
-          other.notes == this.notes &&
-          other.private == this.private &&
-          other.isLiving == this.isLiving &&
-          other.createdAt == this.createdAt &&
-          other.updatedAt == this.updatedAt);
-}
-
-class PersonsCompanion extends UpdateCompanion<Person> {
-  final Value<String> id;
-  final Value<String> treeId;
-  final Value<String> fullName;
-  final Value<String?> firstName;
-  final Value<String?> middleName;
-  final Value<String?> lastName;
-  final Value<String?> birthSurname;
-  final Value<String?> marriedSurname;
-  final Value<String?> prefix;
-  final Value<String?> suffix;
-  final Value<String?> nickname;
-  final Value<String> gender;
-  final Value<DateTime?> birthDate;
-  final Value<String?> birthDateDisplay;
-  final Value<double?> birthDateSort;
-  final Value<DateTime?> deathDate;
-  final Value<String?> deathDateDisplay;
-  final Value<double?> deathDateSort;
-  final Value<String?> birthPlace;
-  final Value<String?> currentPlace;
-  final Value<String?> profilePhotoPath;
-  final Value<String?> bio;
-  final Value<String?> notes;
-  final Value<bool> private;
-  final Value<bool> isLiving;
-  final Value<DateTime> createdAt;
-  final Value<DateTime> updatedAt;
-  final Value<int> rowid;
-  const PersonsCompanion({
-    this.id = const Value.absent(),
-    this.treeId = const Value.absent(),
-    this.fullName = const Value.absent(),
-    this.firstName = const Value.absent(),
-    this.middleName = const Value.absent(),
-    this.lastName = const Value.absent(),
-    this.birthSurname = const Value.absent(),
-    this.marriedSurname = const Value.absent(),
-    this.prefix = const Value.absent(),
-    this.suffix = const Value.absent(),
-    this.nickname = const Value.absent(),
-    this.gender = const Value.absent(),
-    this.birthDate = const Value.absent(),
-    this.birthDateDisplay = const Value.absent(),
-    this.birthDateSort = const Value.absent(),
-    this.deathDate = const Value.absent(),
-    this.deathDateDisplay = const Value.absent(),
-    this.deathDateSort = const Value.absent(),
-    this.birthPlace = const Value.absent(),
-    this.currentPlace = const Value.absent(),
-    this.profilePhotoPath = const Value.absent(),
-    this.bio = const Value.absent(),
-    this.notes = const Value.absent(),
-    this.private = const Value.absent(),
-    this.isLiving = const Value.absent(),
-    this.createdAt = const Value.absent(),
-    this.updatedAt = const Value.absent(),
-    this.rowid = const Value.absent(),
-  });
-  PersonsCompanion.insert({
-    required String id,
-    required String treeId,
-    required String fullName,
-    this.firstName = const Value.absent(),
-    this.middleName = const Value.absent(),
-    this.lastName = const Value.absent(),
-    this.birthSurname = const Value.absent(),
-    this.marriedSurname = const Value.absent(),
-    this.prefix = const Value.absent(),
-    this.suffix = const Value.absent(),
-    this.nickname = const Value.absent(),
-    required String gender,
-    this.birthDate = const Value.absent(),
-    this.birthDateDisplay = const Value.absent(),
-    this.birthDateSort = const Value.absent(),
-    this.deathDate = const Value.absent(),
-    this.deathDateDisplay = const Value.absent(),
-    this.deathDateSort = const Value.absent(),
-    this.birthPlace = const Value.absent(),
-    this.currentPlace = const Value.absent(),
-    this.profilePhotoPath = const Value.absent(),
-    this.bio = const Value.absent(),
-    this.notes = const Value.absent(),
-    this.private = const Value.absent(),
-    this.isLiving = const Value.absent(),
-    required DateTime createdAt,
-    required DateTime updatedAt,
-    this.rowid = const Value.absent(),
-  }) : id = Value(id),
-       treeId = Value(treeId),
-       fullName = Value(fullName),
-       gender = Value(gender),
-       createdAt = Value(createdAt),
-       updatedAt = Value(updatedAt);
-  static Insertable<Person> custom({
-    Expression<String>? id,
-    Expression<String>? treeId,
-    Expression<String>? fullName,
-    Expression<String>? firstName,
-    Expression<String>? middleName,
-    Expression<String>? lastName,
-    Expression<String>? birthSurname,
-    Expression<String>? marriedSurname,
-    Expression<String>? prefix,
-    Expression<String>? suffix,
-    Expression<String>? nickname,
-    Expression<String>? gender,
-    Expression<DateTime>? birthDate,
-    Expression<String>? birthDateDisplay,
-    Expression<double>? birthDateSort,
-    Expression<DateTime>? deathDate,
-    Expression<String>? deathDateDisplay,
-    Expression<double>? deathDateSort,
-    Expression<String>? birthPlace,
-    Expression<String>? currentPlace,
-    Expression<String>? profilePhotoPath,
-    Expression<String>? bio,
-    Expression<String>? notes,
-    Expression<bool>? private,
-    Expression<bool>? isLiving,
-    Expression<DateTime>? createdAt,
-    Expression<DateTime>? updatedAt,
-    Expression<int>? rowid,
-  }) {
-    return RawValuesInsertable({
-      if (id != null) 'id': id,
-      if (treeId != null) 'tree_id': treeId,
-      if (fullName != null) 'full_name': fullName,
-      if (firstName != null) 'first_name': firstName,
-      if (middleName != null) 'middle_name': middleName,
-      if (lastName != null) 'last_name': lastName,
-      if (birthSurname != null) 'birth_surname': birthSurname,
-      if (marriedSurname != null) 'married_surname': marriedSurname,
-      if (prefix != null) 'prefix': prefix,
-      if (suffix != null) 'suffix': suffix,
-      if (nickname != null) 'nickname': nickname,
-      if (gender != null) 'gender': gender,
-      if (birthDate != null) 'birth_date': birthDate,
-      if (birthDateDisplay != null) 'birth_date_display': birthDateDisplay,
-      if (birthDateSort != null) 'birth_date_sort': birthDateSort,
-      if (deathDate != null) 'death_date': deathDate,
-      if (deathDateDisplay != null) 'death_date_display': deathDateDisplay,
-      if (deathDateSort != null) 'death_date_sort': deathDateSort,
-      if (birthPlace != null) 'birth_place': birthPlace,
-      if (currentPlace != null) 'current_place': currentPlace,
-      if (profilePhotoPath != null) 'profile_photo_path': profilePhotoPath,
-      if (bio != null) 'bio': bio,
-      if (notes != null) 'notes': notes,
-      if (private != null) 'private': private,
-      if (isLiving != null) 'is_living': isLiving,
-      if (createdAt != null) 'created_at': createdAt,
-      if (updatedAt != null) 'updated_at': updatedAt,
-      if (rowid != null) 'rowid': rowid,
-    });
-  }
-
-  PersonsCompanion copyWith({
-    Value<String>? id,
-    Value<String>? treeId,
-    Value<String>? fullName,
-    Value<String?>? firstName,
-    Value<String?>? middleName,
-    Value<String?>? lastName,
-    Value<String?>? birthSurname,
-    Value<String?>? marriedSurname,
-    Value<String?>? prefix,
-    Value<String?>? suffix,
-    Value<String?>? nickname,
-    Value<String>? gender,
-    Value<DateTime?>? birthDate,
-    Value<String?>? birthDateDisplay,
-    Value<double?>? birthDateSort,
-    Value<DateTime?>? deathDate,
-    Value<String?>? deathDateDisplay,
-    Value<double?>? deathDateSort,
-    Value<String?>? birthPlace,
-    Value<String?>? currentPlace,
-    Value<String?>? profilePhotoPath,
-    Value<String?>? bio,
-    Value<String?>? notes,
-    Value<bool>? private,
-    Value<bool>? isLiving,
-    Value<DateTime>? createdAt,
-    Value<DateTime>? updatedAt,
-    Value<int>? rowid,
-  }) {
-    return PersonsCompanion(
-      id: id ?? this.id,
-      treeId: treeId ?? this.treeId,
-      fullName: fullName ?? this.fullName,
-      firstName: firstName ?? this.firstName,
-      middleName: middleName ?? this.middleName,
-      lastName: lastName ?? this.lastName,
-      birthSurname: birthSurname ?? this.birthSurname,
-      marriedSurname: marriedSurname ?? this.marriedSurname,
-      prefix: prefix ?? this.prefix,
-      suffix: suffix ?? this.suffix,
-      nickname: nickname ?? this.nickname,
-      gender: gender ?? this.gender,
-      birthDate: birthDate ?? this.birthDate,
-      birthDateDisplay: birthDateDisplay ?? this.birthDateDisplay,
-      birthDateSort: birthDateSort ?? this.birthDateSort,
-      deathDate: deathDate ?? this.deathDate,
-      deathDateDisplay: deathDateDisplay ?? this.deathDateDisplay,
-      deathDateSort: deathDateSort ?? this.deathDateSort,
-      birthPlace: birthPlace ?? this.birthPlace,
-      currentPlace: currentPlace ?? this.currentPlace,
-      profilePhotoPath: profilePhotoPath ?? this.profilePhotoPath,
-      bio: bio ?? this.bio,
-      notes: notes ?? this.notes,
-      private: private ?? this.private,
-      isLiving: isLiving ?? this.isLiving,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-      rowid: rowid ?? this.rowid,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (id.present) {
-      map['id'] = Variable<String>(id.value);
-    }
-    if (treeId.present) {
-      map['tree_id'] = Variable<String>(treeId.value);
-    }
-    if (fullName.present) {
-      map['full_name'] = Variable<String>(fullName.value);
-    }
-    if (firstName.present) {
-      map['first_name'] = Variable<String>(firstName.value);
-    }
-    if (middleName.present) {
-      map['middle_name'] = Variable<String>(middleName.value);
-    }
-    if (lastName.present) {
-      map['last_name'] = Variable<String>(lastName.value);
-    }
-    if (birthSurname.present) {
-      map['birth_surname'] = Variable<String>(birthSurname.value);
-    }
-    if (marriedSurname.present) {
-      map['married_surname'] = Variable<String>(marriedSurname.value);
-    }
-    if (prefix.present) {
-      map['prefix'] = Variable<String>(prefix.value);
-    }
-    if (suffix.present) {
-      map['suffix'] = Variable<String>(suffix.value);
-    }
-    if (nickname.present) {
-      map['nickname'] = Variable<String>(nickname.value);
-    }
-    if (gender.present) {
-      map['gender'] = Variable<String>(gender.value);
-    }
-    if (birthDate.present) {
-      map['birth_date'] = Variable<DateTime>(birthDate.value);
-    }
-    if (birthDateDisplay.present) {
-      map['birth_date_display'] = Variable<String>(birthDateDisplay.value);
-    }
-    if (birthDateSort.present) {
-      map['birth_date_sort'] = Variable<double>(birthDateSort.value);
-    }
-    if (deathDate.present) {
-      map['death_date'] = Variable<DateTime>(deathDate.value);
-    }
-    if (deathDateDisplay.present) {
-      map['death_date_display'] = Variable<String>(deathDateDisplay.value);
-    }
-    if (deathDateSort.present) {
-      map['death_date_sort'] = Variable<double>(deathDateSort.value);
-    }
-    if (birthPlace.present) {
-      map['birth_place'] = Variable<String>(birthPlace.value);
-    }
-    if (currentPlace.present) {
-      map['current_place'] = Variable<String>(currentPlace.value);
-    }
-    if (profilePhotoPath.present) {
-      map['profile_photo_path'] = Variable<String>(profilePhotoPath.value);
-    }
-    if (bio.present) {
-      map['bio'] = Variable<String>(bio.value);
-    }
-    if (notes.present) {
-      map['notes'] = Variable<String>(notes.value);
-    }
-    if (private.present) {
-      map['private'] = Variable<bool>(private.value);
-    }
-    if (isLiving.present) {
-      map['is_living'] = Variable<bool>(isLiving.value);
-    }
-    if (createdAt.present) {
-      map['created_at'] = Variable<DateTime>(createdAt.value);
-    }
-    if (updatedAt.present) {
-      map['updated_at'] = Variable<DateTime>(updatedAt.value);
-    }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('PersonsCompanion(')
-          ..write('id: $id, ')
-          ..write('treeId: $treeId, ')
-          ..write('fullName: $fullName, ')
-          ..write('firstName: $firstName, ')
-          ..write('middleName: $middleName, ')
-          ..write('lastName: $lastName, ')
-          ..write('birthSurname: $birthSurname, ')
-          ..write('marriedSurname: $marriedSurname, ')
-          ..write('prefix: $prefix, ')
-          ..write('suffix: $suffix, ')
-          ..write('nickname: $nickname, ')
-          ..write('gender: $gender, ')
-          ..write('birthDate: $birthDate, ')
-          ..write('birthDateDisplay: $birthDateDisplay, ')
-          ..write('birthDateSort: $birthDateSort, ')
-          ..write('deathDate: $deathDate, ')
-          ..write('deathDateDisplay: $deathDateDisplay, ')
-          ..write('deathDateSort: $deathDateSort, ')
-          ..write('birthPlace: $birthPlace, ')
-          ..write('currentPlace: $currentPlace, ')
-          ..write('profilePhotoPath: $profilePhotoPath, ')
-          ..write('bio: $bio, ')
-          ..write('notes: $notes, ')
-          ..write('private: $private, ')
-          ..write('isLiving: $isLiving, ')
-          ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt, ')
-          ..write('rowid: $rowid')
-          ..write(')'))
-        .toString();
-  }
-}
-
-class $RelationshipsTable extends Relationships
-    with TableInfo<$RelationshipsTable, Relationship> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $RelationshipsTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _idMeta = const VerificationMeta('id');
-  @override
-  late final GeneratedColumn<String> id = GeneratedColumn<String>(
-    'id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _treeIdMeta = const VerificationMeta('treeId');
-  @override
-  late final GeneratedColumn<String> treeId = GeneratedColumn<String>(
-    'tree_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES family_trees (id)',
-    ),
-  );
-  static const VerificationMeta _personIdMeta = const VerificationMeta(
-    'personId',
-  );
-  @override
-  late final GeneratedColumn<String> personId = GeneratedColumn<String>(
-    'person_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES persons (id)',
-    ),
-  );
-  static const VerificationMeta _relatedPersonIdMeta = const VerificationMeta(
-    'relatedPersonId',
-  );
-  @override
-  late final GeneratedColumn<String> relatedPersonId = GeneratedColumn<String>(
-    'related_person_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES persons (id)',
-    ),
-  );
-  static const VerificationMeta _relationshipTypeMeta = const VerificationMeta(
-    'relationshipType',
-  );
-  @override
-  late final GeneratedColumn<String> relationshipType = GeneratedColumn<String>(
-    'relationship_type',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _createdAtMeta = const VerificationMeta(
-    'createdAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
-    'created_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: true,
-  );
-  @override
-  List<GeneratedColumn> get $columns => [
-    id,
-    treeId,
-    personId,
-    relatedPersonId,
-    relationshipType,
-    createdAt,
-  ];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'relationships';
-  @override
-  VerificationContext validateIntegrity(
-    Insertable<Relationship> instance, {
-    bool isInserting = false,
-  }) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('id')) {
-      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
-    } else if (isInserting) {
-      context.missing(_idMeta);
-    }
-    if (data.containsKey('tree_id')) {
-      context.handle(
-        _treeIdMeta,
-        treeId.isAcceptableOrUnknown(data['tree_id']!, _treeIdMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_treeIdMeta);
-    }
-    if (data.containsKey('person_id')) {
-      context.handle(
-        _personIdMeta,
-        personId.isAcceptableOrUnknown(data['person_id']!, _personIdMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_personIdMeta);
-    }
-    if (data.containsKey('related_person_id')) {
-      context.handle(
-        _relatedPersonIdMeta,
-        relatedPersonId.isAcceptableOrUnknown(
-          data['related_person_id']!,
-          _relatedPersonIdMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_relatedPersonIdMeta);
-    }
-    if (data.containsKey('relationship_type')) {
-      context.handle(
-        _relationshipTypeMeta,
-        relationshipType.isAcceptableOrUnknown(
-          data['relationship_type']!,
-          _relationshipTypeMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_relationshipTypeMeta);
-    }
-    if (data.containsKey('created_at')) {
-      context.handle(
-        _createdAtMeta,
-        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_createdAtMeta);
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {id};
-  @override
-  Relationship map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return Relationship(
-      id: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}id'],
-      )!,
-      treeId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}tree_id'],
-      )!,
-      personId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}person_id'],
-      )!,
-      relatedPersonId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}related_person_id'],
-      )!,
-      relationshipType: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}relationship_type'],
-      )!,
-      createdAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}created_at'],
-      )!,
-    );
-  }
-
-  @override
-  $RelationshipsTable createAlias(String alias) {
-    return $RelationshipsTable(attachedDatabase, alias);
-  }
-}
-
-class Relationship extends DataClass implements Insertable<Relationship> {
-  final String id;
-  final String treeId;
-
-  /// For parent_child:
-  /// personId = parent
-  /// relatedPersonId = child
-  ///
-  /// For spouse:
-  /// personId = spouse 1
-  /// relatedPersonId = spouse 2
-  final String personId;
-  final String relatedPersonId;
-
-  /// Allowed values:
-  /// parent_child
-  /// spouse
-  final String relationshipType;
-  final DateTime createdAt;
-  const Relationship({
-    required this.id,
-    required this.treeId,
-    required this.personId,
-    required this.relatedPersonId,
-    required this.relationshipType,
-    required this.createdAt,
-  });
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['id'] = Variable<String>(id);
-    map['tree_id'] = Variable<String>(treeId);
-    map['person_id'] = Variable<String>(personId);
-    map['related_person_id'] = Variable<String>(relatedPersonId);
-    map['relationship_type'] = Variable<String>(relationshipType);
-    map['created_at'] = Variable<DateTime>(createdAt);
-    return map;
-  }
-
-  RelationshipsCompanion toCompanion(bool nullToAbsent) {
-    return RelationshipsCompanion(
-      id: Value(id),
-      treeId: Value(treeId),
-      personId: Value(personId),
-      relatedPersonId: Value(relatedPersonId),
-      relationshipType: Value(relationshipType),
-      createdAt: Value(createdAt),
-    );
-  }
-
-  factory Relationship.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return Relationship(
-      id: serializer.fromJson<String>(json['id']),
-      treeId: serializer.fromJson<String>(json['treeId']),
-      personId: serializer.fromJson<String>(json['personId']),
-      relatedPersonId: serializer.fromJson<String>(json['relatedPersonId']),
-      relationshipType: serializer.fromJson<String>(json['relationshipType']),
-      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'id': serializer.toJson<String>(id),
-      'treeId': serializer.toJson<String>(treeId),
-      'personId': serializer.toJson<String>(personId),
-      'relatedPersonId': serializer.toJson<String>(relatedPersonId),
-      'relationshipType': serializer.toJson<String>(relationshipType),
-      'createdAt': serializer.toJson<DateTime>(createdAt),
-    };
-  }
-
-  Relationship copyWith({
-    String? id,
-    String? treeId,
-    String? personId,
-    String? relatedPersonId,
-    String? relationshipType,
-    DateTime? createdAt,
-  }) => Relationship(
-    id: id ?? this.id,
-    treeId: treeId ?? this.treeId,
-    personId: personId ?? this.personId,
-    relatedPersonId: relatedPersonId ?? this.relatedPersonId,
-    relationshipType: relationshipType ?? this.relationshipType,
-    createdAt: createdAt ?? this.createdAt,
-  );
-  Relationship copyWithCompanion(RelationshipsCompanion data) {
-    return Relationship(
-      id: data.id.present ? data.id.value : this.id,
-      treeId: data.treeId.present ? data.treeId.value : this.treeId,
-      personId: data.personId.present ? data.personId.value : this.personId,
-      relatedPersonId: data.relatedPersonId.present
-          ? data.relatedPersonId.value
-          : this.relatedPersonId,
-      relationshipType: data.relationshipType.present
-          ? data.relationshipType.value
-          : this.relationshipType,
-      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('Relationship(')
-          ..write('id: $id, ')
-          ..write('treeId: $treeId, ')
-          ..write('personId: $personId, ')
-          ..write('relatedPersonId: $relatedPersonId, ')
-          ..write('relationshipType: $relationshipType, ')
-          ..write('createdAt: $createdAt')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    id,
-    treeId,
-    personId,
-    relatedPersonId,
-    relationshipType,
-    createdAt,
-  );
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is Relationship &&
-          other.id == this.id &&
-          other.treeId == this.treeId &&
-          other.personId == this.personId &&
-          other.relatedPersonId == this.relatedPersonId &&
-          other.relationshipType == this.relationshipType &&
-          other.createdAt == this.createdAt);
-}
-
-class RelationshipsCompanion extends UpdateCompanion<Relationship> {
-  final Value<String> id;
-  final Value<String> treeId;
-  final Value<String> personId;
-  final Value<String> relatedPersonId;
-  final Value<String> relationshipType;
-  final Value<DateTime> createdAt;
-  final Value<int> rowid;
-  const RelationshipsCompanion({
-    this.id = const Value.absent(),
-    this.treeId = const Value.absent(),
-    this.personId = const Value.absent(),
-    this.relatedPersonId = const Value.absent(),
-    this.relationshipType = const Value.absent(),
-    this.createdAt = const Value.absent(),
-    this.rowid = const Value.absent(),
-  });
-  RelationshipsCompanion.insert({
-    required String id,
-    required String treeId,
-    required String personId,
-    required String relatedPersonId,
-    required String relationshipType,
-    required DateTime createdAt,
-    this.rowid = const Value.absent(),
-  }) : id = Value(id),
-       treeId = Value(treeId),
-       personId = Value(personId),
-       relatedPersonId = Value(relatedPersonId),
-       relationshipType = Value(relationshipType),
-       createdAt = Value(createdAt);
-  static Insertable<Relationship> custom({
-    Expression<String>? id,
-    Expression<String>? treeId,
-    Expression<String>? personId,
-    Expression<String>? relatedPersonId,
-    Expression<String>? relationshipType,
-    Expression<DateTime>? createdAt,
-    Expression<int>? rowid,
-  }) {
-    return RawValuesInsertable({
-      if (id != null) 'id': id,
-      if (treeId != null) 'tree_id': treeId,
-      if (personId != null) 'person_id': personId,
-      if (relatedPersonId != null) 'related_person_id': relatedPersonId,
-      if (relationshipType != null) 'relationship_type': relationshipType,
-      if (createdAt != null) 'created_at': createdAt,
-      if (rowid != null) 'rowid': rowid,
-    });
-  }
-
-  RelationshipsCompanion copyWith({
-    Value<String>? id,
-    Value<String>? treeId,
-    Value<String>? personId,
-    Value<String>? relatedPersonId,
-    Value<String>? relationshipType,
-    Value<DateTime>? createdAt,
-    Value<int>? rowid,
-  }) {
-    return RelationshipsCompanion(
-      id: id ?? this.id,
-      treeId: treeId ?? this.treeId,
-      personId: personId ?? this.personId,
-      relatedPersonId: relatedPersonId ?? this.relatedPersonId,
-      relationshipType: relationshipType ?? this.relationshipType,
-      createdAt: createdAt ?? this.createdAt,
-      rowid: rowid ?? this.rowid,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (id.present) {
-      map['id'] = Variable<String>(id.value);
-    }
-    if (treeId.present) {
-      map['tree_id'] = Variable<String>(treeId.value);
-    }
-    if (personId.present) {
-      map['person_id'] = Variable<String>(personId.value);
-    }
-    if (relatedPersonId.present) {
-      map['related_person_id'] = Variable<String>(relatedPersonId.value);
-    }
-    if (relationshipType.present) {
-      map['relationship_type'] = Variable<String>(relationshipType.value);
-    }
-    if (createdAt.present) {
-      map['created_at'] = Variable<DateTime>(createdAt.value);
-    }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('RelationshipsCompanion(')
-          ..write('id: $id, ')
-          ..write('treeId: $treeId, ')
-          ..write('personId: $personId, ')
-          ..write('relatedPersonId: $relatedPersonId, ')
-          ..write('relationshipType: $relationshipType, ')
-          ..write('createdAt: $createdAt, ')
-          ..write('rowid: $rowid')
-          ..write(')'))
-        .toString();
-  }
-}
-
-class $MediaItemsTable extends MediaItems
-    with TableInfo<$MediaItemsTable, MediaItem> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $MediaItemsTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _idMeta = const VerificationMeta('id');
-  @override
-  late final GeneratedColumn<String> id = GeneratedColumn<String>(
-    'id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _personIdMeta = const VerificationMeta(
-    'personId',
-  );
-  @override
-  late final GeneratedColumn<String> personId = GeneratedColumn<String>(
-    'person_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES genealogy_persons (id)',
-    ),
-  );
-  static const VerificationMeta _filePathMeta = const VerificationMeta(
-    'filePath',
-  );
-  @override
-  late final GeneratedColumn<String> filePath = GeneratedColumn<String>(
-    'file_path',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _mediaTypeMeta = const VerificationMeta(
-    'mediaType',
-  );
-  @override
-  late final GeneratedColumn<String> mediaType = GeneratedColumn<String>(
-    'media_type',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _titleMeta = const VerificationMeta('title');
-  @override
-  late final GeneratedColumn<String> title = GeneratedColumn<String>(
-    'title',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _descriptionMeta = const VerificationMeta(
-    'description',
-  );
-  @override
-  late final GeneratedColumn<String> description = GeneratedColumn<String>(
-    'description',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _createdAtMeta = const VerificationMeta(
-    'createdAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
-    'created_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: true,
-  );
-  @override
-  List<GeneratedColumn> get $columns => [
-    id,
-    personId,
-    filePath,
-    mediaType,
-    title,
-    description,
-    createdAt,
-  ];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'media_items';
-  @override
-  VerificationContext validateIntegrity(
-    Insertable<MediaItem> instance, {
-    bool isInserting = false,
-  }) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('id')) {
-      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
-    } else if (isInserting) {
-      context.missing(_idMeta);
-    }
-    if (data.containsKey('person_id')) {
-      context.handle(
-        _personIdMeta,
-        personId.isAcceptableOrUnknown(data['person_id']!, _personIdMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_personIdMeta);
-    }
-    if (data.containsKey('file_path')) {
-      context.handle(
-        _filePathMeta,
-        filePath.isAcceptableOrUnknown(data['file_path']!, _filePathMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_filePathMeta);
-    }
-    if (data.containsKey('media_type')) {
-      context.handle(
-        _mediaTypeMeta,
-        mediaType.isAcceptableOrUnknown(data['media_type']!, _mediaTypeMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_mediaTypeMeta);
-    }
-    if (data.containsKey('title')) {
-      context.handle(
-        _titleMeta,
-        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
-      );
-    }
-    if (data.containsKey('description')) {
-      context.handle(
-        _descriptionMeta,
-        description.isAcceptableOrUnknown(
-          data['description']!,
-          _descriptionMeta,
-        ),
-      );
-    }
-    if (data.containsKey('created_at')) {
-      context.handle(
-        _createdAtMeta,
-        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_createdAtMeta);
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {id};
-  @override
-  MediaItem map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return MediaItem(
-      id: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}id'],
-      )!,
-      personId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}person_id'],
-      )!,
-      filePath: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}file_path'],
-      )!,
-      mediaType: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}media_type'],
-      )!,
-      title: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}title'],
-      ),
-      description: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}description'],
-      ),
-      createdAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}created_at'],
-      )!,
-    );
-  }
-
-  @override
-  $MediaItemsTable createAlias(String alias) {
-    return $MediaItemsTable(attachedDatabase, alias);
-  }
-}
-
-class MediaItem extends DataClass implements Insertable<MediaItem> {
-  final String id;
-  final String personId;
-  final String filePath;
-
-  /// photo / document / audio / video
-  final String mediaType;
-  final String? title;
-  final String? description;
-  final DateTime createdAt;
-  const MediaItem({
-    required this.id,
-    required this.personId,
-    required this.filePath,
-    required this.mediaType,
-    this.title,
-    this.description,
-    required this.createdAt,
-  });
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['id'] = Variable<String>(id);
-    map['person_id'] = Variable<String>(personId);
-    map['file_path'] = Variable<String>(filePath);
-    map['media_type'] = Variable<String>(mediaType);
-    if (!nullToAbsent || title != null) {
-      map['title'] = Variable<String>(title);
-    }
-    if (!nullToAbsent || description != null) {
-      map['description'] = Variable<String>(description);
-    }
-    map['created_at'] = Variable<DateTime>(createdAt);
-    return map;
-  }
-
-  MediaItemsCompanion toCompanion(bool nullToAbsent) {
-    return MediaItemsCompanion(
-      id: Value(id),
-      personId: Value(personId),
-      filePath: Value(filePath),
-      mediaType: Value(mediaType),
-      title: title == null && nullToAbsent
-          ? const Value.absent()
-          : Value(title),
-      description: description == null && nullToAbsent
-          ? const Value.absent()
-          : Value(description),
-      createdAt: Value(createdAt),
-    );
-  }
-
-  factory MediaItem.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return MediaItem(
-      id: serializer.fromJson<String>(json['id']),
-      personId: serializer.fromJson<String>(json['personId']),
-      filePath: serializer.fromJson<String>(json['filePath']),
-      mediaType: serializer.fromJson<String>(json['mediaType']),
-      title: serializer.fromJson<String?>(json['title']),
-      description: serializer.fromJson<String?>(json['description']),
-      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'id': serializer.toJson<String>(id),
-      'personId': serializer.toJson<String>(personId),
-      'filePath': serializer.toJson<String>(filePath),
-      'mediaType': serializer.toJson<String>(mediaType),
-      'title': serializer.toJson<String?>(title),
-      'description': serializer.toJson<String?>(description),
-      'createdAt': serializer.toJson<DateTime>(createdAt),
-    };
-  }
-
-  MediaItem copyWith({
-    String? id,
-    String? personId,
-    String? filePath,
-    String? mediaType,
-    Value<String?> title = const Value.absent(),
-    Value<String?> description = const Value.absent(),
-    DateTime? createdAt,
-  }) => MediaItem(
-    id: id ?? this.id,
-    personId: personId ?? this.personId,
-    filePath: filePath ?? this.filePath,
-    mediaType: mediaType ?? this.mediaType,
-    title: title.present ? title.value : this.title,
-    description: description.present ? description.value : this.description,
-    createdAt: createdAt ?? this.createdAt,
-  );
-  MediaItem copyWithCompanion(MediaItemsCompanion data) {
-    return MediaItem(
-      id: data.id.present ? data.id.value : this.id,
-      personId: data.personId.present ? data.personId.value : this.personId,
-      filePath: data.filePath.present ? data.filePath.value : this.filePath,
-      mediaType: data.mediaType.present ? data.mediaType.value : this.mediaType,
-      title: data.title.present ? data.title.value : this.title,
-      description: data.description.present
-          ? data.description.value
-          : this.description,
-      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('MediaItem(')
-          ..write('id: $id, ')
-          ..write('personId: $personId, ')
-          ..write('filePath: $filePath, ')
-          ..write('mediaType: $mediaType, ')
-          ..write('title: $title, ')
-          ..write('description: $description, ')
-          ..write('createdAt: $createdAt')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    id,
-    personId,
-    filePath,
-    mediaType,
-    title,
-    description,
-    createdAt,
-  );
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is MediaItem &&
-          other.id == this.id &&
-          other.personId == this.personId &&
-          other.filePath == this.filePath &&
-          other.mediaType == this.mediaType &&
-          other.title == this.title &&
-          other.description == this.description &&
-          other.createdAt == this.createdAt);
-}
-
-class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
-  final Value<String> id;
-  final Value<String> personId;
-  final Value<String> filePath;
-  final Value<String> mediaType;
-  final Value<String?> title;
-  final Value<String?> description;
-  final Value<DateTime> createdAt;
-  final Value<int> rowid;
-  const MediaItemsCompanion({
-    this.id = const Value.absent(),
-    this.personId = const Value.absent(),
-    this.filePath = const Value.absent(),
-    this.mediaType = const Value.absent(),
-    this.title = const Value.absent(),
-    this.description = const Value.absent(),
-    this.createdAt = const Value.absent(),
-    this.rowid = const Value.absent(),
-  });
-  MediaItemsCompanion.insert({
-    required String id,
-    required String personId,
-    required String filePath,
-    required String mediaType,
-    this.title = const Value.absent(),
-    this.description = const Value.absent(),
-    required DateTime createdAt,
-    this.rowid = const Value.absent(),
-  }) : id = Value(id),
-       personId = Value(personId),
-       filePath = Value(filePath),
-       mediaType = Value(mediaType),
-       createdAt = Value(createdAt);
-  static Insertable<MediaItem> custom({
-    Expression<String>? id,
-    Expression<String>? personId,
-    Expression<String>? filePath,
-    Expression<String>? mediaType,
-    Expression<String>? title,
-    Expression<String>? description,
-    Expression<DateTime>? createdAt,
-    Expression<int>? rowid,
-  }) {
-    return RawValuesInsertable({
-      if (id != null) 'id': id,
-      if (personId != null) 'person_id': personId,
-      if (filePath != null) 'file_path': filePath,
-      if (mediaType != null) 'media_type': mediaType,
-      if (title != null) 'title': title,
-      if (description != null) 'description': description,
-      if (createdAt != null) 'created_at': createdAt,
-      if (rowid != null) 'rowid': rowid,
-    });
-  }
-
-  MediaItemsCompanion copyWith({
-    Value<String>? id,
-    Value<String>? personId,
-    Value<String>? filePath,
-    Value<String>? mediaType,
-    Value<String?>? title,
-    Value<String?>? description,
-    Value<DateTime>? createdAt,
-    Value<int>? rowid,
-  }) {
-    return MediaItemsCompanion(
-      id: id ?? this.id,
-      personId: personId ?? this.personId,
-      filePath: filePath ?? this.filePath,
-      mediaType: mediaType ?? this.mediaType,
-      title: title ?? this.title,
-      description: description ?? this.description,
-      createdAt: createdAt ?? this.createdAt,
-      rowid: rowid ?? this.rowid,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (id.present) {
-      map['id'] = Variable<String>(id.value);
-    }
-    if (personId.present) {
-      map['person_id'] = Variable<String>(personId.value);
-    }
-    if (filePath.present) {
-      map['file_path'] = Variable<String>(filePath.value);
-    }
-    if (mediaType.present) {
-      map['media_type'] = Variable<String>(mediaType.value);
-    }
-    if (title.present) {
-      map['title'] = Variable<String>(title.value);
-    }
-    if (description.present) {
-      map['description'] = Variable<String>(description.value);
-    }
-    if (createdAt.present) {
-      map['created_at'] = Variable<DateTime>(createdAt.value);
-    }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('MediaItemsCompanion(')
-          ..write('id: $id, ')
-          ..write('personId: $personId, ')
-          ..write('filePath: $filePath, ')
-          ..write('mediaType: $mediaType, ')
-          ..write('title: $title, ')
-          ..write('description: $description, ')
-          ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -8830,7 +2544,7 @@ class $EventsTable extends Events with TableInfo<$EventsTable, Event> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES genealogy_persons (id)',
+      'REFERENCES genealogy_persons (id) ON DELETE RESTRICT',
     ),
   );
   static const VerificationMeta _eventTypeMeta = const VerificationMeta(
@@ -9526,12 +3240,1057 @@ class EventsCompanion extends UpdateCompanion<Event> {
   }
 }
 
-class $DuplicateMarkersTable extends DuplicateMarkers
-    with TableInfo<$DuplicateMarkersTable, DuplicateMarker> {
+class $SurnameEventsTable extends SurnameEvents
+    with TableInfo<$SurnameEventsTable, SurnameEvent> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
-  $DuplicateMarkersTable(this.attachedDatabase, [this._alias]);
+  $SurnameEventsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _personIdMeta = const VerificationMeta(
+    'personId',
+  );
+  @override
+  late final GeneratedColumn<String> personId = GeneratedColumn<String>(
+    'person_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES genealogy_persons (id) ON DELETE RESTRICT',
+    ),
+  );
+  static const VerificationMeta _surnameMeta = const VerificationMeta(
+    'surname',
+  );
+  @override
+  late final GeneratedColumn<String> surname = GeneratedColumn<String>(
+    'surname',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _surnameTypeMeta = const VerificationMeta(
+    'surnameType',
+  );
+  @override
+  late final GeneratedColumn<String> surnameType = GeneratedColumn<String>(
+    'surname_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _startDateMeta = const VerificationMeta(
+    'startDate',
+  );
+  @override
+  late final GeneratedColumn<String> startDate = GeneratedColumn<String>(
+    'start_date',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _startDateQualifierMeta =
+      const VerificationMeta('startDateQualifier');
+  @override
+  late final GeneratedColumn<String> startDateQualifier =
+      GeneratedColumn<String>(
+        'start_date_qualifier',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _endDateMeta = const VerificationMeta(
+    'endDate',
+  );
+  @override
+  late final GeneratedColumn<String> endDate = GeneratedColumn<String>(
+    'end_date',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _endDateQualifierMeta = const VerificationMeta(
+    'endDateQualifier',
+  );
+  @override
+  late final GeneratedColumn<String> endDateQualifier = GeneratedColumn<String>(
+    'end_date_qualifier',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _relatedPersonIdMeta = const VerificationMeta(
+    'relatedPersonId',
+  );
+  @override
+  late final GeneratedColumn<String> relatedPersonId = GeneratedColumn<String>(
+    'related_person_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES genealogy_persons (id) ON DELETE SET NULL',
+    ),
+  );
+  static const VerificationMeta _relatedEventIdMeta = const VerificationMeta(
+    'relatedEventId',
+  );
+  @override
+  late final GeneratedColumn<String> relatedEventId = GeneratedColumn<String>(
+    'related_event_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES events (id) ON DELETE SET NULL',
+    ),
+  );
+  static const VerificationMeta _locationMeta = const VerificationMeta(
+    'location',
+  );
+  @override
+  late final GeneratedColumn<String> location = GeneratedColumn<String>(
+    'location',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _legalDocumentMeta = const VerificationMeta(
+    'legalDocument',
+  );
+  @override
+  late final GeneratedColumn<String> legalDocument = GeneratedColumn<String>(
+    'legal_document',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _notesMeta = const VerificationMeta('notes');
+  @override
+  late final GeneratedColumn<String> notes = GeneratedColumn<String>(
+    'notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sortOrderMeta = const VerificationMeta(
+    'sortOrder',
+  );
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+    'sort_order',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _isPrimaryMeta = const VerificationMeta(
+    'isPrimary',
+  );
+  @override
+  late final GeneratedColumn<bool> isPrimary = GeneratedColumn<bool>(
+    'is_primary',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_primary" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _uuidMeta = const VerificationMeta('uuid');
+  @override
+  late final GeneratedColumn<String> uuid = GeneratedColumn<String>(
+    'uuid',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    personId,
+    surname,
+    surnameType,
+    startDate,
+    startDateQualifier,
+    endDate,
+    endDateQualifier,
+    relatedPersonId,
+    relatedEventId,
+    location,
+    legalDocument,
+    notes,
+    sortOrder,
+    isPrimary,
+    uuid,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'surname_events';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SurnameEvent> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('person_id')) {
+      context.handle(
+        _personIdMeta,
+        personId.isAcceptableOrUnknown(data['person_id']!, _personIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_personIdMeta);
+    }
+    if (data.containsKey('surname')) {
+      context.handle(
+        _surnameMeta,
+        surname.isAcceptableOrUnknown(data['surname']!, _surnameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_surnameMeta);
+    }
+    if (data.containsKey('surname_type')) {
+      context.handle(
+        _surnameTypeMeta,
+        surnameType.isAcceptableOrUnknown(
+          data['surname_type']!,
+          _surnameTypeMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_surnameTypeMeta);
+    }
+    if (data.containsKey('start_date')) {
+      context.handle(
+        _startDateMeta,
+        startDate.isAcceptableOrUnknown(data['start_date']!, _startDateMeta),
+      );
+    }
+    if (data.containsKey('start_date_qualifier')) {
+      context.handle(
+        _startDateQualifierMeta,
+        startDateQualifier.isAcceptableOrUnknown(
+          data['start_date_qualifier']!,
+          _startDateQualifierMeta,
+        ),
+      );
+    }
+    if (data.containsKey('end_date')) {
+      context.handle(
+        _endDateMeta,
+        endDate.isAcceptableOrUnknown(data['end_date']!, _endDateMeta),
+      );
+    }
+    if (data.containsKey('end_date_qualifier')) {
+      context.handle(
+        _endDateQualifierMeta,
+        endDateQualifier.isAcceptableOrUnknown(
+          data['end_date_qualifier']!,
+          _endDateQualifierMeta,
+        ),
+      );
+    }
+    if (data.containsKey('related_person_id')) {
+      context.handle(
+        _relatedPersonIdMeta,
+        relatedPersonId.isAcceptableOrUnknown(
+          data['related_person_id']!,
+          _relatedPersonIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('related_event_id')) {
+      context.handle(
+        _relatedEventIdMeta,
+        relatedEventId.isAcceptableOrUnknown(
+          data['related_event_id']!,
+          _relatedEventIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('location')) {
+      context.handle(
+        _locationMeta,
+        location.isAcceptableOrUnknown(data['location']!, _locationMeta),
+      );
+    }
+    if (data.containsKey('legal_document')) {
+      context.handle(
+        _legalDocumentMeta,
+        legalDocument.isAcceptableOrUnknown(
+          data['legal_document']!,
+          _legalDocumentMeta,
+        ),
+      );
+    }
+    if (data.containsKey('notes')) {
+      context.handle(
+        _notesMeta,
+        notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
+      );
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(
+        _sortOrderMeta,
+        sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta),
+      );
+    }
+    if (data.containsKey('is_primary')) {
+      context.handle(
+        _isPrimaryMeta,
+        isPrimary.isAcceptableOrUnknown(data['is_primary']!, _isPrimaryMeta),
+      );
+    }
+    if (data.containsKey('uuid')) {
+      context.handle(
+        _uuidMeta,
+        uuid.isAcceptableOrUnknown(data['uuid']!, _uuidMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_uuidMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SurnameEvent map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SurnameEvent(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      personId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}person_id'],
+      )!,
+      surname: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}surname'],
+      )!,
+      surnameType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}surname_type'],
+      )!,
+      startDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}start_date'],
+      ),
+      startDateQualifier: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}start_date_qualifier'],
+      ),
+      endDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}end_date'],
+      ),
+      endDateQualifier: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}end_date_qualifier'],
+      ),
+      relatedPersonId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}related_person_id'],
+      ),
+      relatedEventId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}related_event_id'],
+      ),
+      location: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}location'],
+      ),
+      legalDocument: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}legal_document'],
+      ),
+      notes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}notes'],
+      ),
+      sortOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sort_order'],
+      )!,
+      isPrimary: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_primary'],
+      )!,
+      uuid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uuid'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $SurnameEventsTable createAlias(String alias) {
+    return $SurnameEventsTable(attachedDatabase, alias);
+  }
+}
+
+class SurnameEvent extends DataClass implements Insertable<SurnameEvent> {
+  final String id;
+  final String personId;
+  final String surname;
+  final String surnameType;
+  final String? startDate;
+  final String? startDateQualifier;
+  final String? endDate;
+  final String? endDateQualifier;
+  final String? relatedPersonId;
+  final String? relatedEventId;
+  final String? location;
+  final String? legalDocument;
+  final String? notes;
+  final int sortOrder;
+  final bool isPrimary;
+  final String uuid;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const SurnameEvent({
+    required this.id,
+    required this.personId,
+    required this.surname,
+    required this.surnameType,
+    this.startDate,
+    this.startDateQualifier,
+    this.endDate,
+    this.endDateQualifier,
+    this.relatedPersonId,
+    this.relatedEventId,
+    this.location,
+    this.legalDocument,
+    this.notes,
+    required this.sortOrder,
+    required this.isPrimary,
+    required this.uuid,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['person_id'] = Variable<String>(personId);
+    map['surname'] = Variable<String>(surname);
+    map['surname_type'] = Variable<String>(surnameType);
+    if (!nullToAbsent || startDate != null) {
+      map['start_date'] = Variable<String>(startDate);
+    }
+    if (!nullToAbsent || startDateQualifier != null) {
+      map['start_date_qualifier'] = Variable<String>(startDateQualifier);
+    }
+    if (!nullToAbsent || endDate != null) {
+      map['end_date'] = Variable<String>(endDate);
+    }
+    if (!nullToAbsent || endDateQualifier != null) {
+      map['end_date_qualifier'] = Variable<String>(endDateQualifier);
+    }
+    if (!nullToAbsent || relatedPersonId != null) {
+      map['related_person_id'] = Variable<String>(relatedPersonId);
+    }
+    if (!nullToAbsent || relatedEventId != null) {
+      map['related_event_id'] = Variable<String>(relatedEventId);
+    }
+    if (!nullToAbsent || location != null) {
+      map['location'] = Variable<String>(location);
+    }
+    if (!nullToAbsent || legalDocument != null) {
+      map['legal_document'] = Variable<String>(legalDocument);
+    }
+    if (!nullToAbsent || notes != null) {
+      map['notes'] = Variable<String>(notes);
+    }
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['is_primary'] = Variable<bool>(isPrimary);
+    map['uuid'] = Variable<String>(uuid);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  SurnameEventsCompanion toCompanion(bool nullToAbsent) {
+    return SurnameEventsCompanion(
+      id: Value(id),
+      personId: Value(personId),
+      surname: Value(surname),
+      surnameType: Value(surnameType),
+      startDate: startDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(startDate),
+      startDateQualifier: startDateQualifier == null && nullToAbsent
+          ? const Value.absent()
+          : Value(startDateQualifier),
+      endDate: endDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(endDate),
+      endDateQualifier: endDateQualifier == null && nullToAbsent
+          ? const Value.absent()
+          : Value(endDateQualifier),
+      relatedPersonId: relatedPersonId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(relatedPersonId),
+      relatedEventId: relatedEventId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(relatedEventId),
+      location: location == null && nullToAbsent
+          ? const Value.absent()
+          : Value(location),
+      legalDocument: legalDocument == null && nullToAbsent
+          ? const Value.absent()
+          : Value(legalDocument),
+      notes: notes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(notes),
+      sortOrder: Value(sortOrder),
+      isPrimary: Value(isPrimary),
+      uuid: Value(uuid),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory SurnameEvent.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SurnameEvent(
+      id: serializer.fromJson<String>(json['id']),
+      personId: serializer.fromJson<String>(json['personId']),
+      surname: serializer.fromJson<String>(json['surname']),
+      surnameType: serializer.fromJson<String>(json['surnameType']),
+      startDate: serializer.fromJson<String?>(json['startDate']),
+      startDateQualifier: serializer.fromJson<String?>(
+        json['startDateQualifier'],
+      ),
+      endDate: serializer.fromJson<String?>(json['endDate']),
+      endDateQualifier: serializer.fromJson<String?>(json['endDateQualifier']),
+      relatedPersonId: serializer.fromJson<String?>(json['relatedPersonId']),
+      relatedEventId: serializer.fromJson<String?>(json['relatedEventId']),
+      location: serializer.fromJson<String?>(json['location']),
+      legalDocument: serializer.fromJson<String?>(json['legalDocument']),
+      notes: serializer.fromJson<String?>(json['notes']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      isPrimary: serializer.fromJson<bool>(json['isPrimary']),
+      uuid: serializer.fromJson<String>(json['uuid']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'personId': serializer.toJson<String>(personId),
+      'surname': serializer.toJson<String>(surname),
+      'surnameType': serializer.toJson<String>(surnameType),
+      'startDate': serializer.toJson<String?>(startDate),
+      'startDateQualifier': serializer.toJson<String?>(startDateQualifier),
+      'endDate': serializer.toJson<String?>(endDate),
+      'endDateQualifier': serializer.toJson<String?>(endDateQualifier),
+      'relatedPersonId': serializer.toJson<String?>(relatedPersonId),
+      'relatedEventId': serializer.toJson<String?>(relatedEventId),
+      'location': serializer.toJson<String?>(location),
+      'legalDocument': serializer.toJson<String?>(legalDocument),
+      'notes': serializer.toJson<String?>(notes),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'isPrimary': serializer.toJson<bool>(isPrimary),
+      'uuid': serializer.toJson<String>(uuid),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  SurnameEvent copyWith({
+    String? id,
+    String? personId,
+    String? surname,
+    String? surnameType,
+    Value<String?> startDate = const Value.absent(),
+    Value<String?> startDateQualifier = const Value.absent(),
+    Value<String?> endDate = const Value.absent(),
+    Value<String?> endDateQualifier = const Value.absent(),
+    Value<String?> relatedPersonId = const Value.absent(),
+    Value<String?> relatedEventId = const Value.absent(),
+    Value<String?> location = const Value.absent(),
+    Value<String?> legalDocument = const Value.absent(),
+    Value<String?> notes = const Value.absent(),
+    int? sortOrder,
+    bool? isPrimary,
+    String? uuid,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => SurnameEvent(
+    id: id ?? this.id,
+    personId: personId ?? this.personId,
+    surname: surname ?? this.surname,
+    surnameType: surnameType ?? this.surnameType,
+    startDate: startDate.present ? startDate.value : this.startDate,
+    startDateQualifier: startDateQualifier.present
+        ? startDateQualifier.value
+        : this.startDateQualifier,
+    endDate: endDate.present ? endDate.value : this.endDate,
+    endDateQualifier: endDateQualifier.present
+        ? endDateQualifier.value
+        : this.endDateQualifier,
+    relatedPersonId: relatedPersonId.present
+        ? relatedPersonId.value
+        : this.relatedPersonId,
+    relatedEventId: relatedEventId.present
+        ? relatedEventId.value
+        : this.relatedEventId,
+    location: location.present ? location.value : this.location,
+    legalDocument: legalDocument.present
+        ? legalDocument.value
+        : this.legalDocument,
+    notes: notes.present ? notes.value : this.notes,
+    sortOrder: sortOrder ?? this.sortOrder,
+    isPrimary: isPrimary ?? this.isPrimary,
+    uuid: uuid ?? this.uuid,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  SurnameEvent copyWithCompanion(SurnameEventsCompanion data) {
+    return SurnameEvent(
+      id: data.id.present ? data.id.value : this.id,
+      personId: data.personId.present ? data.personId.value : this.personId,
+      surname: data.surname.present ? data.surname.value : this.surname,
+      surnameType: data.surnameType.present
+          ? data.surnameType.value
+          : this.surnameType,
+      startDate: data.startDate.present ? data.startDate.value : this.startDate,
+      startDateQualifier: data.startDateQualifier.present
+          ? data.startDateQualifier.value
+          : this.startDateQualifier,
+      endDate: data.endDate.present ? data.endDate.value : this.endDate,
+      endDateQualifier: data.endDateQualifier.present
+          ? data.endDateQualifier.value
+          : this.endDateQualifier,
+      relatedPersonId: data.relatedPersonId.present
+          ? data.relatedPersonId.value
+          : this.relatedPersonId,
+      relatedEventId: data.relatedEventId.present
+          ? data.relatedEventId.value
+          : this.relatedEventId,
+      location: data.location.present ? data.location.value : this.location,
+      legalDocument: data.legalDocument.present
+          ? data.legalDocument.value
+          : this.legalDocument,
+      notes: data.notes.present ? data.notes.value : this.notes,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      isPrimary: data.isPrimary.present ? data.isPrimary.value : this.isPrimary,
+      uuid: data.uuid.present ? data.uuid.value : this.uuid,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SurnameEvent(')
+          ..write('id: $id, ')
+          ..write('personId: $personId, ')
+          ..write('surname: $surname, ')
+          ..write('surnameType: $surnameType, ')
+          ..write('startDate: $startDate, ')
+          ..write('startDateQualifier: $startDateQualifier, ')
+          ..write('endDate: $endDate, ')
+          ..write('endDateQualifier: $endDateQualifier, ')
+          ..write('relatedPersonId: $relatedPersonId, ')
+          ..write('relatedEventId: $relatedEventId, ')
+          ..write('location: $location, ')
+          ..write('legalDocument: $legalDocument, ')
+          ..write('notes: $notes, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('isPrimary: $isPrimary, ')
+          ..write('uuid: $uuid, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    personId,
+    surname,
+    surnameType,
+    startDate,
+    startDateQualifier,
+    endDate,
+    endDateQualifier,
+    relatedPersonId,
+    relatedEventId,
+    location,
+    legalDocument,
+    notes,
+    sortOrder,
+    isPrimary,
+    uuid,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SurnameEvent &&
+          other.id == this.id &&
+          other.personId == this.personId &&
+          other.surname == this.surname &&
+          other.surnameType == this.surnameType &&
+          other.startDate == this.startDate &&
+          other.startDateQualifier == this.startDateQualifier &&
+          other.endDate == this.endDate &&
+          other.endDateQualifier == this.endDateQualifier &&
+          other.relatedPersonId == this.relatedPersonId &&
+          other.relatedEventId == this.relatedEventId &&
+          other.location == this.location &&
+          other.legalDocument == this.legalDocument &&
+          other.notes == this.notes &&
+          other.sortOrder == this.sortOrder &&
+          other.isPrimary == this.isPrimary &&
+          other.uuid == this.uuid &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class SurnameEventsCompanion extends UpdateCompanion<SurnameEvent> {
+  final Value<String> id;
+  final Value<String> personId;
+  final Value<String> surname;
+  final Value<String> surnameType;
+  final Value<String?> startDate;
+  final Value<String?> startDateQualifier;
+  final Value<String?> endDate;
+  final Value<String?> endDateQualifier;
+  final Value<String?> relatedPersonId;
+  final Value<String?> relatedEventId;
+  final Value<String?> location;
+  final Value<String?> legalDocument;
+  final Value<String?> notes;
+  final Value<int> sortOrder;
+  final Value<bool> isPrimary;
+  final Value<String> uuid;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const SurnameEventsCompanion({
+    this.id = const Value.absent(),
+    this.personId = const Value.absent(),
+    this.surname = const Value.absent(),
+    this.surnameType = const Value.absent(),
+    this.startDate = const Value.absent(),
+    this.startDateQualifier = const Value.absent(),
+    this.endDate = const Value.absent(),
+    this.endDateQualifier = const Value.absent(),
+    this.relatedPersonId = const Value.absent(),
+    this.relatedEventId = const Value.absent(),
+    this.location = const Value.absent(),
+    this.legalDocument = const Value.absent(),
+    this.notes = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.isPrimary = const Value.absent(),
+    this.uuid = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SurnameEventsCompanion.insert({
+    required String id,
+    required String personId,
+    required String surname,
+    required String surnameType,
+    this.startDate = const Value.absent(),
+    this.startDateQualifier = const Value.absent(),
+    this.endDate = const Value.absent(),
+    this.endDateQualifier = const Value.absent(),
+    this.relatedPersonId = const Value.absent(),
+    this.relatedEventId = const Value.absent(),
+    this.location = const Value.absent(),
+    this.legalDocument = const Value.absent(),
+    this.notes = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.isPrimary = const Value.absent(),
+    required String uuid,
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       personId = Value(personId),
+       surname = Value(surname),
+       surnameType = Value(surnameType),
+       uuid = Value(uuid);
+  static Insertable<SurnameEvent> custom({
+    Expression<String>? id,
+    Expression<String>? personId,
+    Expression<String>? surname,
+    Expression<String>? surnameType,
+    Expression<String>? startDate,
+    Expression<String>? startDateQualifier,
+    Expression<String>? endDate,
+    Expression<String>? endDateQualifier,
+    Expression<String>? relatedPersonId,
+    Expression<String>? relatedEventId,
+    Expression<String>? location,
+    Expression<String>? legalDocument,
+    Expression<String>? notes,
+    Expression<int>? sortOrder,
+    Expression<bool>? isPrimary,
+    Expression<String>? uuid,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (personId != null) 'person_id': personId,
+      if (surname != null) 'surname': surname,
+      if (surnameType != null) 'surname_type': surnameType,
+      if (startDate != null) 'start_date': startDate,
+      if (startDateQualifier != null)
+        'start_date_qualifier': startDateQualifier,
+      if (endDate != null) 'end_date': endDate,
+      if (endDateQualifier != null) 'end_date_qualifier': endDateQualifier,
+      if (relatedPersonId != null) 'related_person_id': relatedPersonId,
+      if (relatedEventId != null) 'related_event_id': relatedEventId,
+      if (location != null) 'location': location,
+      if (legalDocument != null) 'legal_document': legalDocument,
+      if (notes != null) 'notes': notes,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (isPrimary != null) 'is_primary': isPrimary,
+      if (uuid != null) 'uuid': uuid,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SurnameEventsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? personId,
+    Value<String>? surname,
+    Value<String>? surnameType,
+    Value<String?>? startDate,
+    Value<String?>? startDateQualifier,
+    Value<String?>? endDate,
+    Value<String?>? endDateQualifier,
+    Value<String?>? relatedPersonId,
+    Value<String?>? relatedEventId,
+    Value<String?>? location,
+    Value<String?>? legalDocument,
+    Value<String?>? notes,
+    Value<int>? sortOrder,
+    Value<bool>? isPrimary,
+    Value<String>? uuid,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return SurnameEventsCompanion(
+      id: id ?? this.id,
+      personId: personId ?? this.personId,
+      surname: surname ?? this.surname,
+      surnameType: surnameType ?? this.surnameType,
+      startDate: startDate ?? this.startDate,
+      startDateQualifier: startDateQualifier ?? this.startDateQualifier,
+      endDate: endDate ?? this.endDate,
+      endDateQualifier: endDateQualifier ?? this.endDateQualifier,
+      relatedPersonId: relatedPersonId ?? this.relatedPersonId,
+      relatedEventId: relatedEventId ?? this.relatedEventId,
+      location: location ?? this.location,
+      legalDocument: legalDocument ?? this.legalDocument,
+      notes: notes ?? this.notes,
+      sortOrder: sortOrder ?? this.sortOrder,
+      isPrimary: isPrimary ?? this.isPrimary,
+      uuid: uuid ?? this.uuid,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (personId.present) {
+      map['person_id'] = Variable<String>(personId.value);
+    }
+    if (surname.present) {
+      map['surname'] = Variable<String>(surname.value);
+    }
+    if (surnameType.present) {
+      map['surname_type'] = Variable<String>(surnameType.value);
+    }
+    if (startDate.present) {
+      map['start_date'] = Variable<String>(startDate.value);
+    }
+    if (startDateQualifier.present) {
+      map['start_date_qualifier'] = Variable<String>(startDateQualifier.value);
+    }
+    if (endDate.present) {
+      map['end_date'] = Variable<String>(endDate.value);
+    }
+    if (endDateQualifier.present) {
+      map['end_date_qualifier'] = Variable<String>(endDateQualifier.value);
+    }
+    if (relatedPersonId.present) {
+      map['related_person_id'] = Variable<String>(relatedPersonId.value);
+    }
+    if (relatedEventId.present) {
+      map['related_event_id'] = Variable<String>(relatedEventId.value);
+    }
+    if (location.present) {
+      map['location'] = Variable<String>(location.value);
+    }
+    if (legalDocument.present) {
+      map['legal_document'] = Variable<String>(legalDocument.value);
+    }
+    if (notes.present) {
+      map['notes'] = Variable<String>(notes.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (isPrimary.present) {
+      map['is_primary'] = Variable<bool>(isPrimary.value);
+    }
+    if (uuid.present) {
+      map['uuid'] = Variable<String>(uuid.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SurnameEventsCompanion(')
+          ..write('id: $id, ')
+          ..write('personId: $personId, ')
+          ..write('surname: $surname, ')
+          ..write('surnameType: $surnameType, ')
+          ..write('startDate: $startDate, ')
+          ..write('startDateQualifier: $startDateQualifier, ')
+          ..write('endDate: $endDate, ')
+          ..write('endDateQualifier: $endDateQualifier, ')
+          ..write('relatedPersonId: $relatedPersonId, ')
+          ..write('relatedEventId: $relatedEventId, ')
+          ..write('location: $location, ')
+          ..write('legalDocument: $legalDocument, ')
+          ..write('notes: $notes, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('isPrimary: $isPrimary, ')
+          ..write('uuid: $uuid, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $FamiliesV2Table extends FamiliesV2
+    with TableInfo<$FamiliesV2Table, FamiliesV2Data> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $FamiliesV2Table(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
   late final GeneratedColumn<String> id = GeneratedColumn<String>(
@@ -9549,6 +4308,3092 @@ class $DuplicateMarkersTable extends DuplicateMarkers
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES family_trees (id) ON DELETE RESTRICT',
+    ),
+  );
+  static const VerificationMeta _husbandIdMeta = const VerificationMeta(
+    'husbandId',
+  );
+  @override
+  late final GeneratedColumn<String> husbandId = GeneratedColumn<String>(
+    'husband_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES genealogy_persons (id) ON DELETE RESTRICT',
+    ),
+  );
+  static const VerificationMeta _wifeIdMeta = const VerificationMeta('wifeId');
+  @override
+  late final GeneratedColumn<String> wifeId = GeneratedColumn<String>(
+    'wife_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES genealogy_persons (id) ON DELETE RESTRICT',
+    ),
+  );
+  static const VerificationMeta _marriageDateMeta = const VerificationMeta(
+    'marriageDate',
+  );
+  @override
+  late final GeneratedColumn<DateTime> marriageDate = GeneratedColumn<DateTime>(
+    'marriage_date',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _marriageDateQualifierMeta =
+      const VerificationMeta('marriageDateQualifier');
+  @override
+  late final GeneratedColumn<String> marriageDateQualifier =
+      GeneratedColumn<String>(
+        'marriage_date_qualifier',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _marriagePlaceMeta = const VerificationMeta(
+    'marriagePlace',
+  );
+  @override
+  late final GeneratedColumn<String> marriagePlace = GeneratedColumn<String>(
+    'marriage_place',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _marriagePlaceLatMeta = const VerificationMeta(
+    'marriagePlaceLat',
+  );
+  @override
+  late final GeneratedColumn<double> marriagePlaceLat = GeneratedColumn<double>(
+    'marriage_place_lat',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _marriagePlaceLngMeta = const VerificationMeta(
+    'marriagePlaceLng',
+  );
+  @override
+  late final GeneratedColumn<double> marriagePlaceLng = GeneratedColumn<double>(
+    'marriage_place_lng',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _wifeTookHusbandNameMeta =
+      const VerificationMeta('wifeTookHusbandName');
+  @override
+  late final GeneratedColumn<bool> wifeTookHusbandName = GeneratedColumn<bool>(
+    'wife_took_husband_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("wife_took_husband_name" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _husbandTookWifeNameMeta =
+      const VerificationMeta('husbandTookWifeName');
+  @override
+  late final GeneratedColumn<bool> husbandTookWifeName = GeneratedColumn<bool>(
+    'husband_took_wife_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("husband_took_wife_name" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _hyphenatedSurnameMeta = const VerificationMeta(
+    'hyphenatedSurname',
+  );
+  @override
+  late final GeneratedColumn<bool> hyphenatedSurname = GeneratedColumn<bool>(
+    'hyphenated_surname',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("hyphenated_surname" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _noNameChangeMeta = const VerificationMeta(
+    'noNameChange',
+  );
+  @override
+  late final GeneratedColumn<bool> noNameChange = GeneratedColumn<bool>(
+    'no_name_change',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("no_name_change" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _customSurnameChangeMeta =
+      const VerificationMeta('customSurnameChange');
+  @override
+  late final GeneratedColumn<String> customSurnameChange =
+      GeneratedColumn<String>(
+        'custom_surname_change',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _wifeMarriedSurnameMeta =
+      const VerificationMeta('wifeMarriedSurname');
+  @override
+  late final GeneratedColumn<String> wifeMarriedSurname =
+      GeneratedColumn<String>(
+        'wife_married_surname',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _wifeNameChangeTypeMeta =
+      const VerificationMeta('wifeNameChangeType');
+  @override
+  late final GeneratedColumn<String> wifeNameChangeType =
+      GeneratedColumn<String>(
+        'wife_name_change_type',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _husbandMarriedSurnameMeta =
+      const VerificationMeta('husbandMarriedSurname');
+  @override
+  late final GeneratedColumn<String> husbandMarriedSurname =
+      GeneratedColumn<String>(
+        'husband_married_surname',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _husbandNameChangeTypeMeta =
+      const VerificationMeta('husbandNameChangeType');
+  @override
+  late final GeneratedColumn<String> husbandNameChangeType =
+      GeneratedColumn<String>(
+        'husband_name_change_type',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _divorceDateMeta = const VerificationMeta(
+    'divorceDate',
+  );
+  @override
+  late final GeneratedColumn<DateTime> divorceDate = GeneratedColumn<DateTime>(
+    'divorce_date',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _divorceDateQualifierMeta =
+      const VerificationMeta('divorceDateQualifier');
+  @override
+  late final GeneratedColumn<String> divorceDateQualifier =
+      GeneratedColumn<String>(
+        'divorce_date_qualifier',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _divorcePlaceMeta = const VerificationMeta(
+    'divorcePlace',
+  );
+  @override
+  late final GeneratedColumn<String> divorcePlace = GeneratedColumn<String>(
+    'divorce_place',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _wifeRevertedToMaidenMeta =
+      const VerificationMeta('wifeRevertedToMaiden');
+  @override
+  late final GeneratedColumn<bool> wifeRevertedToMaiden = GeneratedColumn<bool>(
+    'wife_reverted_to_maiden',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("wife_reverted_to_maiden" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _husbandRevertedNameMeta =
+      const VerificationMeta('husbandRevertedName');
+  @override
+  late final GeneratedColumn<bool> husbandRevertedName = GeneratedColumn<bool>(
+    'husband_reverted_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("husband_reverted_name" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _relationshipTypeMeta = const VerificationMeta(
+    'relationshipType',
+  );
+  @override
+  late final GeneratedColumn<String> relationshipType = GeneratedColumn<String>(
+    'relationship_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('marriage'),
+  );
+  static const VerificationMeta _isPrimaryMarriageMeta = const VerificationMeta(
+    'isPrimaryMarriage',
+  );
+  @override
+  late final GeneratedColumn<bool> isPrimaryMarriage = GeneratedColumn<bool>(
+    'is_primary_marriage',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_primary_marriage" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _notesMeta = const VerificationMeta('notes');
+  @override
+  late final GeneratedColumn<String> notes = GeneratedColumn<String>(
+    'notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _privateNotesMeta = const VerificationMeta(
+    'privateNotes',
+  );
+  @override
+  late final GeneratedColumn<String> privateNotes = GeneratedColumn<String>(
+    'private_notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _uuidMeta = const VerificationMeta('uuid');
+  @override
+  late final GeneratedColumn<String> uuid = GeneratedColumn<String>(
+    'uuid',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _isDeletedMeta = const VerificationMeta(
+    'isDeleted',
+  );
+  @override
+  late final GeneratedColumn<bool> isDeleted = GeneratedColumn<bool>(
+    'is_deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_deleted" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    treeId,
+    husbandId,
+    wifeId,
+    marriageDate,
+    marriageDateQualifier,
+    marriagePlace,
+    marriagePlaceLat,
+    marriagePlaceLng,
+    wifeTookHusbandName,
+    husbandTookWifeName,
+    hyphenatedSurname,
+    noNameChange,
+    customSurnameChange,
+    wifeMarriedSurname,
+    wifeNameChangeType,
+    husbandMarriedSurname,
+    husbandNameChangeType,
+    divorceDate,
+    divorceDateQualifier,
+    divorcePlace,
+    wifeRevertedToMaiden,
+    husbandRevertedName,
+    relationshipType,
+    isPrimaryMarriage,
+    notes,
+    privateNotes,
+    uuid,
+    isDeleted,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'families_v2';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<FamiliesV2Data> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('tree_id')) {
+      context.handle(
+        _treeIdMeta,
+        treeId.isAcceptableOrUnknown(data['tree_id']!, _treeIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_treeIdMeta);
+    }
+    if (data.containsKey('husband_id')) {
+      context.handle(
+        _husbandIdMeta,
+        husbandId.isAcceptableOrUnknown(data['husband_id']!, _husbandIdMeta),
+      );
+    }
+    if (data.containsKey('wife_id')) {
+      context.handle(
+        _wifeIdMeta,
+        wifeId.isAcceptableOrUnknown(data['wife_id']!, _wifeIdMeta),
+      );
+    }
+    if (data.containsKey('marriage_date')) {
+      context.handle(
+        _marriageDateMeta,
+        marriageDate.isAcceptableOrUnknown(
+          data['marriage_date']!,
+          _marriageDateMeta,
+        ),
+      );
+    }
+    if (data.containsKey('marriage_date_qualifier')) {
+      context.handle(
+        _marriageDateQualifierMeta,
+        marriageDateQualifier.isAcceptableOrUnknown(
+          data['marriage_date_qualifier']!,
+          _marriageDateQualifierMeta,
+        ),
+      );
+    }
+    if (data.containsKey('marriage_place')) {
+      context.handle(
+        _marriagePlaceMeta,
+        marriagePlace.isAcceptableOrUnknown(
+          data['marriage_place']!,
+          _marriagePlaceMeta,
+        ),
+      );
+    }
+    if (data.containsKey('marriage_place_lat')) {
+      context.handle(
+        _marriagePlaceLatMeta,
+        marriagePlaceLat.isAcceptableOrUnknown(
+          data['marriage_place_lat']!,
+          _marriagePlaceLatMeta,
+        ),
+      );
+    }
+    if (data.containsKey('marriage_place_lng')) {
+      context.handle(
+        _marriagePlaceLngMeta,
+        marriagePlaceLng.isAcceptableOrUnknown(
+          data['marriage_place_lng']!,
+          _marriagePlaceLngMeta,
+        ),
+      );
+    }
+    if (data.containsKey('wife_took_husband_name')) {
+      context.handle(
+        _wifeTookHusbandNameMeta,
+        wifeTookHusbandName.isAcceptableOrUnknown(
+          data['wife_took_husband_name']!,
+          _wifeTookHusbandNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('husband_took_wife_name')) {
+      context.handle(
+        _husbandTookWifeNameMeta,
+        husbandTookWifeName.isAcceptableOrUnknown(
+          data['husband_took_wife_name']!,
+          _husbandTookWifeNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('hyphenated_surname')) {
+      context.handle(
+        _hyphenatedSurnameMeta,
+        hyphenatedSurname.isAcceptableOrUnknown(
+          data['hyphenated_surname']!,
+          _hyphenatedSurnameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('no_name_change')) {
+      context.handle(
+        _noNameChangeMeta,
+        noNameChange.isAcceptableOrUnknown(
+          data['no_name_change']!,
+          _noNameChangeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('custom_surname_change')) {
+      context.handle(
+        _customSurnameChangeMeta,
+        customSurnameChange.isAcceptableOrUnknown(
+          data['custom_surname_change']!,
+          _customSurnameChangeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('wife_married_surname')) {
+      context.handle(
+        _wifeMarriedSurnameMeta,
+        wifeMarriedSurname.isAcceptableOrUnknown(
+          data['wife_married_surname']!,
+          _wifeMarriedSurnameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('wife_name_change_type')) {
+      context.handle(
+        _wifeNameChangeTypeMeta,
+        wifeNameChangeType.isAcceptableOrUnknown(
+          data['wife_name_change_type']!,
+          _wifeNameChangeTypeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('husband_married_surname')) {
+      context.handle(
+        _husbandMarriedSurnameMeta,
+        husbandMarriedSurname.isAcceptableOrUnknown(
+          data['husband_married_surname']!,
+          _husbandMarriedSurnameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('husband_name_change_type')) {
+      context.handle(
+        _husbandNameChangeTypeMeta,
+        husbandNameChangeType.isAcceptableOrUnknown(
+          data['husband_name_change_type']!,
+          _husbandNameChangeTypeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('divorce_date')) {
+      context.handle(
+        _divorceDateMeta,
+        divorceDate.isAcceptableOrUnknown(
+          data['divorce_date']!,
+          _divorceDateMeta,
+        ),
+      );
+    }
+    if (data.containsKey('divorce_date_qualifier')) {
+      context.handle(
+        _divorceDateQualifierMeta,
+        divorceDateQualifier.isAcceptableOrUnknown(
+          data['divorce_date_qualifier']!,
+          _divorceDateQualifierMeta,
+        ),
+      );
+    }
+    if (data.containsKey('divorce_place')) {
+      context.handle(
+        _divorcePlaceMeta,
+        divorcePlace.isAcceptableOrUnknown(
+          data['divorce_place']!,
+          _divorcePlaceMeta,
+        ),
+      );
+    }
+    if (data.containsKey('wife_reverted_to_maiden')) {
+      context.handle(
+        _wifeRevertedToMaidenMeta,
+        wifeRevertedToMaiden.isAcceptableOrUnknown(
+          data['wife_reverted_to_maiden']!,
+          _wifeRevertedToMaidenMeta,
+        ),
+      );
+    }
+    if (data.containsKey('husband_reverted_name')) {
+      context.handle(
+        _husbandRevertedNameMeta,
+        husbandRevertedName.isAcceptableOrUnknown(
+          data['husband_reverted_name']!,
+          _husbandRevertedNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('relationship_type')) {
+      context.handle(
+        _relationshipTypeMeta,
+        relationshipType.isAcceptableOrUnknown(
+          data['relationship_type']!,
+          _relationshipTypeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_primary_marriage')) {
+      context.handle(
+        _isPrimaryMarriageMeta,
+        isPrimaryMarriage.isAcceptableOrUnknown(
+          data['is_primary_marriage']!,
+          _isPrimaryMarriageMeta,
+        ),
+      );
+    }
+    if (data.containsKey('notes')) {
+      context.handle(
+        _notesMeta,
+        notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
+      );
+    }
+    if (data.containsKey('private_notes')) {
+      context.handle(
+        _privateNotesMeta,
+        privateNotes.isAcceptableOrUnknown(
+          data['private_notes']!,
+          _privateNotesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('uuid')) {
+      context.handle(
+        _uuidMeta,
+        uuid.isAcceptableOrUnknown(data['uuid']!, _uuidMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_uuidMeta);
+    }
+    if (data.containsKey('is_deleted')) {
+      context.handle(
+        _isDeletedMeta,
+        isDeleted.isAcceptableOrUnknown(data['is_deleted']!, _isDeletedMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  FamiliesV2Data map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return FamiliesV2Data(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      treeId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tree_id'],
+      )!,
+      husbandId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}husband_id'],
+      ),
+      wifeId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}wife_id'],
+      ),
+      marriageDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}marriage_date'],
+      ),
+      marriageDateQualifier: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}marriage_date_qualifier'],
+      ),
+      marriagePlace: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}marriage_place'],
+      ),
+      marriagePlaceLat: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}marriage_place_lat'],
+      ),
+      marriagePlaceLng: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}marriage_place_lng'],
+      ),
+      wifeTookHusbandName: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}wife_took_husband_name'],
+      )!,
+      husbandTookWifeName: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}husband_took_wife_name'],
+      )!,
+      hyphenatedSurname: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}hyphenated_surname'],
+      )!,
+      noNameChange: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}no_name_change'],
+      )!,
+      customSurnameChange: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}custom_surname_change'],
+      ),
+      wifeMarriedSurname: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}wife_married_surname'],
+      ),
+      wifeNameChangeType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}wife_name_change_type'],
+      ),
+      husbandMarriedSurname: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}husband_married_surname'],
+      ),
+      husbandNameChangeType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}husband_name_change_type'],
+      ),
+      divorceDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}divorce_date'],
+      ),
+      divorceDateQualifier: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}divorce_date_qualifier'],
+      ),
+      divorcePlace: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}divorce_place'],
+      ),
+      wifeRevertedToMaiden: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}wife_reverted_to_maiden'],
+      )!,
+      husbandRevertedName: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}husband_reverted_name'],
+      )!,
+      relationshipType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}relationship_type'],
+      )!,
+      isPrimaryMarriage: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_primary_marriage'],
+      )!,
+      notes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}notes'],
+      ),
+      privateNotes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}private_notes'],
+      ),
+      uuid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uuid'],
+      )!,
+      isDeleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_deleted'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $FamiliesV2Table createAlias(String alias) {
+    return $FamiliesV2Table(attachedDatabase, alias);
+  }
+}
+
+class FamiliesV2Data extends DataClass implements Insertable<FamiliesV2Data> {
+  final String id;
+  final String treeId;
+  final String? husbandId;
+  final String? wifeId;
+  final DateTime? marriageDate;
+  final String? marriageDateQualifier;
+  final String? marriagePlace;
+  final double? marriagePlaceLat;
+  final double? marriagePlaceLng;
+  final bool wifeTookHusbandName;
+  final bool husbandTookWifeName;
+  final bool hyphenatedSurname;
+  final bool noNameChange;
+  final String? customSurnameChange;
+  final String? wifeMarriedSurname;
+  final String? wifeNameChangeType;
+  final String? husbandMarriedSurname;
+  final String? husbandNameChangeType;
+  final DateTime? divorceDate;
+  final String? divorceDateQualifier;
+  final String? divorcePlace;
+  final bool wifeRevertedToMaiden;
+  final bool husbandRevertedName;
+
+  /// Partnership kind. Reserved for distinguishing marriage / partnership /
+  /// cohabitation; currently always the default.
+  final String relationshipType;
+  final bool isPrimaryMarriage;
+  final String? notes;
+  final String? privateNotes;
+  final String uuid;
+  final bool isDeleted;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const FamiliesV2Data({
+    required this.id,
+    required this.treeId,
+    this.husbandId,
+    this.wifeId,
+    this.marriageDate,
+    this.marriageDateQualifier,
+    this.marriagePlace,
+    this.marriagePlaceLat,
+    this.marriagePlaceLng,
+    required this.wifeTookHusbandName,
+    required this.husbandTookWifeName,
+    required this.hyphenatedSurname,
+    required this.noNameChange,
+    this.customSurnameChange,
+    this.wifeMarriedSurname,
+    this.wifeNameChangeType,
+    this.husbandMarriedSurname,
+    this.husbandNameChangeType,
+    this.divorceDate,
+    this.divorceDateQualifier,
+    this.divorcePlace,
+    required this.wifeRevertedToMaiden,
+    required this.husbandRevertedName,
+    required this.relationshipType,
+    required this.isPrimaryMarriage,
+    this.notes,
+    this.privateNotes,
+    required this.uuid,
+    required this.isDeleted,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['tree_id'] = Variable<String>(treeId);
+    if (!nullToAbsent || husbandId != null) {
+      map['husband_id'] = Variable<String>(husbandId);
+    }
+    if (!nullToAbsent || wifeId != null) {
+      map['wife_id'] = Variable<String>(wifeId);
+    }
+    if (!nullToAbsent || marriageDate != null) {
+      map['marriage_date'] = Variable<DateTime>(marriageDate);
+    }
+    if (!nullToAbsent || marriageDateQualifier != null) {
+      map['marriage_date_qualifier'] = Variable<String>(marriageDateQualifier);
+    }
+    if (!nullToAbsent || marriagePlace != null) {
+      map['marriage_place'] = Variable<String>(marriagePlace);
+    }
+    if (!nullToAbsent || marriagePlaceLat != null) {
+      map['marriage_place_lat'] = Variable<double>(marriagePlaceLat);
+    }
+    if (!nullToAbsent || marriagePlaceLng != null) {
+      map['marriage_place_lng'] = Variable<double>(marriagePlaceLng);
+    }
+    map['wife_took_husband_name'] = Variable<bool>(wifeTookHusbandName);
+    map['husband_took_wife_name'] = Variable<bool>(husbandTookWifeName);
+    map['hyphenated_surname'] = Variable<bool>(hyphenatedSurname);
+    map['no_name_change'] = Variable<bool>(noNameChange);
+    if (!nullToAbsent || customSurnameChange != null) {
+      map['custom_surname_change'] = Variable<String>(customSurnameChange);
+    }
+    if (!nullToAbsent || wifeMarriedSurname != null) {
+      map['wife_married_surname'] = Variable<String>(wifeMarriedSurname);
+    }
+    if (!nullToAbsent || wifeNameChangeType != null) {
+      map['wife_name_change_type'] = Variable<String>(wifeNameChangeType);
+    }
+    if (!nullToAbsent || husbandMarriedSurname != null) {
+      map['husband_married_surname'] = Variable<String>(husbandMarriedSurname);
+    }
+    if (!nullToAbsent || husbandNameChangeType != null) {
+      map['husband_name_change_type'] = Variable<String>(husbandNameChangeType);
+    }
+    if (!nullToAbsent || divorceDate != null) {
+      map['divorce_date'] = Variable<DateTime>(divorceDate);
+    }
+    if (!nullToAbsent || divorceDateQualifier != null) {
+      map['divorce_date_qualifier'] = Variable<String>(divorceDateQualifier);
+    }
+    if (!nullToAbsent || divorcePlace != null) {
+      map['divorce_place'] = Variable<String>(divorcePlace);
+    }
+    map['wife_reverted_to_maiden'] = Variable<bool>(wifeRevertedToMaiden);
+    map['husband_reverted_name'] = Variable<bool>(husbandRevertedName);
+    map['relationship_type'] = Variable<String>(relationshipType);
+    map['is_primary_marriage'] = Variable<bool>(isPrimaryMarriage);
+    if (!nullToAbsent || notes != null) {
+      map['notes'] = Variable<String>(notes);
+    }
+    if (!nullToAbsent || privateNotes != null) {
+      map['private_notes'] = Variable<String>(privateNotes);
+    }
+    map['uuid'] = Variable<String>(uuid);
+    map['is_deleted'] = Variable<bool>(isDeleted);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  FamiliesV2Companion toCompanion(bool nullToAbsent) {
+    return FamiliesV2Companion(
+      id: Value(id),
+      treeId: Value(treeId),
+      husbandId: husbandId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(husbandId),
+      wifeId: wifeId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(wifeId),
+      marriageDate: marriageDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(marriageDate),
+      marriageDateQualifier: marriageDateQualifier == null && nullToAbsent
+          ? const Value.absent()
+          : Value(marriageDateQualifier),
+      marriagePlace: marriagePlace == null && nullToAbsent
+          ? const Value.absent()
+          : Value(marriagePlace),
+      marriagePlaceLat: marriagePlaceLat == null && nullToAbsent
+          ? const Value.absent()
+          : Value(marriagePlaceLat),
+      marriagePlaceLng: marriagePlaceLng == null && nullToAbsent
+          ? const Value.absent()
+          : Value(marriagePlaceLng),
+      wifeTookHusbandName: Value(wifeTookHusbandName),
+      husbandTookWifeName: Value(husbandTookWifeName),
+      hyphenatedSurname: Value(hyphenatedSurname),
+      noNameChange: Value(noNameChange),
+      customSurnameChange: customSurnameChange == null && nullToAbsent
+          ? const Value.absent()
+          : Value(customSurnameChange),
+      wifeMarriedSurname: wifeMarriedSurname == null && nullToAbsent
+          ? const Value.absent()
+          : Value(wifeMarriedSurname),
+      wifeNameChangeType: wifeNameChangeType == null && nullToAbsent
+          ? const Value.absent()
+          : Value(wifeNameChangeType),
+      husbandMarriedSurname: husbandMarriedSurname == null && nullToAbsent
+          ? const Value.absent()
+          : Value(husbandMarriedSurname),
+      husbandNameChangeType: husbandNameChangeType == null && nullToAbsent
+          ? const Value.absent()
+          : Value(husbandNameChangeType),
+      divorceDate: divorceDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(divorceDate),
+      divorceDateQualifier: divorceDateQualifier == null && nullToAbsent
+          ? const Value.absent()
+          : Value(divorceDateQualifier),
+      divorcePlace: divorcePlace == null && nullToAbsent
+          ? const Value.absent()
+          : Value(divorcePlace),
+      wifeRevertedToMaiden: Value(wifeRevertedToMaiden),
+      husbandRevertedName: Value(husbandRevertedName),
+      relationshipType: Value(relationshipType),
+      isPrimaryMarriage: Value(isPrimaryMarriage),
+      notes: notes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(notes),
+      privateNotes: privateNotes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(privateNotes),
+      uuid: Value(uuid),
+      isDeleted: Value(isDeleted),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory FamiliesV2Data.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return FamiliesV2Data(
+      id: serializer.fromJson<String>(json['id']),
+      treeId: serializer.fromJson<String>(json['treeId']),
+      husbandId: serializer.fromJson<String?>(json['husbandId']),
+      wifeId: serializer.fromJson<String?>(json['wifeId']),
+      marriageDate: serializer.fromJson<DateTime?>(json['marriageDate']),
+      marriageDateQualifier: serializer.fromJson<String?>(
+        json['marriageDateQualifier'],
+      ),
+      marriagePlace: serializer.fromJson<String?>(json['marriagePlace']),
+      marriagePlaceLat: serializer.fromJson<double?>(json['marriagePlaceLat']),
+      marriagePlaceLng: serializer.fromJson<double?>(json['marriagePlaceLng']),
+      wifeTookHusbandName: serializer.fromJson<bool>(
+        json['wifeTookHusbandName'],
+      ),
+      husbandTookWifeName: serializer.fromJson<bool>(
+        json['husbandTookWifeName'],
+      ),
+      hyphenatedSurname: serializer.fromJson<bool>(json['hyphenatedSurname']),
+      noNameChange: serializer.fromJson<bool>(json['noNameChange']),
+      customSurnameChange: serializer.fromJson<String?>(
+        json['customSurnameChange'],
+      ),
+      wifeMarriedSurname: serializer.fromJson<String?>(
+        json['wifeMarriedSurname'],
+      ),
+      wifeNameChangeType: serializer.fromJson<String?>(
+        json['wifeNameChangeType'],
+      ),
+      husbandMarriedSurname: serializer.fromJson<String?>(
+        json['husbandMarriedSurname'],
+      ),
+      husbandNameChangeType: serializer.fromJson<String?>(
+        json['husbandNameChangeType'],
+      ),
+      divorceDate: serializer.fromJson<DateTime?>(json['divorceDate']),
+      divorceDateQualifier: serializer.fromJson<String?>(
+        json['divorceDateQualifier'],
+      ),
+      divorcePlace: serializer.fromJson<String?>(json['divorcePlace']),
+      wifeRevertedToMaiden: serializer.fromJson<bool>(
+        json['wifeRevertedToMaiden'],
+      ),
+      husbandRevertedName: serializer.fromJson<bool>(
+        json['husbandRevertedName'],
+      ),
+      relationshipType: serializer.fromJson<String>(json['relationshipType']),
+      isPrimaryMarriage: serializer.fromJson<bool>(json['isPrimaryMarriage']),
+      notes: serializer.fromJson<String?>(json['notes']),
+      privateNotes: serializer.fromJson<String?>(json['privateNotes']),
+      uuid: serializer.fromJson<String>(json['uuid']),
+      isDeleted: serializer.fromJson<bool>(json['isDeleted']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'treeId': serializer.toJson<String>(treeId),
+      'husbandId': serializer.toJson<String?>(husbandId),
+      'wifeId': serializer.toJson<String?>(wifeId),
+      'marriageDate': serializer.toJson<DateTime?>(marriageDate),
+      'marriageDateQualifier': serializer.toJson<String?>(
+        marriageDateQualifier,
+      ),
+      'marriagePlace': serializer.toJson<String?>(marriagePlace),
+      'marriagePlaceLat': serializer.toJson<double?>(marriagePlaceLat),
+      'marriagePlaceLng': serializer.toJson<double?>(marriagePlaceLng),
+      'wifeTookHusbandName': serializer.toJson<bool>(wifeTookHusbandName),
+      'husbandTookWifeName': serializer.toJson<bool>(husbandTookWifeName),
+      'hyphenatedSurname': serializer.toJson<bool>(hyphenatedSurname),
+      'noNameChange': serializer.toJson<bool>(noNameChange),
+      'customSurnameChange': serializer.toJson<String?>(customSurnameChange),
+      'wifeMarriedSurname': serializer.toJson<String?>(wifeMarriedSurname),
+      'wifeNameChangeType': serializer.toJson<String?>(wifeNameChangeType),
+      'husbandMarriedSurname': serializer.toJson<String?>(
+        husbandMarriedSurname,
+      ),
+      'husbandNameChangeType': serializer.toJson<String?>(
+        husbandNameChangeType,
+      ),
+      'divorceDate': serializer.toJson<DateTime?>(divorceDate),
+      'divorceDateQualifier': serializer.toJson<String?>(divorceDateQualifier),
+      'divorcePlace': serializer.toJson<String?>(divorcePlace),
+      'wifeRevertedToMaiden': serializer.toJson<bool>(wifeRevertedToMaiden),
+      'husbandRevertedName': serializer.toJson<bool>(husbandRevertedName),
+      'relationshipType': serializer.toJson<String>(relationshipType),
+      'isPrimaryMarriage': serializer.toJson<bool>(isPrimaryMarriage),
+      'notes': serializer.toJson<String?>(notes),
+      'privateNotes': serializer.toJson<String?>(privateNotes),
+      'uuid': serializer.toJson<String>(uuid),
+      'isDeleted': serializer.toJson<bool>(isDeleted),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  FamiliesV2Data copyWith({
+    String? id,
+    String? treeId,
+    Value<String?> husbandId = const Value.absent(),
+    Value<String?> wifeId = const Value.absent(),
+    Value<DateTime?> marriageDate = const Value.absent(),
+    Value<String?> marriageDateQualifier = const Value.absent(),
+    Value<String?> marriagePlace = const Value.absent(),
+    Value<double?> marriagePlaceLat = const Value.absent(),
+    Value<double?> marriagePlaceLng = const Value.absent(),
+    bool? wifeTookHusbandName,
+    bool? husbandTookWifeName,
+    bool? hyphenatedSurname,
+    bool? noNameChange,
+    Value<String?> customSurnameChange = const Value.absent(),
+    Value<String?> wifeMarriedSurname = const Value.absent(),
+    Value<String?> wifeNameChangeType = const Value.absent(),
+    Value<String?> husbandMarriedSurname = const Value.absent(),
+    Value<String?> husbandNameChangeType = const Value.absent(),
+    Value<DateTime?> divorceDate = const Value.absent(),
+    Value<String?> divorceDateQualifier = const Value.absent(),
+    Value<String?> divorcePlace = const Value.absent(),
+    bool? wifeRevertedToMaiden,
+    bool? husbandRevertedName,
+    String? relationshipType,
+    bool? isPrimaryMarriage,
+    Value<String?> notes = const Value.absent(),
+    Value<String?> privateNotes = const Value.absent(),
+    String? uuid,
+    bool? isDeleted,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => FamiliesV2Data(
+    id: id ?? this.id,
+    treeId: treeId ?? this.treeId,
+    husbandId: husbandId.present ? husbandId.value : this.husbandId,
+    wifeId: wifeId.present ? wifeId.value : this.wifeId,
+    marriageDate: marriageDate.present ? marriageDate.value : this.marriageDate,
+    marriageDateQualifier: marriageDateQualifier.present
+        ? marriageDateQualifier.value
+        : this.marriageDateQualifier,
+    marriagePlace: marriagePlace.present
+        ? marriagePlace.value
+        : this.marriagePlace,
+    marriagePlaceLat: marriagePlaceLat.present
+        ? marriagePlaceLat.value
+        : this.marriagePlaceLat,
+    marriagePlaceLng: marriagePlaceLng.present
+        ? marriagePlaceLng.value
+        : this.marriagePlaceLng,
+    wifeTookHusbandName: wifeTookHusbandName ?? this.wifeTookHusbandName,
+    husbandTookWifeName: husbandTookWifeName ?? this.husbandTookWifeName,
+    hyphenatedSurname: hyphenatedSurname ?? this.hyphenatedSurname,
+    noNameChange: noNameChange ?? this.noNameChange,
+    customSurnameChange: customSurnameChange.present
+        ? customSurnameChange.value
+        : this.customSurnameChange,
+    wifeMarriedSurname: wifeMarriedSurname.present
+        ? wifeMarriedSurname.value
+        : this.wifeMarriedSurname,
+    wifeNameChangeType: wifeNameChangeType.present
+        ? wifeNameChangeType.value
+        : this.wifeNameChangeType,
+    husbandMarriedSurname: husbandMarriedSurname.present
+        ? husbandMarriedSurname.value
+        : this.husbandMarriedSurname,
+    husbandNameChangeType: husbandNameChangeType.present
+        ? husbandNameChangeType.value
+        : this.husbandNameChangeType,
+    divorceDate: divorceDate.present ? divorceDate.value : this.divorceDate,
+    divorceDateQualifier: divorceDateQualifier.present
+        ? divorceDateQualifier.value
+        : this.divorceDateQualifier,
+    divorcePlace: divorcePlace.present ? divorcePlace.value : this.divorcePlace,
+    wifeRevertedToMaiden: wifeRevertedToMaiden ?? this.wifeRevertedToMaiden,
+    husbandRevertedName: husbandRevertedName ?? this.husbandRevertedName,
+    relationshipType: relationshipType ?? this.relationshipType,
+    isPrimaryMarriage: isPrimaryMarriage ?? this.isPrimaryMarriage,
+    notes: notes.present ? notes.value : this.notes,
+    privateNotes: privateNotes.present ? privateNotes.value : this.privateNotes,
+    uuid: uuid ?? this.uuid,
+    isDeleted: isDeleted ?? this.isDeleted,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  FamiliesV2Data copyWithCompanion(FamiliesV2Companion data) {
+    return FamiliesV2Data(
+      id: data.id.present ? data.id.value : this.id,
+      treeId: data.treeId.present ? data.treeId.value : this.treeId,
+      husbandId: data.husbandId.present ? data.husbandId.value : this.husbandId,
+      wifeId: data.wifeId.present ? data.wifeId.value : this.wifeId,
+      marriageDate: data.marriageDate.present
+          ? data.marriageDate.value
+          : this.marriageDate,
+      marriageDateQualifier: data.marriageDateQualifier.present
+          ? data.marriageDateQualifier.value
+          : this.marriageDateQualifier,
+      marriagePlace: data.marriagePlace.present
+          ? data.marriagePlace.value
+          : this.marriagePlace,
+      marriagePlaceLat: data.marriagePlaceLat.present
+          ? data.marriagePlaceLat.value
+          : this.marriagePlaceLat,
+      marriagePlaceLng: data.marriagePlaceLng.present
+          ? data.marriagePlaceLng.value
+          : this.marriagePlaceLng,
+      wifeTookHusbandName: data.wifeTookHusbandName.present
+          ? data.wifeTookHusbandName.value
+          : this.wifeTookHusbandName,
+      husbandTookWifeName: data.husbandTookWifeName.present
+          ? data.husbandTookWifeName.value
+          : this.husbandTookWifeName,
+      hyphenatedSurname: data.hyphenatedSurname.present
+          ? data.hyphenatedSurname.value
+          : this.hyphenatedSurname,
+      noNameChange: data.noNameChange.present
+          ? data.noNameChange.value
+          : this.noNameChange,
+      customSurnameChange: data.customSurnameChange.present
+          ? data.customSurnameChange.value
+          : this.customSurnameChange,
+      wifeMarriedSurname: data.wifeMarriedSurname.present
+          ? data.wifeMarriedSurname.value
+          : this.wifeMarriedSurname,
+      wifeNameChangeType: data.wifeNameChangeType.present
+          ? data.wifeNameChangeType.value
+          : this.wifeNameChangeType,
+      husbandMarriedSurname: data.husbandMarriedSurname.present
+          ? data.husbandMarriedSurname.value
+          : this.husbandMarriedSurname,
+      husbandNameChangeType: data.husbandNameChangeType.present
+          ? data.husbandNameChangeType.value
+          : this.husbandNameChangeType,
+      divorceDate: data.divorceDate.present
+          ? data.divorceDate.value
+          : this.divorceDate,
+      divorceDateQualifier: data.divorceDateQualifier.present
+          ? data.divorceDateQualifier.value
+          : this.divorceDateQualifier,
+      divorcePlace: data.divorcePlace.present
+          ? data.divorcePlace.value
+          : this.divorcePlace,
+      wifeRevertedToMaiden: data.wifeRevertedToMaiden.present
+          ? data.wifeRevertedToMaiden.value
+          : this.wifeRevertedToMaiden,
+      husbandRevertedName: data.husbandRevertedName.present
+          ? data.husbandRevertedName.value
+          : this.husbandRevertedName,
+      relationshipType: data.relationshipType.present
+          ? data.relationshipType.value
+          : this.relationshipType,
+      isPrimaryMarriage: data.isPrimaryMarriage.present
+          ? data.isPrimaryMarriage.value
+          : this.isPrimaryMarriage,
+      notes: data.notes.present ? data.notes.value : this.notes,
+      privateNotes: data.privateNotes.present
+          ? data.privateNotes.value
+          : this.privateNotes,
+      uuid: data.uuid.present ? data.uuid.value : this.uuid,
+      isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FamiliesV2Data(')
+          ..write('id: $id, ')
+          ..write('treeId: $treeId, ')
+          ..write('husbandId: $husbandId, ')
+          ..write('wifeId: $wifeId, ')
+          ..write('marriageDate: $marriageDate, ')
+          ..write('marriageDateQualifier: $marriageDateQualifier, ')
+          ..write('marriagePlace: $marriagePlace, ')
+          ..write('marriagePlaceLat: $marriagePlaceLat, ')
+          ..write('marriagePlaceLng: $marriagePlaceLng, ')
+          ..write('wifeTookHusbandName: $wifeTookHusbandName, ')
+          ..write('husbandTookWifeName: $husbandTookWifeName, ')
+          ..write('hyphenatedSurname: $hyphenatedSurname, ')
+          ..write('noNameChange: $noNameChange, ')
+          ..write('customSurnameChange: $customSurnameChange, ')
+          ..write('wifeMarriedSurname: $wifeMarriedSurname, ')
+          ..write('wifeNameChangeType: $wifeNameChangeType, ')
+          ..write('husbandMarriedSurname: $husbandMarriedSurname, ')
+          ..write('husbandNameChangeType: $husbandNameChangeType, ')
+          ..write('divorceDate: $divorceDate, ')
+          ..write('divorceDateQualifier: $divorceDateQualifier, ')
+          ..write('divorcePlace: $divorcePlace, ')
+          ..write('wifeRevertedToMaiden: $wifeRevertedToMaiden, ')
+          ..write('husbandRevertedName: $husbandRevertedName, ')
+          ..write('relationshipType: $relationshipType, ')
+          ..write('isPrimaryMarriage: $isPrimaryMarriage, ')
+          ..write('notes: $notes, ')
+          ..write('privateNotes: $privateNotes, ')
+          ..write('uuid: $uuid, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hashAll([
+    id,
+    treeId,
+    husbandId,
+    wifeId,
+    marriageDate,
+    marriageDateQualifier,
+    marriagePlace,
+    marriagePlaceLat,
+    marriagePlaceLng,
+    wifeTookHusbandName,
+    husbandTookWifeName,
+    hyphenatedSurname,
+    noNameChange,
+    customSurnameChange,
+    wifeMarriedSurname,
+    wifeNameChangeType,
+    husbandMarriedSurname,
+    husbandNameChangeType,
+    divorceDate,
+    divorceDateQualifier,
+    divorcePlace,
+    wifeRevertedToMaiden,
+    husbandRevertedName,
+    relationshipType,
+    isPrimaryMarriage,
+    notes,
+    privateNotes,
+    uuid,
+    isDeleted,
+    createdAt,
+    updatedAt,
+  ]);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is FamiliesV2Data &&
+          other.id == this.id &&
+          other.treeId == this.treeId &&
+          other.husbandId == this.husbandId &&
+          other.wifeId == this.wifeId &&
+          other.marriageDate == this.marriageDate &&
+          other.marriageDateQualifier == this.marriageDateQualifier &&
+          other.marriagePlace == this.marriagePlace &&
+          other.marriagePlaceLat == this.marriagePlaceLat &&
+          other.marriagePlaceLng == this.marriagePlaceLng &&
+          other.wifeTookHusbandName == this.wifeTookHusbandName &&
+          other.husbandTookWifeName == this.husbandTookWifeName &&
+          other.hyphenatedSurname == this.hyphenatedSurname &&
+          other.noNameChange == this.noNameChange &&
+          other.customSurnameChange == this.customSurnameChange &&
+          other.wifeMarriedSurname == this.wifeMarriedSurname &&
+          other.wifeNameChangeType == this.wifeNameChangeType &&
+          other.husbandMarriedSurname == this.husbandMarriedSurname &&
+          other.husbandNameChangeType == this.husbandNameChangeType &&
+          other.divorceDate == this.divorceDate &&
+          other.divorceDateQualifier == this.divorceDateQualifier &&
+          other.divorcePlace == this.divorcePlace &&
+          other.wifeRevertedToMaiden == this.wifeRevertedToMaiden &&
+          other.husbandRevertedName == this.husbandRevertedName &&
+          other.relationshipType == this.relationshipType &&
+          other.isPrimaryMarriage == this.isPrimaryMarriage &&
+          other.notes == this.notes &&
+          other.privateNotes == this.privateNotes &&
+          other.uuid == this.uuid &&
+          other.isDeleted == this.isDeleted &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class FamiliesV2Companion extends UpdateCompanion<FamiliesV2Data> {
+  final Value<String> id;
+  final Value<String> treeId;
+  final Value<String?> husbandId;
+  final Value<String?> wifeId;
+  final Value<DateTime?> marriageDate;
+  final Value<String?> marriageDateQualifier;
+  final Value<String?> marriagePlace;
+  final Value<double?> marriagePlaceLat;
+  final Value<double?> marriagePlaceLng;
+  final Value<bool> wifeTookHusbandName;
+  final Value<bool> husbandTookWifeName;
+  final Value<bool> hyphenatedSurname;
+  final Value<bool> noNameChange;
+  final Value<String?> customSurnameChange;
+  final Value<String?> wifeMarriedSurname;
+  final Value<String?> wifeNameChangeType;
+  final Value<String?> husbandMarriedSurname;
+  final Value<String?> husbandNameChangeType;
+  final Value<DateTime?> divorceDate;
+  final Value<String?> divorceDateQualifier;
+  final Value<String?> divorcePlace;
+  final Value<bool> wifeRevertedToMaiden;
+  final Value<bool> husbandRevertedName;
+  final Value<String> relationshipType;
+  final Value<bool> isPrimaryMarriage;
+  final Value<String?> notes;
+  final Value<String?> privateNotes;
+  final Value<String> uuid;
+  final Value<bool> isDeleted;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const FamiliesV2Companion({
+    this.id = const Value.absent(),
+    this.treeId = const Value.absent(),
+    this.husbandId = const Value.absent(),
+    this.wifeId = const Value.absent(),
+    this.marriageDate = const Value.absent(),
+    this.marriageDateQualifier = const Value.absent(),
+    this.marriagePlace = const Value.absent(),
+    this.marriagePlaceLat = const Value.absent(),
+    this.marriagePlaceLng = const Value.absent(),
+    this.wifeTookHusbandName = const Value.absent(),
+    this.husbandTookWifeName = const Value.absent(),
+    this.hyphenatedSurname = const Value.absent(),
+    this.noNameChange = const Value.absent(),
+    this.customSurnameChange = const Value.absent(),
+    this.wifeMarriedSurname = const Value.absent(),
+    this.wifeNameChangeType = const Value.absent(),
+    this.husbandMarriedSurname = const Value.absent(),
+    this.husbandNameChangeType = const Value.absent(),
+    this.divorceDate = const Value.absent(),
+    this.divorceDateQualifier = const Value.absent(),
+    this.divorcePlace = const Value.absent(),
+    this.wifeRevertedToMaiden = const Value.absent(),
+    this.husbandRevertedName = const Value.absent(),
+    this.relationshipType = const Value.absent(),
+    this.isPrimaryMarriage = const Value.absent(),
+    this.notes = const Value.absent(),
+    this.privateNotes = const Value.absent(),
+    this.uuid = const Value.absent(),
+    this.isDeleted = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  FamiliesV2Companion.insert({
+    required String id,
+    required String treeId,
+    this.husbandId = const Value.absent(),
+    this.wifeId = const Value.absent(),
+    this.marriageDate = const Value.absent(),
+    this.marriageDateQualifier = const Value.absent(),
+    this.marriagePlace = const Value.absent(),
+    this.marriagePlaceLat = const Value.absent(),
+    this.marriagePlaceLng = const Value.absent(),
+    this.wifeTookHusbandName = const Value.absent(),
+    this.husbandTookWifeName = const Value.absent(),
+    this.hyphenatedSurname = const Value.absent(),
+    this.noNameChange = const Value.absent(),
+    this.customSurnameChange = const Value.absent(),
+    this.wifeMarriedSurname = const Value.absent(),
+    this.wifeNameChangeType = const Value.absent(),
+    this.husbandMarriedSurname = const Value.absent(),
+    this.husbandNameChangeType = const Value.absent(),
+    this.divorceDate = const Value.absent(),
+    this.divorceDateQualifier = const Value.absent(),
+    this.divorcePlace = const Value.absent(),
+    this.wifeRevertedToMaiden = const Value.absent(),
+    this.husbandRevertedName = const Value.absent(),
+    this.relationshipType = const Value.absent(),
+    this.isPrimaryMarriage = const Value.absent(),
+    this.notes = const Value.absent(),
+    this.privateNotes = const Value.absent(),
+    required String uuid,
+    this.isDeleted = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       treeId = Value(treeId),
+       uuid = Value(uuid);
+  static Insertable<FamiliesV2Data> custom({
+    Expression<String>? id,
+    Expression<String>? treeId,
+    Expression<String>? husbandId,
+    Expression<String>? wifeId,
+    Expression<DateTime>? marriageDate,
+    Expression<String>? marriageDateQualifier,
+    Expression<String>? marriagePlace,
+    Expression<double>? marriagePlaceLat,
+    Expression<double>? marriagePlaceLng,
+    Expression<bool>? wifeTookHusbandName,
+    Expression<bool>? husbandTookWifeName,
+    Expression<bool>? hyphenatedSurname,
+    Expression<bool>? noNameChange,
+    Expression<String>? customSurnameChange,
+    Expression<String>? wifeMarriedSurname,
+    Expression<String>? wifeNameChangeType,
+    Expression<String>? husbandMarriedSurname,
+    Expression<String>? husbandNameChangeType,
+    Expression<DateTime>? divorceDate,
+    Expression<String>? divorceDateQualifier,
+    Expression<String>? divorcePlace,
+    Expression<bool>? wifeRevertedToMaiden,
+    Expression<bool>? husbandRevertedName,
+    Expression<String>? relationshipType,
+    Expression<bool>? isPrimaryMarriage,
+    Expression<String>? notes,
+    Expression<String>? privateNotes,
+    Expression<String>? uuid,
+    Expression<bool>? isDeleted,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (treeId != null) 'tree_id': treeId,
+      if (husbandId != null) 'husband_id': husbandId,
+      if (wifeId != null) 'wife_id': wifeId,
+      if (marriageDate != null) 'marriage_date': marriageDate,
+      if (marriageDateQualifier != null)
+        'marriage_date_qualifier': marriageDateQualifier,
+      if (marriagePlace != null) 'marriage_place': marriagePlace,
+      if (marriagePlaceLat != null) 'marriage_place_lat': marriagePlaceLat,
+      if (marriagePlaceLng != null) 'marriage_place_lng': marriagePlaceLng,
+      if (wifeTookHusbandName != null)
+        'wife_took_husband_name': wifeTookHusbandName,
+      if (husbandTookWifeName != null)
+        'husband_took_wife_name': husbandTookWifeName,
+      if (hyphenatedSurname != null) 'hyphenated_surname': hyphenatedSurname,
+      if (noNameChange != null) 'no_name_change': noNameChange,
+      if (customSurnameChange != null)
+        'custom_surname_change': customSurnameChange,
+      if (wifeMarriedSurname != null)
+        'wife_married_surname': wifeMarriedSurname,
+      if (wifeNameChangeType != null)
+        'wife_name_change_type': wifeNameChangeType,
+      if (husbandMarriedSurname != null)
+        'husband_married_surname': husbandMarriedSurname,
+      if (husbandNameChangeType != null)
+        'husband_name_change_type': husbandNameChangeType,
+      if (divorceDate != null) 'divorce_date': divorceDate,
+      if (divorceDateQualifier != null)
+        'divorce_date_qualifier': divorceDateQualifier,
+      if (divorcePlace != null) 'divorce_place': divorcePlace,
+      if (wifeRevertedToMaiden != null)
+        'wife_reverted_to_maiden': wifeRevertedToMaiden,
+      if (husbandRevertedName != null)
+        'husband_reverted_name': husbandRevertedName,
+      if (relationshipType != null) 'relationship_type': relationshipType,
+      if (isPrimaryMarriage != null) 'is_primary_marriage': isPrimaryMarriage,
+      if (notes != null) 'notes': notes,
+      if (privateNotes != null) 'private_notes': privateNotes,
+      if (uuid != null) 'uuid': uuid,
+      if (isDeleted != null) 'is_deleted': isDeleted,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  FamiliesV2Companion copyWith({
+    Value<String>? id,
+    Value<String>? treeId,
+    Value<String?>? husbandId,
+    Value<String?>? wifeId,
+    Value<DateTime?>? marriageDate,
+    Value<String?>? marriageDateQualifier,
+    Value<String?>? marriagePlace,
+    Value<double?>? marriagePlaceLat,
+    Value<double?>? marriagePlaceLng,
+    Value<bool>? wifeTookHusbandName,
+    Value<bool>? husbandTookWifeName,
+    Value<bool>? hyphenatedSurname,
+    Value<bool>? noNameChange,
+    Value<String?>? customSurnameChange,
+    Value<String?>? wifeMarriedSurname,
+    Value<String?>? wifeNameChangeType,
+    Value<String?>? husbandMarriedSurname,
+    Value<String?>? husbandNameChangeType,
+    Value<DateTime?>? divorceDate,
+    Value<String?>? divorceDateQualifier,
+    Value<String?>? divorcePlace,
+    Value<bool>? wifeRevertedToMaiden,
+    Value<bool>? husbandRevertedName,
+    Value<String>? relationshipType,
+    Value<bool>? isPrimaryMarriage,
+    Value<String?>? notes,
+    Value<String?>? privateNotes,
+    Value<String>? uuid,
+    Value<bool>? isDeleted,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return FamiliesV2Companion(
+      id: id ?? this.id,
+      treeId: treeId ?? this.treeId,
+      husbandId: husbandId ?? this.husbandId,
+      wifeId: wifeId ?? this.wifeId,
+      marriageDate: marriageDate ?? this.marriageDate,
+      marriageDateQualifier:
+          marriageDateQualifier ?? this.marriageDateQualifier,
+      marriagePlace: marriagePlace ?? this.marriagePlace,
+      marriagePlaceLat: marriagePlaceLat ?? this.marriagePlaceLat,
+      marriagePlaceLng: marriagePlaceLng ?? this.marriagePlaceLng,
+      wifeTookHusbandName: wifeTookHusbandName ?? this.wifeTookHusbandName,
+      husbandTookWifeName: husbandTookWifeName ?? this.husbandTookWifeName,
+      hyphenatedSurname: hyphenatedSurname ?? this.hyphenatedSurname,
+      noNameChange: noNameChange ?? this.noNameChange,
+      customSurnameChange: customSurnameChange ?? this.customSurnameChange,
+      wifeMarriedSurname: wifeMarriedSurname ?? this.wifeMarriedSurname,
+      wifeNameChangeType: wifeNameChangeType ?? this.wifeNameChangeType,
+      husbandMarriedSurname:
+          husbandMarriedSurname ?? this.husbandMarriedSurname,
+      husbandNameChangeType:
+          husbandNameChangeType ?? this.husbandNameChangeType,
+      divorceDate: divorceDate ?? this.divorceDate,
+      divorceDateQualifier: divorceDateQualifier ?? this.divorceDateQualifier,
+      divorcePlace: divorcePlace ?? this.divorcePlace,
+      wifeRevertedToMaiden: wifeRevertedToMaiden ?? this.wifeRevertedToMaiden,
+      husbandRevertedName: husbandRevertedName ?? this.husbandRevertedName,
+      relationshipType: relationshipType ?? this.relationshipType,
+      isPrimaryMarriage: isPrimaryMarriage ?? this.isPrimaryMarriage,
+      notes: notes ?? this.notes,
+      privateNotes: privateNotes ?? this.privateNotes,
+      uuid: uuid ?? this.uuid,
+      isDeleted: isDeleted ?? this.isDeleted,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (treeId.present) {
+      map['tree_id'] = Variable<String>(treeId.value);
+    }
+    if (husbandId.present) {
+      map['husband_id'] = Variable<String>(husbandId.value);
+    }
+    if (wifeId.present) {
+      map['wife_id'] = Variable<String>(wifeId.value);
+    }
+    if (marriageDate.present) {
+      map['marriage_date'] = Variable<DateTime>(marriageDate.value);
+    }
+    if (marriageDateQualifier.present) {
+      map['marriage_date_qualifier'] = Variable<String>(
+        marriageDateQualifier.value,
+      );
+    }
+    if (marriagePlace.present) {
+      map['marriage_place'] = Variable<String>(marriagePlace.value);
+    }
+    if (marriagePlaceLat.present) {
+      map['marriage_place_lat'] = Variable<double>(marriagePlaceLat.value);
+    }
+    if (marriagePlaceLng.present) {
+      map['marriage_place_lng'] = Variable<double>(marriagePlaceLng.value);
+    }
+    if (wifeTookHusbandName.present) {
+      map['wife_took_husband_name'] = Variable<bool>(wifeTookHusbandName.value);
+    }
+    if (husbandTookWifeName.present) {
+      map['husband_took_wife_name'] = Variable<bool>(husbandTookWifeName.value);
+    }
+    if (hyphenatedSurname.present) {
+      map['hyphenated_surname'] = Variable<bool>(hyphenatedSurname.value);
+    }
+    if (noNameChange.present) {
+      map['no_name_change'] = Variable<bool>(noNameChange.value);
+    }
+    if (customSurnameChange.present) {
+      map['custom_surname_change'] = Variable<String>(
+        customSurnameChange.value,
+      );
+    }
+    if (wifeMarriedSurname.present) {
+      map['wife_married_surname'] = Variable<String>(wifeMarriedSurname.value);
+    }
+    if (wifeNameChangeType.present) {
+      map['wife_name_change_type'] = Variable<String>(wifeNameChangeType.value);
+    }
+    if (husbandMarriedSurname.present) {
+      map['husband_married_surname'] = Variable<String>(
+        husbandMarriedSurname.value,
+      );
+    }
+    if (husbandNameChangeType.present) {
+      map['husband_name_change_type'] = Variable<String>(
+        husbandNameChangeType.value,
+      );
+    }
+    if (divorceDate.present) {
+      map['divorce_date'] = Variable<DateTime>(divorceDate.value);
+    }
+    if (divorceDateQualifier.present) {
+      map['divorce_date_qualifier'] = Variable<String>(
+        divorceDateQualifier.value,
+      );
+    }
+    if (divorcePlace.present) {
+      map['divorce_place'] = Variable<String>(divorcePlace.value);
+    }
+    if (wifeRevertedToMaiden.present) {
+      map['wife_reverted_to_maiden'] = Variable<bool>(
+        wifeRevertedToMaiden.value,
+      );
+    }
+    if (husbandRevertedName.present) {
+      map['husband_reverted_name'] = Variable<bool>(husbandRevertedName.value);
+    }
+    if (relationshipType.present) {
+      map['relationship_type'] = Variable<String>(relationshipType.value);
+    }
+    if (isPrimaryMarriage.present) {
+      map['is_primary_marriage'] = Variable<bool>(isPrimaryMarriage.value);
+    }
+    if (notes.present) {
+      map['notes'] = Variable<String>(notes.value);
+    }
+    if (privateNotes.present) {
+      map['private_notes'] = Variable<String>(privateNotes.value);
+    }
+    if (uuid.present) {
+      map['uuid'] = Variable<String>(uuid.value);
+    }
+    if (isDeleted.present) {
+      map['is_deleted'] = Variable<bool>(isDeleted.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FamiliesV2Companion(')
+          ..write('id: $id, ')
+          ..write('treeId: $treeId, ')
+          ..write('husbandId: $husbandId, ')
+          ..write('wifeId: $wifeId, ')
+          ..write('marriageDate: $marriageDate, ')
+          ..write('marriageDateQualifier: $marriageDateQualifier, ')
+          ..write('marriagePlace: $marriagePlace, ')
+          ..write('marriagePlaceLat: $marriagePlaceLat, ')
+          ..write('marriagePlaceLng: $marriagePlaceLng, ')
+          ..write('wifeTookHusbandName: $wifeTookHusbandName, ')
+          ..write('husbandTookWifeName: $husbandTookWifeName, ')
+          ..write('hyphenatedSurname: $hyphenatedSurname, ')
+          ..write('noNameChange: $noNameChange, ')
+          ..write('customSurnameChange: $customSurnameChange, ')
+          ..write('wifeMarriedSurname: $wifeMarriedSurname, ')
+          ..write('wifeNameChangeType: $wifeNameChangeType, ')
+          ..write('husbandMarriedSurname: $husbandMarriedSurname, ')
+          ..write('husbandNameChangeType: $husbandNameChangeType, ')
+          ..write('divorceDate: $divorceDate, ')
+          ..write('divorceDateQualifier: $divorceDateQualifier, ')
+          ..write('divorcePlace: $divorcePlace, ')
+          ..write('wifeRevertedToMaiden: $wifeRevertedToMaiden, ')
+          ..write('husbandRevertedName: $husbandRevertedName, ')
+          ..write('relationshipType: $relationshipType, ')
+          ..write('isPrimaryMarriage: $isPrimaryMarriage, ')
+          ..write('notes: $notes, ')
+          ..write('privateNotes: $privateNotes, ')
+          ..write('uuid: $uuid, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $FamilyChildrenV2Table extends FamilyChildrenV2
+    with TableInfo<$FamilyChildrenV2Table, FamilyChildrenV2Data> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $FamilyChildrenV2Table(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _familyIdMeta = const VerificationMeta(
+    'familyId',
+  );
+  @override
+  late final GeneratedColumn<String> familyId = GeneratedColumn<String>(
+    'family_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES families_v2 (id) ON DELETE RESTRICT',
+    ),
+  );
+  static const VerificationMeta _childIdMeta = const VerificationMeta(
+    'childId',
+  );
+  @override
+  late final GeneratedColumn<String> childId = GeneratedColumn<String>(
+    'child_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES genealogy_persons (id) ON DELETE RESTRICT',
+    ),
+  );
+  static const VerificationMeta _birthOrderMeta = const VerificationMeta(
+    'birthOrder',
+  );
+  @override
+  late final GeneratedColumn<int> birthOrder = GeneratedColumn<int>(
+    'birth_order',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _relationshipTypeMeta = const VerificationMeta(
+    'relationshipType',
+  );
+  @override
+  late final GeneratedColumn<String> relationshipType = GeneratedColumn<String>(
+    'relationship_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('biological'),
+  );
+  static const VerificationMeta _childSurnameAtBirthMeta =
+      const VerificationMeta('childSurnameAtBirth');
+  @override
+  late final GeneratedColumn<String> childSurnameAtBirth =
+      GeneratedColumn<String>(
+        'child_surname_at_birth',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _paternalRelationshipMeta =
+      const VerificationMeta('paternalRelationship');
+  @override
+  late final GeneratedColumn<String> paternalRelationship =
+      GeneratedColumn<String>(
+        'paternal_relationship',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _maternalRelationshipMeta =
+      const VerificationMeta('maternalRelationship');
+  @override
+  late final GeneratedColumn<String> maternalRelationship =
+      GeneratedColumn<String>(
+        'maternal_relationship',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _notesMeta = const VerificationMeta('notes');
+  @override
+  late final GeneratedColumn<String> notes = GeneratedColumn<String>(
+    'notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _uuidMeta = const VerificationMeta('uuid');
+  @override
+  late final GeneratedColumn<String> uuid = GeneratedColumn<String>(
+    'uuid',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _isDeletedMeta = const VerificationMeta(
+    'isDeleted',
+  );
+  @override
+  late final GeneratedColumn<bool> isDeleted = GeneratedColumn<bool>(
+    'is_deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_deleted" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    familyId,
+    childId,
+    birthOrder,
+    relationshipType,
+    childSurnameAtBirth,
+    paternalRelationship,
+    maternalRelationship,
+    notes,
+    uuid,
+    isDeleted,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'family_children_v2';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<FamilyChildrenV2Data> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('family_id')) {
+      context.handle(
+        _familyIdMeta,
+        familyId.isAcceptableOrUnknown(data['family_id']!, _familyIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_familyIdMeta);
+    }
+    if (data.containsKey('child_id')) {
+      context.handle(
+        _childIdMeta,
+        childId.isAcceptableOrUnknown(data['child_id']!, _childIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_childIdMeta);
+    }
+    if (data.containsKey('birth_order')) {
+      context.handle(
+        _birthOrderMeta,
+        birthOrder.isAcceptableOrUnknown(data['birth_order']!, _birthOrderMeta),
+      );
+    }
+    if (data.containsKey('relationship_type')) {
+      context.handle(
+        _relationshipTypeMeta,
+        relationshipType.isAcceptableOrUnknown(
+          data['relationship_type']!,
+          _relationshipTypeMeta,
+        ),
+      );
+    }
+    if (data.containsKey('child_surname_at_birth')) {
+      context.handle(
+        _childSurnameAtBirthMeta,
+        childSurnameAtBirth.isAcceptableOrUnknown(
+          data['child_surname_at_birth']!,
+          _childSurnameAtBirthMeta,
+        ),
+      );
+    }
+    if (data.containsKey('paternal_relationship')) {
+      context.handle(
+        _paternalRelationshipMeta,
+        paternalRelationship.isAcceptableOrUnknown(
+          data['paternal_relationship']!,
+          _paternalRelationshipMeta,
+        ),
+      );
+    }
+    if (data.containsKey('maternal_relationship')) {
+      context.handle(
+        _maternalRelationshipMeta,
+        maternalRelationship.isAcceptableOrUnknown(
+          data['maternal_relationship']!,
+          _maternalRelationshipMeta,
+        ),
+      );
+    }
+    if (data.containsKey('notes')) {
+      context.handle(
+        _notesMeta,
+        notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
+      );
+    }
+    if (data.containsKey('uuid')) {
+      context.handle(
+        _uuidMeta,
+        uuid.isAcceptableOrUnknown(data['uuid']!, _uuidMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_uuidMeta);
+    }
+    if (data.containsKey('is_deleted')) {
+      context.handle(
+        _isDeletedMeta,
+        isDeleted.isAcceptableOrUnknown(data['is_deleted']!, _isDeletedMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  FamilyChildrenV2Data map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return FamilyChildrenV2Data(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      familyId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}family_id'],
+      )!,
+      childId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}child_id'],
+      )!,
+      birthOrder: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}birth_order'],
+      ),
+      relationshipType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}relationship_type'],
+      )!,
+      childSurnameAtBirth: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}child_surname_at_birth'],
+      ),
+      paternalRelationship: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}paternal_relationship'],
+      ),
+      maternalRelationship: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}maternal_relationship'],
+      ),
+      notes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}notes'],
+      ),
+      uuid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uuid'],
+      )!,
+      isDeleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_deleted'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $FamilyChildrenV2Table createAlias(String alias) {
+    return $FamilyChildrenV2Table(attachedDatabase, alias);
+  }
+}
+
+class FamilyChildrenV2Data extends DataClass
+    implements Insertable<FamilyChildrenV2Data> {
+  final String id;
+  final String familyId;
+  final String childId;
+  final int? birthOrder;
+
+  /// biological / adopted / foster / step / unknown
+  final String relationshipType;
+  final String? childSurnameAtBirth;
+  final String? paternalRelationship;
+  final String? maternalRelationship;
+  final String? notes;
+  final String uuid;
+  final bool isDeleted;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const FamilyChildrenV2Data({
+    required this.id,
+    required this.familyId,
+    required this.childId,
+    this.birthOrder,
+    required this.relationshipType,
+    this.childSurnameAtBirth,
+    this.paternalRelationship,
+    this.maternalRelationship,
+    this.notes,
+    required this.uuid,
+    required this.isDeleted,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['family_id'] = Variable<String>(familyId);
+    map['child_id'] = Variable<String>(childId);
+    if (!nullToAbsent || birthOrder != null) {
+      map['birth_order'] = Variable<int>(birthOrder);
+    }
+    map['relationship_type'] = Variable<String>(relationshipType);
+    if (!nullToAbsent || childSurnameAtBirth != null) {
+      map['child_surname_at_birth'] = Variable<String>(childSurnameAtBirth);
+    }
+    if (!nullToAbsent || paternalRelationship != null) {
+      map['paternal_relationship'] = Variable<String>(paternalRelationship);
+    }
+    if (!nullToAbsent || maternalRelationship != null) {
+      map['maternal_relationship'] = Variable<String>(maternalRelationship);
+    }
+    if (!nullToAbsent || notes != null) {
+      map['notes'] = Variable<String>(notes);
+    }
+    map['uuid'] = Variable<String>(uuid);
+    map['is_deleted'] = Variable<bool>(isDeleted);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  FamilyChildrenV2Companion toCompanion(bool nullToAbsent) {
+    return FamilyChildrenV2Companion(
+      id: Value(id),
+      familyId: Value(familyId),
+      childId: Value(childId),
+      birthOrder: birthOrder == null && nullToAbsent
+          ? const Value.absent()
+          : Value(birthOrder),
+      relationshipType: Value(relationshipType),
+      childSurnameAtBirth: childSurnameAtBirth == null && nullToAbsent
+          ? const Value.absent()
+          : Value(childSurnameAtBirth),
+      paternalRelationship: paternalRelationship == null && nullToAbsent
+          ? const Value.absent()
+          : Value(paternalRelationship),
+      maternalRelationship: maternalRelationship == null && nullToAbsent
+          ? const Value.absent()
+          : Value(maternalRelationship),
+      notes: notes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(notes),
+      uuid: Value(uuid),
+      isDeleted: Value(isDeleted),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory FamilyChildrenV2Data.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return FamilyChildrenV2Data(
+      id: serializer.fromJson<String>(json['id']),
+      familyId: serializer.fromJson<String>(json['familyId']),
+      childId: serializer.fromJson<String>(json['childId']),
+      birthOrder: serializer.fromJson<int?>(json['birthOrder']),
+      relationshipType: serializer.fromJson<String>(json['relationshipType']),
+      childSurnameAtBirth: serializer.fromJson<String?>(
+        json['childSurnameAtBirth'],
+      ),
+      paternalRelationship: serializer.fromJson<String?>(
+        json['paternalRelationship'],
+      ),
+      maternalRelationship: serializer.fromJson<String?>(
+        json['maternalRelationship'],
+      ),
+      notes: serializer.fromJson<String?>(json['notes']),
+      uuid: serializer.fromJson<String>(json['uuid']),
+      isDeleted: serializer.fromJson<bool>(json['isDeleted']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'familyId': serializer.toJson<String>(familyId),
+      'childId': serializer.toJson<String>(childId),
+      'birthOrder': serializer.toJson<int?>(birthOrder),
+      'relationshipType': serializer.toJson<String>(relationshipType),
+      'childSurnameAtBirth': serializer.toJson<String?>(childSurnameAtBirth),
+      'paternalRelationship': serializer.toJson<String?>(paternalRelationship),
+      'maternalRelationship': serializer.toJson<String?>(maternalRelationship),
+      'notes': serializer.toJson<String?>(notes),
+      'uuid': serializer.toJson<String>(uuid),
+      'isDeleted': serializer.toJson<bool>(isDeleted),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  FamilyChildrenV2Data copyWith({
+    String? id,
+    String? familyId,
+    String? childId,
+    Value<int?> birthOrder = const Value.absent(),
+    String? relationshipType,
+    Value<String?> childSurnameAtBirth = const Value.absent(),
+    Value<String?> paternalRelationship = const Value.absent(),
+    Value<String?> maternalRelationship = const Value.absent(),
+    Value<String?> notes = const Value.absent(),
+    String? uuid,
+    bool? isDeleted,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => FamilyChildrenV2Data(
+    id: id ?? this.id,
+    familyId: familyId ?? this.familyId,
+    childId: childId ?? this.childId,
+    birthOrder: birthOrder.present ? birthOrder.value : this.birthOrder,
+    relationshipType: relationshipType ?? this.relationshipType,
+    childSurnameAtBirth: childSurnameAtBirth.present
+        ? childSurnameAtBirth.value
+        : this.childSurnameAtBirth,
+    paternalRelationship: paternalRelationship.present
+        ? paternalRelationship.value
+        : this.paternalRelationship,
+    maternalRelationship: maternalRelationship.present
+        ? maternalRelationship.value
+        : this.maternalRelationship,
+    notes: notes.present ? notes.value : this.notes,
+    uuid: uuid ?? this.uuid,
+    isDeleted: isDeleted ?? this.isDeleted,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  FamilyChildrenV2Data copyWithCompanion(FamilyChildrenV2Companion data) {
+    return FamilyChildrenV2Data(
+      id: data.id.present ? data.id.value : this.id,
+      familyId: data.familyId.present ? data.familyId.value : this.familyId,
+      childId: data.childId.present ? data.childId.value : this.childId,
+      birthOrder: data.birthOrder.present
+          ? data.birthOrder.value
+          : this.birthOrder,
+      relationshipType: data.relationshipType.present
+          ? data.relationshipType.value
+          : this.relationshipType,
+      childSurnameAtBirth: data.childSurnameAtBirth.present
+          ? data.childSurnameAtBirth.value
+          : this.childSurnameAtBirth,
+      paternalRelationship: data.paternalRelationship.present
+          ? data.paternalRelationship.value
+          : this.paternalRelationship,
+      maternalRelationship: data.maternalRelationship.present
+          ? data.maternalRelationship.value
+          : this.maternalRelationship,
+      notes: data.notes.present ? data.notes.value : this.notes,
+      uuid: data.uuid.present ? data.uuid.value : this.uuid,
+      isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FamilyChildrenV2Data(')
+          ..write('id: $id, ')
+          ..write('familyId: $familyId, ')
+          ..write('childId: $childId, ')
+          ..write('birthOrder: $birthOrder, ')
+          ..write('relationshipType: $relationshipType, ')
+          ..write('childSurnameAtBirth: $childSurnameAtBirth, ')
+          ..write('paternalRelationship: $paternalRelationship, ')
+          ..write('maternalRelationship: $maternalRelationship, ')
+          ..write('notes: $notes, ')
+          ..write('uuid: $uuid, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    familyId,
+    childId,
+    birthOrder,
+    relationshipType,
+    childSurnameAtBirth,
+    paternalRelationship,
+    maternalRelationship,
+    notes,
+    uuid,
+    isDeleted,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is FamilyChildrenV2Data &&
+          other.id == this.id &&
+          other.familyId == this.familyId &&
+          other.childId == this.childId &&
+          other.birthOrder == this.birthOrder &&
+          other.relationshipType == this.relationshipType &&
+          other.childSurnameAtBirth == this.childSurnameAtBirth &&
+          other.paternalRelationship == this.paternalRelationship &&
+          other.maternalRelationship == this.maternalRelationship &&
+          other.notes == this.notes &&
+          other.uuid == this.uuid &&
+          other.isDeleted == this.isDeleted &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class FamilyChildrenV2Companion extends UpdateCompanion<FamilyChildrenV2Data> {
+  final Value<String> id;
+  final Value<String> familyId;
+  final Value<String> childId;
+  final Value<int?> birthOrder;
+  final Value<String> relationshipType;
+  final Value<String?> childSurnameAtBirth;
+  final Value<String?> paternalRelationship;
+  final Value<String?> maternalRelationship;
+  final Value<String?> notes;
+  final Value<String> uuid;
+  final Value<bool> isDeleted;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const FamilyChildrenV2Companion({
+    this.id = const Value.absent(),
+    this.familyId = const Value.absent(),
+    this.childId = const Value.absent(),
+    this.birthOrder = const Value.absent(),
+    this.relationshipType = const Value.absent(),
+    this.childSurnameAtBirth = const Value.absent(),
+    this.paternalRelationship = const Value.absent(),
+    this.maternalRelationship = const Value.absent(),
+    this.notes = const Value.absent(),
+    this.uuid = const Value.absent(),
+    this.isDeleted = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  FamilyChildrenV2Companion.insert({
+    required String id,
+    required String familyId,
+    required String childId,
+    this.birthOrder = const Value.absent(),
+    this.relationshipType = const Value.absent(),
+    this.childSurnameAtBirth = const Value.absent(),
+    this.paternalRelationship = const Value.absent(),
+    this.maternalRelationship = const Value.absent(),
+    this.notes = const Value.absent(),
+    required String uuid,
+    this.isDeleted = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       familyId = Value(familyId),
+       childId = Value(childId),
+       uuid = Value(uuid);
+  static Insertable<FamilyChildrenV2Data> custom({
+    Expression<String>? id,
+    Expression<String>? familyId,
+    Expression<String>? childId,
+    Expression<int>? birthOrder,
+    Expression<String>? relationshipType,
+    Expression<String>? childSurnameAtBirth,
+    Expression<String>? paternalRelationship,
+    Expression<String>? maternalRelationship,
+    Expression<String>? notes,
+    Expression<String>? uuid,
+    Expression<bool>? isDeleted,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (familyId != null) 'family_id': familyId,
+      if (childId != null) 'child_id': childId,
+      if (birthOrder != null) 'birth_order': birthOrder,
+      if (relationshipType != null) 'relationship_type': relationshipType,
+      if (childSurnameAtBirth != null)
+        'child_surname_at_birth': childSurnameAtBirth,
+      if (paternalRelationship != null)
+        'paternal_relationship': paternalRelationship,
+      if (maternalRelationship != null)
+        'maternal_relationship': maternalRelationship,
+      if (notes != null) 'notes': notes,
+      if (uuid != null) 'uuid': uuid,
+      if (isDeleted != null) 'is_deleted': isDeleted,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  FamilyChildrenV2Companion copyWith({
+    Value<String>? id,
+    Value<String>? familyId,
+    Value<String>? childId,
+    Value<int?>? birthOrder,
+    Value<String>? relationshipType,
+    Value<String?>? childSurnameAtBirth,
+    Value<String?>? paternalRelationship,
+    Value<String?>? maternalRelationship,
+    Value<String?>? notes,
+    Value<String>? uuid,
+    Value<bool>? isDeleted,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return FamilyChildrenV2Companion(
+      id: id ?? this.id,
+      familyId: familyId ?? this.familyId,
+      childId: childId ?? this.childId,
+      birthOrder: birthOrder ?? this.birthOrder,
+      relationshipType: relationshipType ?? this.relationshipType,
+      childSurnameAtBirth: childSurnameAtBirth ?? this.childSurnameAtBirth,
+      paternalRelationship: paternalRelationship ?? this.paternalRelationship,
+      maternalRelationship: maternalRelationship ?? this.maternalRelationship,
+      notes: notes ?? this.notes,
+      uuid: uuid ?? this.uuid,
+      isDeleted: isDeleted ?? this.isDeleted,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (familyId.present) {
+      map['family_id'] = Variable<String>(familyId.value);
+    }
+    if (childId.present) {
+      map['child_id'] = Variable<String>(childId.value);
+    }
+    if (birthOrder.present) {
+      map['birth_order'] = Variable<int>(birthOrder.value);
+    }
+    if (relationshipType.present) {
+      map['relationship_type'] = Variable<String>(relationshipType.value);
+    }
+    if (childSurnameAtBirth.present) {
+      map['child_surname_at_birth'] = Variable<String>(
+        childSurnameAtBirth.value,
+      );
+    }
+    if (paternalRelationship.present) {
+      map['paternal_relationship'] = Variable<String>(
+        paternalRelationship.value,
+      );
+    }
+    if (maternalRelationship.present) {
+      map['maternal_relationship'] = Variable<String>(
+        maternalRelationship.value,
+      );
+    }
+    if (notes.present) {
+      map['notes'] = Variable<String>(notes.value);
+    }
+    if (uuid.present) {
+      map['uuid'] = Variable<String>(uuid.value);
+    }
+    if (isDeleted.present) {
+      map['is_deleted'] = Variable<bool>(isDeleted.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FamilyChildrenV2Companion(')
+          ..write('id: $id, ')
+          ..write('familyId: $familyId, ')
+          ..write('childId: $childId, ')
+          ..write('birthOrder: $birthOrder, ')
+          ..write('relationshipType: $relationshipType, ')
+          ..write('childSurnameAtBirth: $childSurnameAtBirth, ')
+          ..write('paternalRelationship: $paternalRelationship, ')
+          ..write('maternalRelationship: $maternalRelationship, ')
+          ..write('notes: $notes, ')
+          ..write('uuid: $uuid, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $MediaItemsTable extends MediaItems
+    with TableInfo<$MediaItemsTable, MediaItem> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $MediaItemsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _personIdMeta = const VerificationMeta(
+    'personId',
+  );
+  @override
+  late final GeneratedColumn<String> personId = GeneratedColumn<String>(
+    'person_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES genealogy_persons (id) ON DELETE RESTRICT',
+    ),
+  );
+  static const VerificationMeta _filePathMeta = const VerificationMeta(
+    'filePath',
+  );
+  @override
+  late final GeneratedColumn<String> filePath = GeneratedColumn<String>(
+    'file_path',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _mediaTypeMeta = const VerificationMeta(
+    'mediaType',
+  );
+  @override
+  late final GeneratedColumn<String> mediaType = GeneratedColumn<String>(
+    'media_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _descriptionMeta = const VerificationMeta(
+    'description',
+  );
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+    'description',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    personId,
+    filePath,
+    mediaType,
+    title,
+    description,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'media_items';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<MediaItem> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('person_id')) {
+      context.handle(
+        _personIdMeta,
+        personId.isAcceptableOrUnknown(data['person_id']!, _personIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_personIdMeta);
+    }
+    if (data.containsKey('file_path')) {
+      context.handle(
+        _filePathMeta,
+        filePath.isAcceptableOrUnknown(data['file_path']!, _filePathMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_filePathMeta);
+    }
+    if (data.containsKey('media_type')) {
+      context.handle(
+        _mediaTypeMeta,
+        mediaType.isAcceptableOrUnknown(data['media_type']!, _mediaTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_mediaTypeMeta);
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+        _descriptionMeta,
+        description.isAcceptableOrUnknown(
+          data['description']!,
+          _descriptionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  MediaItem map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return MediaItem(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      personId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}person_id'],
+      )!,
+      filePath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}file_path'],
+      )!,
+      mediaType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}media_type'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      ),
+      description: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}description'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $MediaItemsTable createAlias(String alias) {
+    return $MediaItemsTable(attachedDatabase, alias);
+  }
+}
+
+class MediaItem extends DataClass implements Insertable<MediaItem> {
+  final String id;
+  final String personId;
+  final String filePath;
+
+  /// photo / document / audio / video
+  final String mediaType;
+  final String? title;
+  final String? description;
+  final DateTime createdAt;
+  const MediaItem({
+    required this.id,
+    required this.personId,
+    required this.filePath,
+    required this.mediaType,
+    this.title,
+    this.description,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['person_id'] = Variable<String>(personId);
+    map['file_path'] = Variable<String>(filePath);
+    map['media_type'] = Variable<String>(mediaType);
+    if (!nullToAbsent || title != null) {
+      map['title'] = Variable<String>(title);
+    }
+    if (!nullToAbsent || description != null) {
+      map['description'] = Variable<String>(description);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  MediaItemsCompanion toCompanion(bool nullToAbsent) {
+    return MediaItemsCompanion(
+      id: Value(id),
+      personId: Value(personId),
+      filePath: Value(filePath),
+      mediaType: Value(mediaType),
+      title: title == null && nullToAbsent
+          ? const Value.absent()
+          : Value(title),
+      description: description == null && nullToAbsent
+          ? const Value.absent()
+          : Value(description),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory MediaItem.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return MediaItem(
+      id: serializer.fromJson<String>(json['id']),
+      personId: serializer.fromJson<String>(json['personId']),
+      filePath: serializer.fromJson<String>(json['filePath']),
+      mediaType: serializer.fromJson<String>(json['mediaType']),
+      title: serializer.fromJson<String?>(json['title']),
+      description: serializer.fromJson<String?>(json['description']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'personId': serializer.toJson<String>(personId),
+      'filePath': serializer.toJson<String>(filePath),
+      'mediaType': serializer.toJson<String>(mediaType),
+      'title': serializer.toJson<String?>(title),
+      'description': serializer.toJson<String?>(description),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  MediaItem copyWith({
+    String? id,
+    String? personId,
+    String? filePath,
+    String? mediaType,
+    Value<String?> title = const Value.absent(),
+    Value<String?> description = const Value.absent(),
+    DateTime? createdAt,
+  }) => MediaItem(
+    id: id ?? this.id,
+    personId: personId ?? this.personId,
+    filePath: filePath ?? this.filePath,
+    mediaType: mediaType ?? this.mediaType,
+    title: title.present ? title.value : this.title,
+    description: description.present ? description.value : this.description,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  MediaItem copyWithCompanion(MediaItemsCompanion data) {
+    return MediaItem(
+      id: data.id.present ? data.id.value : this.id,
+      personId: data.personId.present ? data.personId.value : this.personId,
+      filePath: data.filePath.present ? data.filePath.value : this.filePath,
+      mediaType: data.mediaType.present ? data.mediaType.value : this.mediaType,
+      title: data.title.present ? data.title.value : this.title,
+      description: data.description.present
+          ? data.description.value
+          : this.description,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MediaItem(')
+          ..write('id: $id, ')
+          ..write('personId: $personId, ')
+          ..write('filePath: $filePath, ')
+          ..write('mediaType: $mediaType, ')
+          ..write('title: $title, ')
+          ..write('description: $description, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    personId,
+    filePath,
+    mediaType,
+    title,
+    description,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is MediaItem &&
+          other.id == this.id &&
+          other.personId == this.personId &&
+          other.filePath == this.filePath &&
+          other.mediaType == this.mediaType &&
+          other.title == this.title &&
+          other.description == this.description &&
+          other.createdAt == this.createdAt);
+}
+
+class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
+  final Value<String> id;
+  final Value<String> personId;
+  final Value<String> filePath;
+  final Value<String> mediaType;
+  final Value<String?> title;
+  final Value<String?> description;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const MediaItemsCompanion({
+    this.id = const Value.absent(),
+    this.personId = const Value.absent(),
+    this.filePath = const Value.absent(),
+    this.mediaType = const Value.absent(),
+    this.title = const Value.absent(),
+    this.description = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  MediaItemsCompanion.insert({
+    required String id,
+    required String personId,
+    required String filePath,
+    required String mediaType,
+    this.title = const Value.absent(),
+    this.description = const Value.absent(),
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       personId = Value(personId),
+       filePath = Value(filePath),
+       mediaType = Value(mediaType),
+       createdAt = Value(createdAt);
+  static Insertable<MediaItem> custom({
+    Expression<String>? id,
+    Expression<String>? personId,
+    Expression<String>? filePath,
+    Expression<String>? mediaType,
+    Expression<String>? title,
+    Expression<String>? description,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (personId != null) 'person_id': personId,
+      if (filePath != null) 'file_path': filePath,
+      if (mediaType != null) 'media_type': mediaType,
+      if (title != null) 'title': title,
+      if (description != null) 'description': description,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  MediaItemsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? personId,
+    Value<String>? filePath,
+    Value<String>? mediaType,
+    Value<String?>? title,
+    Value<String?>? description,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return MediaItemsCompanion(
+      id: id ?? this.id,
+      personId: personId ?? this.personId,
+      filePath: filePath ?? this.filePath,
+      mediaType: mediaType ?? this.mediaType,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (personId.present) {
+      map['person_id'] = Variable<String>(personId.value);
+    }
+    if (filePath.present) {
+      map['file_path'] = Variable<String>(filePath.value);
+    }
+    if (mediaType.present) {
+      map['media_type'] = Variable<String>(mediaType.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MediaItemsCompanion(')
+          ..write('id: $id, ')
+          ..write('personId: $personId, ')
+          ..write('filePath: $filePath, ')
+          ..write('mediaType: $mediaType, ')
+          ..write('title: $title, ')
+          ..write('description: $description, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $DuplicateMarkersTable extends DuplicateMarkers
+    with TableInfo<$DuplicateMarkersTable, DuplicateMarker> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DuplicateMarkersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
   );
   static const VerificationMeta _personAIdMeta = const VerificationMeta(
     'personAId',
@@ -9560,6 +7405,9 @@ class $DuplicateMarkersTable extends DuplicateMarkers
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES genealogy_persons (id) ON DELETE CASCADE',
+    ),
   );
   static const VerificationMeta _personBIdMeta = const VerificationMeta(
     'personBId',
@@ -9571,6 +7419,9 @@ class $DuplicateMarkersTable extends DuplicateMarkers
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES genealogy_persons (id) ON DELETE CASCADE',
+    ),
   );
   static const VerificationMeta _reasonMeta = const VerificationMeta('reason');
   @override
@@ -9595,7 +7446,6 @@ class $DuplicateMarkersTable extends DuplicateMarkers
   @override
   List<GeneratedColumn> get $columns => [
     id,
-    treeId,
     personAId,
     personBId,
     reason,
@@ -9617,14 +7467,6 @@ class $DuplicateMarkersTable extends DuplicateMarkers
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     } else if (isInserting) {
       context.missing(_idMeta);
-    }
-    if (data.containsKey('tree_id')) {
-      context.handle(
-        _treeIdMeta,
-        treeId.isAcceptableOrUnknown(data['tree_id']!, _treeIdMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_treeIdMeta);
     }
     if (data.containsKey('person_a_id')) {
       context.handle(
@@ -9669,10 +7511,6 @@ class $DuplicateMarkersTable extends DuplicateMarkers
         DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
-      treeId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}tree_id'],
-      )!,
       personAId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}person_a_id'],
@@ -9700,14 +7538,12 @@ class $DuplicateMarkersTable extends DuplicateMarkers
 
 class DuplicateMarker extends DataClass implements Insertable<DuplicateMarker> {
   final String id;
-  final String treeId;
   final String personAId;
   final String personBId;
   final String? reason;
   final DateTime createdAt;
   const DuplicateMarker({
     required this.id,
-    required this.treeId,
     required this.personAId,
     required this.personBId,
     this.reason,
@@ -9717,7 +7553,6 @@ class DuplicateMarker extends DataClass implements Insertable<DuplicateMarker> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
-    map['tree_id'] = Variable<String>(treeId);
     map['person_a_id'] = Variable<String>(personAId);
     map['person_b_id'] = Variable<String>(personBId);
     if (!nullToAbsent || reason != null) {
@@ -9730,7 +7565,6 @@ class DuplicateMarker extends DataClass implements Insertable<DuplicateMarker> {
   DuplicateMarkersCompanion toCompanion(bool nullToAbsent) {
     return DuplicateMarkersCompanion(
       id: Value(id),
-      treeId: Value(treeId),
       personAId: Value(personAId),
       personBId: Value(personBId),
       reason: reason == null && nullToAbsent
@@ -9747,7 +7581,6 @@ class DuplicateMarker extends DataClass implements Insertable<DuplicateMarker> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return DuplicateMarker(
       id: serializer.fromJson<String>(json['id']),
-      treeId: serializer.fromJson<String>(json['treeId']),
       personAId: serializer.fromJson<String>(json['personAId']),
       personBId: serializer.fromJson<String>(json['personBId']),
       reason: serializer.fromJson<String?>(json['reason']),
@@ -9759,7 +7592,6 @@ class DuplicateMarker extends DataClass implements Insertable<DuplicateMarker> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
-      'treeId': serializer.toJson<String>(treeId),
       'personAId': serializer.toJson<String>(personAId),
       'personBId': serializer.toJson<String>(personBId),
       'reason': serializer.toJson<String?>(reason),
@@ -9769,14 +7601,12 @@ class DuplicateMarker extends DataClass implements Insertable<DuplicateMarker> {
 
   DuplicateMarker copyWith({
     String? id,
-    String? treeId,
     String? personAId,
     String? personBId,
     Value<String?> reason = const Value.absent(),
     DateTime? createdAt,
   }) => DuplicateMarker(
     id: id ?? this.id,
-    treeId: treeId ?? this.treeId,
     personAId: personAId ?? this.personAId,
     personBId: personBId ?? this.personBId,
     reason: reason.present ? reason.value : this.reason,
@@ -9785,7 +7615,6 @@ class DuplicateMarker extends DataClass implements Insertable<DuplicateMarker> {
   DuplicateMarker copyWithCompanion(DuplicateMarkersCompanion data) {
     return DuplicateMarker(
       id: data.id.present ? data.id.value : this.id,
-      treeId: data.treeId.present ? data.treeId.value : this.treeId,
       personAId: data.personAId.present ? data.personAId.value : this.personAId,
       personBId: data.personBId.present ? data.personBId.value : this.personBId,
       reason: data.reason.present ? data.reason.value : this.reason,
@@ -9797,7 +7626,6 @@ class DuplicateMarker extends DataClass implements Insertable<DuplicateMarker> {
   String toString() {
     return (StringBuffer('DuplicateMarker(')
           ..write('id: $id, ')
-          ..write('treeId: $treeId, ')
           ..write('personAId: $personAId, ')
           ..write('personBId: $personBId, ')
           ..write('reason: $reason, ')
@@ -9807,14 +7635,12 @@ class DuplicateMarker extends DataClass implements Insertable<DuplicateMarker> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, treeId, personAId, personBId, reason, createdAt);
+  int get hashCode => Object.hash(id, personAId, personBId, reason, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is DuplicateMarker &&
           other.id == this.id &&
-          other.treeId == this.treeId &&
           other.personAId == this.personAId &&
           other.personBId == this.personBId &&
           other.reason == this.reason &&
@@ -9823,7 +7649,6 @@ class DuplicateMarker extends DataClass implements Insertable<DuplicateMarker> {
 
 class DuplicateMarkersCompanion extends UpdateCompanion<DuplicateMarker> {
   final Value<String> id;
-  final Value<String> treeId;
   final Value<String> personAId;
   final Value<String> personBId;
   final Value<String?> reason;
@@ -9831,7 +7656,6 @@ class DuplicateMarkersCompanion extends UpdateCompanion<DuplicateMarker> {
   final Value<int> rowid;
   const DuplicateMarkersCompanion({
     this.id = const Value.absent(),
-    this.treeId = const Value.absent(),
     this.personAId = const Value.absent(),
     this.personBId = const Value.absent(),
     this.reason = const Value.absent(),
@@ -9840,20 +7664,17 @@ class DuplicateMarkersCompanion extends UpdateCompanion<DuplicateMarker> {
   });
   DuplicateMarkersCompanion.insert({
     required String id,
-    required String treeId,
     required String personAId,
     required String personBId,
     this.reason = const Value.absent(),
     required DateTime createdAt,
     this.rowid = const Value.absent(),
   }) : id = Value(id),
-       treeId = Value(treeId),
        personAId = Value(personAId),
        personBId = Value(personBId),
        createdAt = Value(createdAt);
   static Insertable<DuplicateMarker> custom({
     Expression<String>? id,
-    Expression<String>? treeId,
     Expression<String>? personAId,
     Expression<String>? personBId,
     Expression<String>? reason,
@@ -9862,7 +7683,6 @@ class DuplicateMarkersCompanion extends UpdateCompanion<DuplicateMarker> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
-      if (treeId != null) 'tree_id': treeId,
       if (personAId != null) 'person_a_id': personAId,
       if (personBId != null) 'person_b_id': personBId,
       if (reason != null) 'reason': reason,
@@ -9873,7 +7693,6 @@ class DuplicateMarkersCompanion extends UpdateCompanion<DuplicateMarker> {
 
   DuplicateMarkersCompanion copyWith({
     Value<String>? id,
-    Value<String>? treeId,
     Value<String>? personAId,
     Value<String>? personBId,
     Value<String?>? reason,
@@ -9882,7 +7701,6 @@ class DuplicateMarkersCompanion extends UpdateCompanion<DuplicateMarker> {
   }) {
     return DuplicateMarkersCompanion(
       id: id ?? this.id,
-      treeId: treeId ?? this.treeId,
       personAId: personAId ?? this.personAId,
       personBId: personBId ?? this.personBId,
       reason: reason ?? this.reason,
@@ -9896,9 +7714,6 @@ class DuplicateMarkersCompanion extends UpdateCompanion<DuplicateMarker> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<String>(id.value);
-    }
-    if (treeId.present) {
-      map['tree_id'] = Variable<String>(treeId.value);
     }
     if (personAId.present) {
       map['person_a_id'] = Variable<String>(personAId.value);
@@ -9922,7 +7737,6 @@ class DuplicateMarkersCompanion extends UpdateCompanion<DuplicateMarker> {
   String toString() {
     return (StringBuffer('DuplicateMarkersCompanion(')
           ..write('id: $id, ')
-          ..write('treeId: $treeId, ')
           ..write('personAId: $personAId, ')
           ..write('personBId: $personBId, ')
           ..write('reason: $reason, ')
@@ -10924,7 +8738,7 @@ class $ResearchNotesTable extends ResearchNotes
     type: DriftSqlType.string,
     requiredDuringInsert: false,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES genealogy_persons (id)',
+      'REFERENCES genealogy_persons (id) ON DELETE RESTRICT',
     ),
   );
   static const VerificationMeta _noteTextMeta = const VerificationMeta(
@@ -11462,7 +9276,7 @@ class $TodosTable extends Todos with TableInfo<$TodosTable, Todo> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES genealogy_persons (id)',
+      'REFERENCES genealogy_persons (id) ON DELETE RESTRICT',
     ),
   );
   static const VerificationMeta _taskTextMeta = const VerificationMeta(
@@ -11904,529 +9718,6 @@ class TodosCompanion extends UpdateCompanion<Todo> {
   }
 }
 
-class $SyncChangeLogTable extends SyncChangeLog
-    with TableInfo<$SyncChangeLogTable, SyncChangeLogData> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $SyncChangeLogTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _idMeta = const VerificationMeta('id');
-  @override
-  late final GeneratedColumn<String> id = GeneratedColumn<String>(
-    'id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _sourceTableNameMeta = const VerificationMeta(
-    'sourceTableName',
-  );
-  @override
-  late final GeneratedColumn<String> sourceTableName = GeneratedColumn<String>(
-    'source_table_name',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _recordUuidMeta = const VerificationMeta(
-    'recordUuid',
-  );
-  @override
-  late final GeneratedColumn<String> recordUuid = GeneratedColumn<String>(
-    'record_uuid',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _changeTypeMeta = const VerificationMeta(
-    'changeType',
-  );
-  @override
-  late final GeneratedColumn<String> changeType = GeneratedColumn<String>(
-    'change_type',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _changeDataMeta = const VerificationMeta(
-    'changeData',
-  );
-  @override
-  late final GeneratedColumn<String> changeData = GeneratedColumn<String>(
-    'change_data',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _changedAtMeta = const VerificationMeta(
-    'changedAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> changedAt = GeneratedColumn<DateTime>(
-    'changed_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _syncStatusMeta = const VerificationMeta(
-    'syncStatus',
-  );
-  @override
-  late final GeneratedColumn<String> syncStatus = GeneratedColumn<String>(
-    'sync_status',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-    defaultValue: const Constant('pending'),
-  );
-  static const VerificationMeta _deviceIdMeta = const VerificationMeta(
-    'deviceId',
-  );
-  @override
-  late final GeneratedColumn<String> deviceId = GeneratedColumn<String>(
-    'device_id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-    defaultValue: const Constant('local'),
-  );
-  @override
-  List<GeneratedColumn> get $columns => [
-    id,
-    sourceTableName,
-    recordUuid,
-    changeType,
-    changeData,
-    changedAt,
-    syncStatus,
-    deviceId,
-  ];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'sync_change_log';
-  @override
-  VerificationContext validateIntegrity(
-    Insertable<SyncChangeLogData> instance, {
-    bool isInserting = false,
-  }) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('id')) {
-      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
-    } else if (isInserting) {
-      context.missing(_idMeta);
-    }
-    if (data.containsKey('source_table_name')) {
-      context.handle(
-        _sourceTableNameMeta,
-        sourceTableName.isAcceptableOrUnknown(
-          data['source_table_name']!,
-          _sourceTableNameMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_sourceTableNameMeta);
-    }
-    if (data.containsKey('record_uuid')) {
-      context.handle(
-        _recordUuidMeta,
-        recordUuid.isAcceptableOrUnknown(data['record_uuid']!, _recordUuidMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_recordUuidMeta);
-    }
-    if (data.containsKey('change_type')) {
-      context.handle(
-        _changeTypeMeta,
-        changeType.isAcceptableOrUnknown(data['change_type']!, _changeTypeMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_changeTypeMeta);
-    }
-    if (data.containsKey('change_data')) {
-      context.handle(
-        _changeDataMeta,
-        changeData.isAcceptableOrUnknown(data['change_data']!, _changeDataMeta),
-      );
-    }
-    if (data.containsKey('changed_at')) {
-      context.handle(
-        _changedAtMeta,
-        changedAt.isAcceptableOrUnknown(data['changed_at']!, _changedAtMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_changedAtMeta);
-    }
-    if (data.containsKey('sync_status')) {
-      context.handle(
-        _syncStatusMeta,
-        syncStatus.isAcceptableOrUnknown(data['sync_status']!, _syncStatusMeta),
-      );
-    }
-    if (data.containsKey('device_id')) {
-      context.handle(
-        _deviceIdMeta,
-        deviceId.isAcceptableOrUnknown(data['device_id']!, _deviceIdMeta),
-      );
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {id};
-  @override
-  SyncChangeLogData map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return SyncChangeLogData(
-      id: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}id'],
-      )!,
-      sourceTableName: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}source_table_name'],
-      )!,
-      recordUuid: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}record_uuid'],
-      )!,
-      changeType: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}change_type'],
-      )!,
-      changeData: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}change_data'],
-      ),
-      changedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}changed_at'],
-      )!,
-      syncStatus: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}sync_status'],
-      )!,
-      deviceId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}device_id'],
-      )!,
-    );
-  }
-
-  @override
-  $SyncChangeLogTable createAlias(String alias) {
-    return $SyncChangeLogTable(attachedDatabase, alias);
-  }
-}
-
-class SyncChangeLogData extends DataClass
-    implements Insertable<SyncChangeLogData> {
-  final String id;
-  final String sourceTableName;
-  final String recordUuid;
-  final String changeType;
-  final String? changeData;
-  final DateTime changedAt;
-  final String syncStatus;
-  final String deviceId;
-  const SyncChangeLogData({
-    required this.id,
-    required this.sourceTableName,
-    required this.recordUuid,
-    required this.changeType,
-    this.changeData,
-    required this.changedAt,
-    required this.syncStatus,
-    required this.deviceId,
-  });
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['id'] = Variable<String>(id);
-    map['source_table_name'] = Variable<String>(sourceTableName);
-    map['record_uuid'] = Variable<String>(recordUuid);
-    map['change_type'] = Variable<String>(changeType);
-    if (!nullToAbsent || changeData != null) {
-      map['change_data'] = Variable<String>(changeData);
-    }
-    map['changed_at'] = Variable<DateTime>(changedAt);
-    map['sync_status'] = Variable<String>(syncStatus);
-    map['device_id'] = Variable<String>(deviceId);
-    return map;
-  }
-
-  SyncChangeLogCompanion toCompanion(bool nullToAbsent) {
-    return SyncChangeLogCompanion(
-      id: Value(id),
-      sourceTableName: Value(sourceTableName),
-      recordUuid: Value(recordUuid),
-      changeType: Value(changeType),
-      changeData: changeData == null && nullToAbsent
-          ? const Value.absent()
-          : Value(changeData),
-      changedAt: Value(changedAt),
-      syncStatus: Value(syncStatus),
-      deviceId: Value(deviceId),
-    );
-  }
-
-  factory SyncChangeLogData.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return SyncChangeLogData(
-      id: serializer.fromJson<String>(json['id']),
-      sourceTableName: serializer.fromJson<String>(json['sourceTableName']),
-      recordUuid: serializer.fromJson<String>(json['recordUuid']),
-      changeType: serializer.fromJson<String>(json['changeType']),
-      changeData: serializer.fromJson<String?>(json['changeData']),
-      changedAt: serializer.fromJson<DateTime>(json['changedAt']),
-      syncStatus: serializer.fromJson<String>(json['syncStatus']),
-      deviceId: serializer.fromJson<String>(json['deviceId']),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'id': serializer.toJson<String>(id),
-      'sourceTableName': serializer.toJson<String>(sourceTableName),
-      'recordUuid': serializer.toJson<String>(recordUuid),
-      'changeType': serializer.toJson<String>(changeType),
-      'changeData': serializer.toJson<String?>(changeData),
-      'changedAt': serializer.toJson<DateTime>(changedAt),
-      'syncStatus': serializer.toJson<String>(syncStatus),
-      'deviceId': serializer.toJson<String>(deviceId),
-    };
-  }
-
-  SyncChangeLogData copyWith({
-    String? id,
-    String? sourceTableName,
-    String? recordUuid,
-    String? changeType,
-    Value<String?> changeData = const Value.absent(),
-    DateTime? changedAt,
-    String? syncStatus,
-    String? deviceId,
-  }) => SyncChangeLogData(
-    id: id ?? this.id,
-    sourceTableName: sourceTableName ?? this.sourceTableName,
-    recordUuid: recordUuid ?? this.recordUuid,
-    changeType: changeType ?? this.changeType,
-    changeData: changeData.present ? changeData.value : this.changeData,
-    changedAt: changedAt ?? this.changedAt,
-    syncStatus: syncStatus ?? this.syncStatus,
-    deviceId: deviceId ?? this.deviceId,
-  );
-  SyncChangeLogData copyWithCompanion(SyncChangeLogCompanion data) {
-    return SyncChangeLogData(
-      id: data.id.present ? data.id.value : this.id,
-      sourceTableName: data.sourceTableName.present
-          ? data.sourceTableName.value
-          : this.sourceTableName,
-      recordUuid: data.recordUuid.present
-          ? data.recordUuid.value
-          : this.recordUuid,
-      changeType: data.changeType.present
-          ? data.changeType.value
-          : this.changeType,
-      changeData: data.changeData.present
-          ? data.changeData.value
-          : this.changeData,
-      changedAt: data.changedAt.present ? data.changedAt.value : this.changedAt,
-      syncStatus: data.syncStatus.present
-          ? data.syncStatus.value
-          : this.syncStatus,
-      deviceId: data.deviceId.present ? data.deviceId.value : this.deviceId,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('SyncChangeLogData(')
-          ..write('id: $id, ')
-          ..write('sourceTableName: $sourceTableName, ')
-          ..write('recordUuid: $recordUuid, ')
-          ..write('changeType: $changeType, ')
-          ..write('changeData: $changeData, ')
-          ..write('changedAt: $changedAt, ')
-          ..write('syncStatus: $syncStatus, ')
-          ..write('deviceId: $deviceId')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    id,
-    sourceTableName,
-    recordUuid,
-    changeType,
-    changeData,
-    changedAt,
-    syncStatus,
-    deviceId,
-  );
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is SyncChangeLogData &&
-          other.id == this.id &&
-          other.sourceTableName == this.sourceTableName &&
-          other.recordUuid == this.recordUuid &&
-          other.changeType == this.changeType &&
-          other.changeData == this.changeData &&
-          other.changedAt == this.changedAt &&
-          other.syncStatus == this.syncStatus &&
-          other.deviceId == this.deviceId);
-}
-
-class SyncChangeLogCompanion extends UpdateCompanion<SyncChangeLogData> {
-  final Value<String> id;
-  final Value<String> sourceTableName;
-  final Value<String> recordUuid;
-  final Value<String> changeType;
-  final Value<String?> changeData;
-  final Value<DateTime> changedAt;
-  final Value<String> syncStatus;
-  final Value<String> deviceId;
-  final Value<int> rowid;
-  const SyncChangeLogCompanion({
-    this.id = const Value.absent(),
-    this.sourceTableName = const Value.absent(),
-    this.recordUuid = const Value.absent(),
-    this.changeType = const Value.absent(),
-    this.changeData = const Value.absent(),
-    this.changedAt = const Value.absent(),
-    this.syncStatus = const Value.absent(),
-    this.deviceId = const Value.absent(),
-    this.rowid = const Value.absent(),
-  });
-  SyncChangeLogCompanion.insert({
-    required String id,
-    required String sourceTableName,
-    required String recordUuid,
-    required String changeType,
-    this.changeData = const Value.absent(),
-    required DateTime changedAt,
-    this.syncStatus = const Value.absent(),
-    this.deviceId = const Value.absent(),
-    this.rowid = const Value.absent(),
-  }) : id = Value(id),
-       sourceTableName = Value(sourceTableName),
-       recordUuid = Value(recordUuid),
-       changeType = Value(changeType),
-       changedAt = Value(changedAt);
-  static Insertable<SyncChangeLogData> custom({
-    Expression<String>? id,
-    Expression<String>? sourceTableName,
-    Expression<String>? recordUuid,
-    Expression<String>? changeType,
-    Expression<String>? changeData,
-    Expression<DateTime>? changedAt,
-    Expression<String>? syncStatus,
-    Expression<String>? deviceId,
-    Expression<int>? rowid,
-  }) {
-    return RawValuesInsertable({
-      if (id != null) 'id': id,
-      if (sourceTableName != null) 'source_table_name': sourceTableName,
-      if (recordUuid != null) 'record_uuid': recordUuid,
-      if (changeType != null) 'change_type': changeType,
-      if (changeData != null) 'change_data': changeData,
-      if (changedAt != null) 'changed_at': changedAt,
-      if (syncStatus != null) 'sync_status': syncStatus,
-      if (deviceId != null) 'device_id': deviceId,
-      if (rowid != null) 'rowid': rowid,
-    });
-  }
-
-  SyncChangeLogCompanion copyWith({
-    Value<String>? id,
-    Value<String>? sourceTableName,
-    Value<String>? recordUuid,
-    Value<String>? changeType,
-    Value<String?>? changeData,
-    Value<DateTime>? changedAt,
-    Value<String>? syncStatus,
-    Value<String>? deviceId,
-    Value<int>? rowid,
-  }) {
-    return SyncChangeLogCompanion(
-      id: id ?? this.id,
-      sourceTableName: sourceTableName ?? this.sourceTableName,
-      recordUuid: recordUuid ?? this.recordUuid,
-      changeType: changeType ?? this.changeType,
-      changeData: changeData ?? this.changeData,
-      changedAt: changedAt ?? this.changedAt,
-      syncStatus: syncStatus ?? this.syncStatus,
-      deviceId: deviceId ?? this.deviceId,
-      rowid: rowid ?? this.rowid,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (id.present) {
-      map['id'] = Variable<String>(id.value);
-    }
-    if (sourceTableName.present) {
-      map['source_table_name'] = Variable<String>(sourceTableName.value);
-    }
-    if (recordUuid.present) {
-      map['record_uuid'] = Variable<String>(recordUuid.value);
-    }
-    if (changeType.present) {
-      map['change_type'] = Variable<String>(changeType.value);
-    }
-    if (changeData.present) {
-      map['change_data'] = Variable<String>(changeData.value);
-    }
-    if (changedAt.present) {
-      map['changed_at'] = Variable<DateTime>(changedAt.value);
-    }
-    if (syncStatus.present) {
-      map['sync_status'] = Variable<String>(syncStatus.value);
-    }
-    if (deviceId.present) {
-      map['device_id'] = Variable<String>(deviceId.value);
-    }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('SyncChangeLogCompanion(')
-          ..write('id: $id, ')
-          ..write('sourceTableName: $sourceTableName, ')
-          ..write('recordUuid: $recordUuid, ')
-          ..write('changeType: $changeType, ')
-          ..write('changeData: $changeData, ')
-          ..write('changedAt: $changedAt, ')
-          ..write('syncStatus: $syncStatus, ')
-          ..write('deviceId: $deviceId, ')
-          ..write('rowid: $rowid')
-          ..write(')'))
-        .toString();
-  }
-}
-
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -12434,15 +9725,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $GenealogyPersonsTable genealogyPersons = $GenealogyPersonsTable(
     this,
   );
+  late final $EventsTable events = $EventsTable(this);
   late final $SurnameEventsTable surnameEvents = $SurnameEventsTable(this);
   late final $FamiliesV2Table familiesV2 = $FamiliesV2Table(this);
   late final $FamilyChildrenV2Table familyChildrenV2 = $FamilyChildrenV2Table(
     this,
   );
-  late final $PersonsTable persons = $PersonsTable(this);
-  late final $RelationshipsTable relationships = $RelationshipsTable(this);
   late final $MediaItemsTable mediaItems = $MediaItemsTable(this);
-  late final $EventsTable events = $EventsTable(this);
   late final $DuplicateMarkersTable duplicateMarkers = $DuplicateMarkersTable(
     this,
   );
@@ -12450,11 +9739,61 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $CitationLinksTable citationLinks = $CitationLinksTable(this);
   late final $ResearchNotesTable researchNotes = $ResearchNotesTable(this);
   late final $TodosTable todos = $TodosTable(this);
-  late final $SyncChangeLogTable syncChangeLog = $SyncChangeLogTable(this);
+  late final Index idxFamilyTreesRootPerson = Index(
+    'idx_family_trees_root_person',
+    'CREATE INDEX idx_family_trees_root_person ON family_trees (root_person_id)',
+  );
+  late final Index idxGenealogyPersonsTreeId = Index(
+    'idx_genealogy_persons_tree_id',
+    'CREATE INDEX idx_genealogy_persons_tree_id ON genealogy_persons (tree_id)',
+  );
+  late final Index idxGenealogyPersonsMergedInto = Index(
+    'idx_genealogy_persons_merged_into',
+    'CREATE INDEX idx_genealogy_persons_merged_into ON genealogy_persons (merged_into_id)',
+  );
+  late final Index idxSurnameEventsPersonId = Index(
+    'idx_surname_events_person_id',
+    'CREATE INDEX idx_surname_events_person_id ON surname_events (person_id)',
+  );
+  late final Index idxFamiliesV2TreeId = Index(
+    'idx_families_v2_tree_id',
+    'CREATE INDEX idx_families_v2_tree_id ON families_v2 (tree_id)',
+  );
+  late final Index idxFamiliesV2HusbandId = Index(
+    'idx_families_v2_husband_id',
+    'CREATE INDEX idx_families_v2_husband_id ON families_v2 (husband_id)',
+  );
+  late final Index idxFamiliesV2WifeId = Index(
+    'idx_families_v2_wife_id',
+    'CREATE INDEX idx_families_v2_wife_id ON families_v2 (wife_id)',
+  );
+  late final Index idxFamilyChildrenV2ChildId = Index(
+    'idx_family_children_v2_child_id',
+    'CREATE INDEX idx_family_children_v2_child_id ON family_children_v2 (child_id)',
+  );
+  late final Index idxMediaItemsPersonId = Index(
+    'idx_media_items_person_id',
+    'CREATE INDEX idx_media_items_person_id ON media_items (person_id)',
+  );
+  late final Index idxEventsPersonId = Index(
+    'idx_events_person_id',
+    'CREATE INDEX idx_events_person_id ON events (person_id)',
+  );
+  late final Index idxDuplicateMarkersPersonB = Index(
+    'idx_duplicate_markers_person_b',
+    'CREATE INDEX idx_duplicate_markers_person_b ON duplicate_markers (person_b_id)',
+  );
+  late final Index idxResearchNotesPersonId = Index(
+    'idx_research_notes_person_id',
+    'CREATE INDEX idx_research_notes_person_id ON research_notes (person_id)',
+  );
+  late final Index idxTodosPersonId = Index(
+    'idx_todos_person_id',
+    'CREATE INDEX idx_todos_person_id ON todos (person_id)',
+  );
   late final GenealogyPersonDao genealogyPersonDao = GenealogyPersonDao(
     this as AppDatabase,
   );
-  late final PersonDao personDao = PersonDao(this as AppDatabase);
   late final EventsDao eventsDao = EventsDao(this as AppDatabase);
   late final ResearchNotesDao researchNotesDao = ResearchNotesDao(
     this as AppDatabase,
@@ -12466,20 +9805,68 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     familyTrees,
     genealogyPersons,
+    events,
     surnameEvents,
     familiesV2,
     familyChildrenV2,
-    persons,
-    relationships,
     mediaItems,
-    events,
     duplicateMarkers,
     citations,
     citationLinks,
     researchNotes,
     todos,
-    syncChangeLog,
+    idxFamilyTreesRootPerson,
+    idxGenealogyPersonsTreeId,
+    idxGenealogyPersonsMergedInto,
+    idxSurnameEventsPersonId,
+    idxFamiliesV2TreeId,
+    idxFamiliesV2HusbandId,
+    idxFamiliesV2WifeId,
+    idxFamilyChildrenV2ChildId,
+    idxMediaItemsPersonId,
+    idxEventsPersonId,
+    idxDuplicateMarkersPersonB,
+    idxResearchNotesPersonId,
+    idxTodosPersonId,
   ];
+  @override
+  StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'genealogy_persons',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('genealogy_persons', kind: UpdateKind.update)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'genealogy_persons',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('surname_events', kind: UpdateKind.update)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'events',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('surname_events', kind: UpdateKind.update)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'genealogy_persons',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('duplicate_markers', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'genealogy_persons',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('duplicate_markers', kind: UpdateKind.delete)],
+    ),
+  ]);
 }
 
 typedef $$FamilyTreesTableCreateCompanionBuilder =
@@ -12507,38 +9894,40 @@ final class $$FamilyTreesTableReferences
     extends BaseReferences<_$AppDatabase, $FamilyTreesTable, FamilyTree> {
   $$FamilyTreesTableReferences(super.$_db, super.$_table, super.$_typedResult);
 
-  static MultiTypedResultKey<$PersonsTable, List<Person>> _personsRefsTable(
-    _$AppDatabase db,
-  ) => MultiTypedResultKey.fromTable(
-    db.persons,
-    aliasName: $_aliasNameGenerator(db.familyTrees.id, db.persons.treeId),
+  static MultiTypedResultKey<$GenealogyPersonsTable, List<GenealogyPerson>>
+  _personsInTreeTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.genealogyPersons,
+    aliasName: $_aliasNameGenerator(
+      db.familyTrees.id,
+      db.genealogyPersons.treeId,
+    ),
   );
 
-  $$PersonsTableProcessedTableManager get personsRefs {
-    final manager = $$PersonsTableTableManager(
+  $$GenealogyPersonsTableProcessedTableManager get personsInTree {
+    final manager = $$GenealogyPersonsTableTableManager(
       $_db,
-      $_db.persons,
+      $_db.genealogyPersons,
     ).filter((f) => f.treeId.id.sqlEquals($_itemColumn<String>('id')!));
 
-    final cache = $_typedResult.readTableOrNull(_personsRefsTable($_db));
+    final cache = $_typedResult.readTableOrNull(_personsInTreeTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
 
-  static MultiTypedResultKey<$RelationshipsTable, List<Relationship>>
-  _relationshipsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
-    db.relationships,
-    aliasName: $_aliasNameGenerator(db.familyTrees.id, db.relationships.treeId),
+  static MultiTypedResultKey<$FamiliesV2Table, List<FamiliesV2Data>>
+  _familiesInTreeTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.familiesV2,
+    aliasName: $_aliasNameGenerator(db.familyTrees.id, db.familiesV2.treeId),
   );
 
-  $$RelationshipsTableProcessedTableManager get relationshipsRefs {
-    final manager = $$RelationshipsTableTableManager(
+  $$FamiliesV2TableProcessedTableManager get familiesInTree {
+    final manager = $$FamiliesV2TableTableManager(
       $_db,
-      $_db.relationships,
+      $_db.familiesV2,
     ).filter((f) => f.treeId.id.sqlEquals($_itemColumn<String>('id')!));
 
-    final cache = $_typedResult.readTableOrNull(_relationshipsRefsTable($_db));
+    final cache = $_typedResult.readTableOrNull(_familiesInTreeTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -12584,22 +9973,22 @@ class $$FamilyTreesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  Expression<bool> personsRefs(
-    Expression<bool> Function($$PersonsTableFilterComposer f) f,
+  Expression<bool> personsInTree(
+    Expression<bool> Function($$GenealogyPersonsTableFilterComposer f) f,
   ) {
-    final $$PersonsTableFilterComposer composer = $composerBuilder(
+    final $$GenealogyPersonsTableFilterComposer composer = $composerBuilder(
       composer: this,
       getCurrentColumn: (t) => t.id,
-      referencedTable: $db.persons,
+      referencedTable: $db.genealogyPersons,
       getReferencedColumn: (t) => t.treeId,
       builder:
           (
             joinBuilder, {
             $addJoinBuilderToRootComposer,
             $removeJoinBuilderFromRootComposer,
-          }) => $$PersonsTableFilterComposer(
+          }) => $$GenealogyPersonsTableFilterComposer(
             $db: $db,
-            $table: $db.persons,
+            $table: $db.genealogyPersons,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -12609,22 +9998,22 @@ class $$FamilyTreesTableFilterComposer
     return f(composer);
   }
 
-  Expression<bool> relationshipsRefs(
-    Expression<bool> Function($$RelationshipsTableFilterComposer f) f,
+  Expression<bool> familiesInTree(
+    Expression<bool> Function($$FamiliesV2TableFilterComposer f) f,
   ) {
-    final $$RelationshipsTableFilterComposer composer = $composerBuilder(
+    final $$FamiliesV2TableFilterComposer composer = $composerBuilder(
       composer: this,
       getCurrentColumn: (t) => t.id,
-      referencedTable: $db.relationships,
+      referencedTable: $db.familiesV2,
       getReferencedColumn: (t) => t.treeId,
       builder:
           (
             joinBuilder, {
             $addJoinBuilderToRootComposer,
             $removeJoinBuilderFromRootComposer,
-          }) => $$RelationshipsTableFilterComposer(
+          }) => $$FamiliesV2TableFilterComposer(
             $db: $db,
-            $table: $db.relationships,
+            $table: $db.familiesV2,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -12706,22 +10095,22 @@ class $$FamilyTreesTableAnnotationComposer
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
-  Expression<T> personsRefs<T extends Object>(
-    Expression<T> Function($$PersonsTableAnnotationComposer a) f,
+  Expression<T> personsInTree<T extends Object>(
+    Expression<T> Function($$GenealogyPersonsTableAnnotationComposer a) f,
   ) {
-    final $$PersonsTableAnnotationComposer composer = $composerBuilder(
+    final $$GenealogyPersonsTableAnnotationComposer composer = $composerBuilder(
       composer: this,
       getCurrentColumn: (t) => t.id,
-      referencedTable: $db.persons,
+      referencedTable: $db.genealogyPersons,
       getReferencedColumn: (t) => t.treeId,
       builder:
           (
             joinBuilder, {
             $addJoinBuilderToRootComposer,
             $removeJoinBuilderFromRootComposer,
-          }) => $$PersonsTableAnnotationComposer(
+          }) => $$GenealogyPersonsTableAnnotationComposer(
             $db: $db,
-            $table: $db.persons,
+            $table: $db.genealogyPersons,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -12731,22 +10120,22 @@ class $$FamilyTreesTableAnnotationComposer
     return f(composer);
   }
 
-  Expression<T> relationshipsRefs<T extends Object>(
-    Expression<T> Function($$RelationshipsTableAnnotationComposer a) f,
+  Expression<T> familiesInTree<T extends Object>(
+    Expression<T> Function($$FamiliesV2TableAnnotationComposer a) f,
   ) {
-    final $$RelationshipsTableAnnotationComposer composer = $composerBuilder(
+    final $$FamiliesV2TableAnnotationComposer composer = $composerBuilder(
       composer: this,
       getCurrentColumn: (t) => t.id,
-      referencedTable: $db.relationships,
+      referencedTable: $db.familiesV2,
       getReferencedColumn: (t) => t.treeId,
       builder:
           (
             joinBuilder, {
             $addJoinBuilderToRootComposer,
             $removeJoinBuilderFromRootComposer,
-          }) => $$RelationshipsTableAnnotationComposer(
+          }) => $$FamiliesV2TableAnnotationComposer(
             $db: $db,
-            $table: $db.relationships,
+            $table: $db.familiesV2,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -12770,7 +10159,7 @@ class $$FamilyTreesTableTableManager
           $$FamilyTreesTableUpdateCompanionBuilder,
           (FamilyTree, $$FamilyTreesTableReferences),
           FamilyTree,
-          PrefetchHooks Function({bool personsRefs, bool relationshipsRefs})
+          PrefetchHooks Function({bool personsInTree, bool familiesInTree})
         > {
   $$FamilyTreesTableTableManager(_$AppDatabase db, $FamilyTreesTable table)
     : super(
@@ -12828,52 +10217,52 @@ class $$FamilyTreesTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({personsRefs = false, relationshipsRefs = false}) {
+              ({personsInTree = false, familiesInTree = false}) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
-                    if (personsRefs) db.persons,
-                    if (relationshipsRefs) db.relationships,
+                    if (personsInTree) db.genealogyPersons,
+                    if (familiesInTree) db.familiesV2,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
                     return [
-                      if (personsRefs)
+                      if (personsInTree)
                         await $_getPrefetchedData<
                           FamilyTree,
                           $FamilyTreesTable,
-                          Person
+                          GenealogyPerson
                         >(
                           currentTable: table,
                           referencedTable: $$FamilyTreesTableReferences
-                              ._personsRefsTable(db),
+                              ._personsInTreeTable(db),
                           managerFromTypedResult: (p0) =>
                               $$FamilyTreesTableReferences(
                                 db,
                                 table,
                                 p0,
-                              ).personsRefs,
+                              ).personsInTree,
                           referencedItemsForCurrentItem:
                               (item, referencedItems) => referencedItems.where(
                                 (e) => e.treeId == item.id,
                               ),
                           typedResults: items,
                         ),
-                      if (relationshipsRefs)
+                      if (familiesInTree)
                         await $_getPrefetchedData<
                           FamilyTree,
                           $FamilyTreesTable,
-                          Relationship
+                          FamiliesV2Data
                         >(
                           currentTable: table,
                           referencedTable: $$FamilyTreesTableReferences
-                              ._relationshipsRefsTable(db),
+                              ._familiesInTreeTable(db),
                           managerFromTypedResult: (p0) =>
                               $$FamilyTreesTableReferences(
                                 db,
                                 table,
                                 p0,
-                              ).relationshipsRefs,
+                              ).familiesInTree,
                           referencedItemsForCurrentItem:
                               (item, referencedItems) => referencedItems.where(
                                 (e) => e.treeId == item.id,
@@ -12900,7 +10289,7 @@ typedef $$FamilyTreesTableProcessedTableManager =
       $$FamilyTreesTableUpdateCompanionBuilder,
       (FamilyTree, $$FamilyTreesTableReferences),
       FamilyTree,
-      PrefetchHooks Function({bool personsRefs, bool relationshipsRefs})
+      PrefetchHooks Function({bool personsInTree, bool familiesInTree})
     >;
 typedef $$GenealogyPersonsTableCreateCompanionBuilder =
     GenealogyPersonsCompanion Function({
@@ -12938,12 +10327,9 @@ typedef $$GenealogyPersonsTableCreateCompanionBuilder =
       Value<int> privacyLevel,
       required String treeId,
       required String uuid,
-      Value<String> syncStatus,
       Value<bool> isDeleted,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
-      Value<DateTime?> lastSyncedAt,
-      Value<int> version,
       Value<String?> mergedIntoId,
       Value<int> rowid,
     });
@@ -12983,12 +10369,9 @@ typedef $$GenealogyPersonsTableUpdateCompanionBuilder =
       Value<int> privacyLevel,
       Value<String> treeId,
       Value<String> uuid,
-      Value<String> syncStatus,
       Value<bool> isDeleted,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
-      Value<DateTime?> lastSyncedAt,
-      Value<int> version,
       Value<String?> mergedIntoId,
       Value<int> rowid,
     });
@@ -13001,6 +10384,66 @@ final class $$GenealogyPersonsTableReferences
     super.$_table,
     super.$_typedResult,
   );
+
+  static $FamilyTreesTable _treeIdTable(_$AppDatabase db) =>
+      db.familyTrees.createAlias(
+        $_aliasNameGenerator(db.genealogyPersons.treeId, db.familyTrees.id),
+      );
+
+  $$FamilyTreesTableProcessedTableManager get treeId {
+    final $_column = $_itemColumn<String>('tree_id')!;
+
+    final manager = $$FamilyTreesTableTableManager(
+      $_db,
+      $_db.familyTrees,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_treeIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $GenealogyPersonsTable _mergedIntoIdTable(_$AppDatabase db) =>
+      db.genealogyPersons.createAlias(
+        $_aliasNameGenerator(
+          db.genealogyPersons.mergedIntoId,
+          db.genealogyPersons.id,
+        ),
+      );
+
+  $$GenealogyPersonsTableProcessedTableManager? get mergedIntoId {
+    final $_column = $_itemColumn<String>('merged_into_id');
+    if ($_column == null) return null;
+    final manager = $$GenealogyPersonsTableTableManager(
+      $_db,
+      $_db.genealogyPersons,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_mergedIntoIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<$EventsTable, List<Event>> _eventsRefsTable(
+    _$AppDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.events,
+    aliasName: $_aliasNameGenerator(db.genealogyPersons.id, db.events.personId),
+  );
+
+  $$EventsTableProcessedTableManager get eventsRefs {
+    final manager = $$EventsTableTableManager(
+      $_db,
+      $_db.events,
+    ).filter((f) => f.personId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_eventsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 
   static MultiTypedResultKey<$SurnameEventsTable, List<SurnameEvent>>
   _surnameEventsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
@@ -13018,6 +10461,27 @@ final class $$GenealogyPersonsTableReferences
     ).filter((f) => f.personId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_surnameEventsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$SurnameEventsTable, List<SurnameEvent>>
+  _surnameEventsAboutTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.surnameEvents,
+    aliasName: $_aliasNameGenerator(
+      db.genealogyPersons.id,
+      db.surnameEvents.relatedPersonId,
+    ),
+  );
+
+  $$SurnameEventsTableProcessedTableManager get surnameEventsAbout {
+    final manager = $$SurnameEventsTableTableManager($_db, $_db.surnameEvents)
+        .filter(
+          (f) => f.relatedPersonId.id.sqlEquals($_itemColumn<String>('id')!),
+        );
+
+    final cache = $_typedResult.readTableOrNull(_surnameEventsAboutTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -13102,25 +10566,6 @@ final class $$GenealogyPersonsTableReferences
     ).filter((f) => f.personId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_mediaItemsRefsTable($_db));
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: cache),
-    );
-  }
-
-  static MultiTypedResultKey<$EventsTable, List<Event>> _eventsRefsTable(
-    _$AppDatabase db,
-  ) => MultiTypedResultKey.fromTable(
-    db.events,
-    aliasName: $_aliasNameGenerator(db.genealogyPersons.id, db.events.personId),
-  );
-
-  $$EventsTableProcessedTableManager get eventsRefs {
-    final manager = $$EventsTableTableManager(
-      $_db,
-      $_db.events,
-    ).filter((f) => f.personId.id.sqlEquals($_itemColumn<String>('id')!));
-
-    final cache = $_typedResult.readTableOrNull(_eventsRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -13336,18 +10781,8 @@ class $$GenealogyPersonsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get treeId => $composableBuilder(
-    column: $table.treeId,
-    builder: (column) => ColumnFilters(column),
-  );
-
   ColumnFilters<String> get uuid => $composableBuilder(
     column: $table.uuid,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get syncStatus => $composableBuilder(
-    column: $table.syncStatus,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -13366,20 +10801,76 @@ class $$GenealogyPersonsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<DateTime> get lastSyncedAt => $composableBuilder(
-    column: $table.lastSyncedAt,
-    builder: (column) => ColumnFilters(column),
-  );
+  $$FamilyTreesTableFilterComposer get treeId {
+    final $$FamilyTreesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.treeId,
+      referencedTable: $db.familyTrees,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FamilyTreesTableFilterComposer(
+            $db: $db,
+            $table: $db.familyTrees,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 
-  ColumnFilters<int> get version => $composableBuilder(
-    column: $table.version,
-    builder: (column) => ColumnFilters(column),
-  );
+  $$GenealogyPersonsTableFilterComposer get mergedIntoId {
+    final $$GenealogyPersonsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.mergedIntoId,
+      referencedTable: $db.genealogyPersons,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GenealogyPersonsTableFilterComposer(
+            $db: $db,
+            $table: $db.genealogyPersons,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 
-  ColumnFilters<String> get mergedIntoId => $composableBuilder(
-    column: $table.mergedIntoId,
-    builder: (column) => ColumnFilters(column),
-  );
+  Expression<bool> eventsRefs(
+    Expression<bool> Function($$EventsTableFilterComposer f) f,
+  ) {
+    final $$EventsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.events,
+      getReferencedColumn: (t) => t.personId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$EventsTableFilterComposer(
+            $db: $db,
+            $table: $db.events,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 
   Expression<bool> surnameEventsRefs(
     Expression<bool> Function($$SurnameEventsTableFilterComposer f) f,
@@ -13389,6 +10880,31 @@ class $$GenealogyPersonsTableFilterComposer
       getCurrentColumn: (t) => t.id,
       referencedTable: $db.surnameEvents,
       getReferencedColumn: (t) => t.personId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SurnameEventsTableFilterComposer(
+            $db: $db,
+            $table: $db.surnameEvents,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> surnameEventsAbout(
+    Expression<bool> Function($$SurnameEventsTableFilterComposer f) f,
+  ) {
+    final $$SurnameEventsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.surnameEvents,
+      getReferencedColumn: (t) => t.relatedPersonId,
       builder:
           (
             joinBuilder, {
@@ -13497,31 +11013,6 @@ class $$GenealogyPersonsTableFilterComposer
           }) => $$MediaItemsTableFilterComposer(
             $db: $db,
             $table: $db.mediaItems,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-
-  Expression<bool> eventsRefs(
-    Expression<bool> Function($$EventsTableFilterComposer f) f,
-  ) {
-    final $$EventsTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.events,
-      getReferencedColumn: (t) => t.personId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$EventsTableFilterComposer(
-            $db: $db,
-            $table: $db.events,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -13751,18 +11242,8 @@ class $$GenealogyPersonsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get treeId => $composableBuilder(
-    column: $table.treeId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<String> get uuid => $composableBuilder(
     column: $table.uuid,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get syncStatus => $composableBuilder(
-    column: $table.syncStatus,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -13781,20 +11262,51 @@ class $$GenealogyPersonsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<DateTime> get lastSyncedAt => $composableBuilder(
-    column: $table.lastSyncedAt,
-    builder: (column) => ColumnOrderings(column),
-  );
+  $$FamilyTreesTableOrderingComposer get treeId {
+    final $$FamilyTreesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.treeId,
+      referencedTable: $db.familyTrees,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FamilyTreesTableOrderingComposer(
+            $db: $db,
+            $table: $db.familyTrees,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 
-  ColumnOrderings<int> get version => $composableBuilder(
-    column: $table.version,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get mergedIntoId => $composableBuilder(
-    column: $table.mergedIntoId,
-    builder: (column) => ColumnOrderings(column),
-  );
+  $$GenealogyPersonsTableOrderingComposer get mergedIntoId {
+    final $$GenealogyPersonsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.mergedIntoId,
+      referencedTable: $db.genealogyPersons,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GenealogyPersonsTableOrderingComposer(
+            $db: $db,
+            $table: $db.genealogyPersons,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$GenealogyPersonsTableAnnotationComposer
@@ -13936,16 +11448,8 @@ class $$GenealogyPersonsTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get treeId =>
-      $composableBuilder(column: $table.treeId, builder: (column) => column);
-
   GeneratedColumn<String> get uuid =>
       $composableBuilder(column: $table.uuid, builder: (column) => column);
-
-  GeneratedColumn<String> get syncStatus => $composableBuilder(
-    column: $table.syncStatus,
-    builder: (column) => column,
-  );
 
   GeneratedColumn<bool> get isDeleted =>
       $composableBuilder(column: $table.isDeleted, builder: (column) => column);
@@ -13956,18 +11460,76 @@ class $$GenealogyPersonsTableAnnotationComposer
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get lastSyncedAt => $composableBuilder(
-    column: $table.lastSyncedAt,
-    builder: (column) => column,
-  );
+  $$FamilyTreesTableAnnotationComposer get treeId {
+    final $$FamilyTreesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.treeId,
+      referencedTable: $db.familyTrees,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FamilyTreesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.familyTrees,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 
-  GeneratedColumn<int> get version =>
-      $composableBuilder(column: $table.version, builder: (column) => column);
+  $$GenealogyPersonsTableAnnotationComposer get mergedIntoId {
+    final $$GenealogyPersonsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.mergedIntoId,
+      referencedTable: $db.genealogyPersons,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GenealogyPersonsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.genealogyPersons,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 
-  GeneratedColumn<String> get mergedIntoId => $composableBuilder(
-    column: $table.mergedIntoId,
-    builder: (column) => column,
-  );
+  Expression<T> eventsRefs<T extends Object>(
+    Expression<T> Function($$EventsTableAnnotationComposer a) f,
+  ) {
+    final $$EventsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.events,
+      getReferencedColumn: (t) => t.personId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$EventsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.events,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 
   Expression<T> surnameEventsRefs<T extends Object>(
     Expression<T> Function($$SurnameEventsTableAnnotationComposer a) f,
@@ -13977,6 +11539,31 @@ class $$GenealogyPersonsTableAnnotationComposer
       getCurrentColumn: (t) => t.id,
       referencedTable: $db.surnameEvents,
       getReferencedColumn: (t) => t.personId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SurnameEventsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.surnameEvents,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> surnameEventsAbout<T extends Object>(
+    Expression<T> Function($$SurnameEventsTableAnnotationComposer a) f,
+  ) {
+    final $$SurnameEventsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.surnameEvents,
+      getReferencedColumn: (t) => t.relatedPersonId,
       builder:
           (
             joinBuilder, {
@@ -14094,31 +11681,6 @@ class $$GenealogyPersonsTableAnnotationComposer
     return f(composer);
   }
 
-  Expression<T> eventsRefs<T extends Object>(
-    Expression<T> Function($$EventsTableAnnotationComposer a) f,
-  ) {
-    final $$EventsTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.events,
-      getReferencedColumn: (t) => t.personId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$EventsTableAnnotationComposer(
-            $db: $db,
-            $table: $db.events,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-
   Expression<T> researchNotesRefs<T extends Object>(
     Expression<T> Function($$ResearchNotesTableAnnotationComposer a) f,
   ) {
@@ -14184,12 +11746,15 @@ class $$GenealogyPersonsTableTableManager
           (GenealogyPerson, $$GenealogyPersonsTableReferences),
           GenealogyPerson,
           PrefetchHooks Function({
+            bool treeId,
+            bool mergedIntoId,
+            bool eventsRefs,
             bool surnameEventsRefs,
+            bool surnameEventsAbout,
             bool husbandFamilies,
             bool wifeFamilies,
             bool childFamilyLinks,
             bool mediaItemsRefs,
-            bool eventsRefs,
             bool researchNotesRefs,
             bool todosRefs,
           })
@@ -14243,12 +11808,9 @@ class $$GenealogyPersonsTableTableManager
                 Value<int> privacyLevel = const Value.absent(),
                 Value<String> treeId = const Value.absent(),
                 Value<String> uuid = const Value.absent(),
-                Value<String> syncStatus = const Value.absent(),
                 Value<bool> isDeleted = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
-                Value<DateTime?> lastSyncedAt = const Value.absent(),
-                Value<int> version = const Value.absent(),
                 Value<String?> mergedIntoId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => GenealogyPersonsCompanion(
@@ -14286,12 +11848,9 @@ class $$GenealogyPersonsTableTableManager
                 privacyLevel: privacyLevel,
                 treeId: treeId,
                 uuid: uuid,
-                syncStatus: syncStatus,
                 isDeleted: isDeleted,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
-                lastSyncedAt: lastSyncedAt,
-                version: version,
                 mergedIntoId: mergedIntoId,
                 rowid: rowid,
               ),
@@ -14331,12 +11890,9 @@ class $$GenealogyPersonsTableTableManager
                 Value<int> privacyLevel = const Value.absent(),
                 required String treeId,
                 required String uuid,
-                Value<String> syncStatus = const Value.absent(),
                 Value<bool> isDeleted = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
-                Value<DateTime?> lastSyncedAt = const Value.absent(),
-                Value<int> version = const Value.absent(),
                 Value<String?> mergedIntoId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => GenealogyPersonsCompanion.insert(
@@ -14374,12 +11930,9 @@ class $$GenealogyPersonsTableTableManager
                 privacyLevel: privacyLevel,
                 treeId: treeId,
                 uuid: uuid,
-                syncStatus: syncStatus,
                 isDeleted: isDeleted,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
-                lastSyncedAt: lastSyncedAt,
-                version: version,
                 mergedIntoId: mergedIntoId,
                 rowid: rowid,
               ),
@@ -14393,30 +11946,103 @@ class $$GenealogyPersonsTableTableManager
               .toList(),
           prefetchHooksCallback:
               ({
+                treeId = false,
+                mergedIntoId = false,
+                eventsRefs = false,
                 surnameEventsRefs = false,
+                surnameEventsAbout = false,
                 husbandFamilies = false,
                 wifeFamilies = false,
                 childFamilyLinks = false,
                 mediaItemsRefs = false,
-                eventsRefs = false,
                 researchNotesRefs = false,
                 todosRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
+                    if (eventsRefs) db.events,
                     if (surnameEventsRefs) db.surnameEvents,
+                    if (surnameEventsAbout) db.surnameEvents,
                     if (husbandFamilies) db.familiesV2,
                     if (wifeFamilies) db.familiesV2,
                     if (childFamilyLinks) db.familyChildrenV2,
                     if (mediaItemsRefs) db.mediaItems,
-                    if (eventsRefs) db.events,
                     if (researchNotesRefs) db.researchNotes,
                     if (todosRefs) db.todos,
                   ],
-                  addJoins: null,
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (treeId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.treeId,
+                                    referencedTable:
+                                        $$GenealogyPersonsTableReferences
+                                            ._treeIdTable(db),
+                                    referencedColumn:
+                                        $$GenealogyPersonsTableReferences
+                                            ._treeIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (mergedIntoId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.mergedIntoId,
+                                    referencedTable:
+                                        $$GenealogyPersonsTableReferences
+                                            ._mergedIntoIdTable(db),
+                                    referencedColumn:
+                                        $$GenealogyPersonsTableReferences
+                                            ._mergedIntoIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
                   getPrefetchedDataCallback: (items) async {
                     return [
+                      if (eventsRefs)
+                        await $_getPrefetchedData<
+                          GenealogyPerson,
+                          $GenealogyPersonsTable,
+                          Event
+                        >(
+                          currentTable: table,
+                          referencedTable: $$GenealogyPersonsTableReferences
+                              ._eventsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$GenealogyPersonsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).eventsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.personId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                       if (surnameEventsRefs)
                         await $_getPrefetchedData<
                           GenealogyPerson,
@@ -14435,6 +12061,27 @@ class $$GenealogyPersonsTableTableManager
                           referencedItemsForCurrentItem:
                               (item, referencedItems) => referencedItems.where(
                                 (e) => e.personId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (surnameEventsAbout)
+                        await $_getPrefetchedData<
+                          GenealogyPerson,
+                          $GenealogyPersonsTable,
+                          SurnameEvent
+                        >(
+                          currentTable: table,
+                          referencedTable: $$GenealogyPersonsTableReferences
+                              ._surnameEventsAboutTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$GenealogyPersonsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).surnameEventsAbout,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.relatedPersonId == item.id,
                               ),
                           typedResults: items,
                         ),
@@ -14522,27 +12169,6 @@ class $$GenealogyPersonsTableTableManager
                               ),
                           typedResults: items,
                         ),
-                      if (eventsRefs)
-                        await $_getPrefetchedData<
-                          GenealogyPerson,
-                          $GenealogyPersonsTable,
-                          Event
-                        >(
-                          currentTable: table,
-                          referencedTable: $$GenealogyPersonsTableReferences
-                              ._eventsRefsTable(db),
-                          managerFromTypedResult: (p0) =>
-                              $$GenealogyPersonsTableReferences(
-                                db,
-                                table,
-                                p0,
-                              ).eventsRefs,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.personId == item.id,
-                              ),
-                          typedResults: items,
-                        ),
                       if (researchNotesRefs)
                         await $_getPrefetchedData<
                           GenealogyPerson,
@@ -14606,15 +12232,568 @@ typedef $$GenealogyPersonsTableProcessedTableManager =
       (GenealogyPerson, $$GenealogyPersonsTableReferences),
       GenealogyPerson,
       PrefetchHooks Function({
+        bool treeId,
+        bool mergedIntoId,
+        bool eventsRefs,
         bool surnameEventsRefs,
+        bool surnameEventsAbout,
         bool husbandFamilies,
         bool wifeFamilies,
         bool childFamilyLinks,
         bool mediaItemsRefs,
-        bool eventsRefs,
         bool researchNotesRefs,
         bool todosRefs,
       })
+    >;
+typedef $$EventsTableCreateCompanionBuilder =
+    EventsCompanion Function({
+      required String id,
+      required String personId,
+      required String eventType,
+      Value<double?> dateSort,
+      Value<String?> dateDisplay,
+      Value<String?> place,
+      Value<String?> description,
+      Value<bool> isPrimary,
+      Value<double?> latitude,
+      Value<double?> longitude,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$EventsTableUpdateCompanionBuilder =
+    EventsCompanion Function({
+      Value<String> id,
+      Value<String> personId,
+      Value<String> eventType,
+      Value<double?> dateSort,
+      Value<String?> dateDisplay,
+      Value<String?> place,
+      Value<String?> description,
+      Value<bool> isPrimary,
+      Value<double?> latitude,
+      Value<double?> longitude,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+final class $$EventsTableReferences
+    extends BaseReferences<_$AppDatabase, $EventsTable, Event> {
+  $$EventsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $GenealogyPersonsTable _personIdTable(_$AppDatabase db) =>
+      db.genealogyPersons.createAlias(
+        $_aliasNameGenerator(db.events.personId, db.genealogyPersons.id),
+      );
+
+  $$GenealogyPersonsTableProcessedTableManager get personId {
+    final $_column = $_itemColumn<String>('person_id')!;
+
+    final manager = $$GenealogyPersonsTableTableManager(
+      $_db,
+      $_db.genealogyPersons,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_personIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<$SurnameEventsTable, List<SurnameEvent>>
+  _surnameEventsFromTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.surnameEvents,
+    aliasName: $_aliasNameGenerator(
+      db.events.id,
+      db.surnameEvents.relatedEventId,
+    ),
+  );
+
+  $$SurnameEventsTableProcessedTableManager get surnameEventsFrom {
+    final manager = $$SurnameEventsTableTableManager(
+      $_db,
+      $_db.surnameEvents,
+    ).filter((f) => f.relatedEventId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_surnameEventsFromTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$EventsTableFilterComposer
+    extends Composer<_$AppDatabase, $EventsTable> {
+  $$EventsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get eventType => $composableBuilder(
+    column: $table.eventType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get dateSort => $composableBuilder(
+    column: $table.dateSort,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get dateDisplay => $composableBuilder(
+    column: $table.dateDisplay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get place => $composableBuilder(
+    column: $table.place,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isPrimary => $composableBuilder(
+    column: $table.isPrimary,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get latitude => $composableBuilder(
+    column: $table.latitude,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get longitude => $composableBuilder(
+    column: $table.longitude,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$GenealogyPersonsTableFilterComposer get personId {
+    final $$GenealogyPersonsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.personId,
+      referencedTable: $db.genealogyPersons,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GenealogyPersonsTableFilterComposer(
+            $db: $db,
+            $table: $db.genealogyPersons,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<bool> surnameEventsFrom(
+    Expression<bool> Function($$SurnameEventsTableFilterComposer f) f,
+  ) {
+    final $$SurnameEventsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.surnameEvents,
+      getReferencedColumn: (t) => t.relatedEventId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SurnameEventsTableFilterComposer(
+            $db: $db,
+            $table: $db.surnameEvents,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$EventsTableOrderingComposer
+    extends Composer<_$AppDatabase, $EventsTable> {
+  $$EventsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get eventType => $composableBuilder(
+    column: $table.eventType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get dateSort => $composableBuilder(
+    column: $table.dateSort,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get dateDisplay => $composableBuilder(
+    column: $table.dateDisplay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get place => $composableBuilder(
+    column: $table.place,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isPrimary => $composableBuilder(
+    column: $table.isPrimary,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get latitude => $composableBuilder(
+    column: $table.latitude,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get longitude => $composableBuilder(
+    column: $table.longitude,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$GenealogyPersonsTableOrderingComposer get personId {
+    final $$GenealogyPersonsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.personId,
+      referencedTable: $db.genealogyPersons,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GenealogyPersonsTableOrderingComposer(
+            $db: $db,
+            $table: $db.genealogyPersons,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$EventsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $EventsTable> {
+  $$EventsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get eventType =>
+      $composableBuilder(column: $table.eventType, builder: (column) => column);
+
+  GeneratedColumn<double> get dateSort =>
+      $composableBuilder(column: $table.dateSort, builder: (column) => column);
+
+  GeneratedColumn<String> get dateDisplay => $composableBuilder(
+    column: $table.dateDisplay,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get place =>
+      $composableBuilder(column: $table.place, builder: (column) => column);
+
+  GeneratedColumn<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isPrimary =>
+      $composableBuilder(column: $table.isPrimary, builder: (column) => column);
+
+  GeneratedColumn<double> get latitude =>
+      $composableBuilder(column: $table.latitude, builder: (column) => column);
+
+  GeneratedColumn<double> get longitude =>
+      $composableBuilder(column: $table.longitude, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$GenealogyPersonsTableAnnotationComposer get personId {
+    final $$GenealogyPersonsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.personId,
+      referencedTable: $db.genealogyPersons,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GenealogyPersonsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.genealogyPersons,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<T> surnameEventsFrom<T extends Object>(
+    Expression<T> Function($$SurnameEventsTableAnnotationComposer a) f,
+  ) {
+    final $$SurnameEventsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.surnameEvents,
+      getReferencedColumn: (t) => t.relatedEventId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$SurnameEventsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.surnameEvents,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$EventsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $EventsTable,
+          Event,
+          $$EventsTableFilterComposer,
+          $$EventsTableOrderingComposer,
+          $$EventsTableAnnotationComposer,
+          $$EventsTableCreateCompanionBuilder,
+          $$EventsTableUpdateCompanionBuilder,
+          (Event, $$EventsTableReferences),
+          Event,
+          PrefetchHooks Function({bool personId, bool surnameEventsFrom})
+        > {
+  $$EventsTableTableManager(_$AppDatabase db, $EventsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$EventsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$EventsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$EventsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> personId = const Value.absent(),
+                Value<String> eventType = const Value.absent(),
+                Value<double?> dateSort = const Value.absent(),
+                Value<String?> dateDisplay = const Value.absent(),
+                Value<String?> place = const Value.absent(),
+                Value<String?> description = const Value.absent(),
+                Value<bool> isPrimary = const Value.absent(),
+                Value<double?> latitude = const Value.absent(),
+                Value<double?> longitude = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => EventsCompanion(
+                id: id,
+                personId: personId,
+                eventType: eventType,
+                dateSort: dateSort,
+                dateDisplay: dateDisplay,
+                place: place,
+                description: description,
+                isPrimary: isPrimary,
+                latitude: latitude,
+                longitude: longitude,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String personId,
+                required String eventType,
+                Value<double?> dateSort = const Value.absent(),
+                Value<String?> dateDisplay = const Value.absent(),
+                Value<String?> place = const Value.absent(),
+                Value<String?> description = const Value.absent(),
+                Value<bool> isPrimary = const Value.absent(),
+                Value<double?> latitude = const Value.absent(),
+                Value<double?> longitude = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => EventsCompanion.insert(
+                id: id,
+                personId: personId,
+                eventType: eventType,
+                dateSort: dateSort,
+                dateDisplay: dateDisplay,
+                place: place,
+                description: description,
+                isPrimary: isPrimary,
+                latitude: latitude,
+                longitude: longitude,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) =>
+                    (e.readTable(table), $$EventsTableReferences(db, table, e)),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({personId = false, surnameEventsFrom = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (surnameEventsFrom) db.surnameEvents,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (personId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.personId,
+                                    referencedTable: $$EventsTableReferences
+                                        ._personIdTable(db),
+                                    referencedColumn: $$EventsTableReferences
+                                        ._personIdTable(db)
+                                        .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (surnameEventsFrom)
+                        await $_getPrefetchedData<
+                          Event,
+                          $EventsTable,
+                          SurnameEvent
+                        >(
+                          currentTable: table,
+                          referencedTable: $$EventsTableReferences
+                              ._surnameEventsFromTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$EventsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).surnameEventsFrom,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.relatedEventId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$EventsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $EventsTable,
+      Event,
+      $$EventsTableFilterComposer,
+      $$EventsTableOrderingComposer,
+      $$EventsTableAnnotationComposer,
+      $$EventsTableCreateCompanionBuilder,
+      $$EventsTableUpdateCompanionBuilder,
+      (Event, $$EventsTableReferences),
+      Event,
+      PrefetchHooks Function({bool personId, bool surnameEventsFrom})
     >;
 typedef $$SurnameEventsTableCreateCompanionBuilder =
     SurnameEventsCompanion Function({
@@ -14626,15 +12805,14 @@ typedef $$SurnameEventsTableCreateCompanionBuilder =
       Value<String?> startDateQualifier,
       Value<String?> endDate,
       Value<String?> endDateQualifier,
-      Value<String?> relatedEventId,
       Value<String?> relatedPersonId,
+      Value<String?> relatedEventId,
       Value<String?> location,
       Value<String?> legalDocument,
       Value<String?> notes,
       Value<int> sortOrder,
       Value<bool> isPrimary,
       required String uuid,
-      Value<String> syncStatus,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -14649,15 +12827,14 @@ typedef $$SurnameEventsTableUpdateCompanionBuilder =
       Value<String?> startDateQualifier,
       Value<String?> endDate,
       Value<String?> endDateQualifier,
-      Value<String?> relatedEventId,
       Value<String?> relatedPersonId,
+      Value<String?> relatedEventId,
       Value<String?> location,
       Value<String?> legalDocument,
       Value<String?> notes,
       Value<int> sortOrder,
       Value<bool> isPrimary,
       Value<String> uuid,
-      Value<String> syncStatus,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -14684,6 +12861,47 @@ final class $$SurnameEventsTableReferences
       $_db.genealogyPersons,
     ).filter((f) => f.id.sqlEquals($_column));
     final item = $_typedResult.readTableOrNull(_personIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $GenealogyPersonsTable _relatedPersonIdTable(_$AppDatabase db) =>
+      db.genealogyPersons.createAlias(
+        $_aliasNameGenerator(
+          db.surnameEvents.relatedPersonId,
+          db.genealogyPersons.id,
+        ),
+      );
+
+  $$GenealogyPersonsTableProcessedTableManager? get relatedPersonId {
+    final $_column = $_itemColumn<String>('related_person_id');
+    if ($_column == null) return null;
+    final manager = $$GenealogyPersonsTableTableManager(
+      $_db,
+      $_db.genealogyPersons,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_relatedPersonIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $EventsTable _relatedEventIdTable(_$AppDatabase db) =>
+      db.events.createAlias(
+        $_aliasNameGenerator(db.surnameEvents.relatedEventId, db.events.id),
+      );
+
+  $$EventsTableProcessedTableManager? get relatedEventId {
+    final $_column = $_itemColumn<String>('related_event_id');
+    if ($_column == null) return null;
+    final manager = $$EventsTableTableManager(
+      $_db,
+      $_db.events,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_relatedEventIdTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: [item]),
@@ -14735,16 +12953,6 @@ class $$SurnameEventsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get relatedEventId => $composableBuilder(
-    column: $table.relatedEventId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get relatedPersonId => $composableBuilder(
-    column: $table.relatedPersonId,
-    builder: (column) => ColumnFilters(column),
-  );
-
   ColumnFilters<String> get location => $composableBuilder(
     column: $table.location,
     builder: (column) => ColumnFilters(column),
@@ -14775,11 +12983,6 @@ class $$SurnameEventsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get syncStatus => $composableBuilder(
-    column: $table.syncStatus,
-    builder: (column) => ColumnFilters(column),
-  );
-
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnFilters(column),
@@ -14804,6 +13007,52 @@ class $$SurnameEventsTableFilterComposer
           }) => $$GenealogyPersonsTableFilterComposer(
             $db: $db,
             $table: $db.genealogyPersons,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$GenealogyPersonsTableFilterComposer get relatedPersonId {
+    final $$GenealogyPersonsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.relatedPersonId,
+      referencedTable: $db.genealogyPersons,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GenealogyPersonsTableFilterComposer(
+            $db: $db,
+            $table: $db.genealogyPersons,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$EventsTableFilterComposer get relatedEventId {
+    final $$EventsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.relatedEventId,
+      referencedTable: $db.events,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$EventsTableFilterComposer(
+            $db: $db,
+            $table: $db.events,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -14858,16 +13107,6 @@ class $$SurnameEventsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get relatedEventId => $composableBuilder(
-    column: $table.relatedEventId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get relatedPersonId => $composableBuilder(
-    column: $table.relatedPersonId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<String> get location => $composableBuilder(
     column: $table.location,
     builder: (column) => ColumnOrderings(column),
@@ -14898,11 +13137,6 @@ class $$SurnameEventsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get syncStatus => $composableBuilder(
-    column: $table.syncStatus,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -14927,6 +13161,52 @@ class $$SurnameEventsTableOrderingComposer
           }) => $$GenealogyPersonsTableOrderingComposer(
             $db: $db,
             $table: $db.genealogyPersons,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$GenealogyPersonsTableOrderingComposer get relatedPersonId {
+    final $$GenealogyPersonsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.relatedPersonId,
+      referencedTable: $db.genealogyPersons,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GenealogyPersonsTableOrderingComposer(
+            $db: $db,
+            $table: $db.genealogyPersons,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$EventsTableOrderingComposer get relatedEventId {
+    final $$EventsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.relatedEventId,
+      referencedTable: $db.events,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$EventsTableOrderingComposer(
+            $db: $db,
+            $table: $db.events,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -14973,16 +13253,6 @@ class $$SurnameEventsTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get relatedEventId => $composableBuilder(
-    column: $table.relatedEventId,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get relatedPersonId => $composableBuilder(
-    column: $table.relatedPersonId,
-    builder: (column) => column,
-  );
-
   GeneratedColumn<String> get location =>
       $composableBuilder(column: $table.location, builder: (column) => column);
 
@@ -15002,11 +13272,6 @@ class $$SurnameEventsTableAnnotationComposer
 
   GeneratedColumn<String> get uuid =>
       $composableBuilder(column: $table.uuid, builder: (column) => column);
-
-  GeneratedColumn<String> get syncStatus => $composableBuilder(
-    column: $table.syncStatus,
-    builder: (column) => column,
-  );
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -15036,6 +13301,52 @@ class $$SurnameEventsTableAnnotationComposer
     );
     return composer;
   }
+
+  $$GenealogyPersonsTableAnnotationComposer get relatedPersonId {
+    final $$GenealogyPersonsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.relatedPersonId,
+      referencedTable: $db.genealogyPersons,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GenealogyPersonsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.genealogyPersons,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$EventsTableAnnotationComposer get relatedEventId {
+    final $$EventsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.relatedEventId,
+      referencedTable: $db.events,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$EventsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.events,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$SurnameEventsTableTableManager
@@ -15051,7 +13362,11 @@ class $$SurnameEventsTableTableManager
           $$SurnameEventsTableUpdateCompanionBuilder,
           (SurnameEvent, $$SurnameEventsTableReferences),
           SurnameEvent,
-          PrefetchHooks Function({bool personId})
+          PrefetchHooks Function({
+            bool personId,
+            bool relatedPersonId,
+            bool relatedEventId,
+          })
         > {
   $$SurnameEventsTableTableManager(_$AppDatabase db, $SurnameEventsTable table)
     : super(
@@ -15074,15 +13389,14 @@ class $$SurnameEventsTableTableManager
                 Value<String?> startDateQualifier = const Value.absent(),
                 Value<String?> endDate = const Value.absent(),
                 Value<String?> endDateQualifier = const Value.absent(),
-                Value<String?> relatedEventId = const Value.absent(),
                 Value<String?> relatedPersonId = const Value.absent(),
+                Value<String?> relatedEventId = const Value.absent(),
                 Value<String?> location = const Value.absent(),
                 Value<String?> legalDocument = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<bool> isPrimary = const Value.absent(),
                 Value<String> uuid = const Value.absent(),
-                Value<String> syncStatus = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -15095,15 +13409,14 @@ class $$SurnameEventsTableTableManager
                 startDateQualifier: startDateQualifier,
                 endDate: endDate,
                 endDateQualifier: endDateQualifier,
-                relatedEventId: relatedEventId,
                 relatedPersonId: relatedPersonId,
+                relatedEventId: relatedEventId,
                 location: location,
                 legalDocument: legalDocument,
                 notes: notes,
                 sortOrder: sortOrder,
                 isPrimary: isPrimary,
                 uuid: uuid,
-                syncStatus: syncStatus,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -15118,15 +13431,14 @@ class $$SurnameEventsTableTableManager
                 Value<String?> startDateQualifier = const Value.absent(),
                 Value<String?> endDate = const Value.absent(),
                 Value<String?> endDateQualifier = const Value.absent(),
-                Value<String?> relatedEventId = const Value.absent(),
                 Value<String?> relatedPersonId = const Value.absent(),
+                Value<String?> relatedEventId = const Value.absent(),
                 Value<String?> location = const Value.absent(),
                 Value<String?> legalDocument = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<bool> isPrimary = const Value.absent(),
                 required String uuid,
-                Value<String> syncStatus = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -15139,15 +13451,14 @@ class $$SurnameEventsTableTableManager
                 startDateQualifier: startDateQualifier,
                 endDate: endDate,
                 endDateQualifier: endDateQualifier,
-                relatedEventId: relatedEventId,
                 relatedPersonId: relatedPersonId,
+                relatedEventId: relatedEventId,
                 location: location,
                 legalDocument: legalDocument,
                 notes: notes,
                 sortOrder: sortOrder,
                 isPrimary: isPrimary,
                 uuid: uuid,
-                syncStatus: syncStatus,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -15160,47 +13471,84 @@ class $$SurnameEventsTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({personId = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [],
-              addJoins:
-                  <
-                    T extends TableManagerState<
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic
-                    >
-                  >(state) {
-                    if (personId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.personId,
-                                referencedTable: $$SurnameEventsTableReferences
-                                    ._personIdTable(db),
-                                referencedColumn: $$SurnameEventsTableReferences
-                                    ._personIdTable(db)
-                                    .id,
-                              )
-                              as T;
-                    }
+          prefetchHooksCallback:
+              ({
+                personId = false,
+                relatedPersonId = false,
+                relatedEventId = false,
+              }) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (personId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.personId,
+                                    referencedTable:
+                                        $$SurnameEventsTableReferences
+                                            ._personIdTable(db),
+                                    referencedColumn:
+                                        $$SurnameEventsTableReferences
+                                            ._personIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (relatedPersonId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.relatedPersonId,
+                                    referencedTable:
+                                        $$SurnameEventsTableReferences
+                                            ._relatedPersonIdTable(db),
+                                    referencedColumn:
+                                        $$SurnameEventsTableReferences
+                                            ._relatedPersonIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (relatedEventId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.relatedEventId,
+                                    referencedTable:
+                                        $$SurnameEventsTableReferences
+                                            ._relatedEventIdTable(db),
+                                    referencedColumn:
+                                        $$SurnameEventsTableReferences
+                                            ._relatedEventIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
 
-                    return state;
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [];
                   },
-              getPrefetchedDataCallback: (items) async {
-                return [];
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -15217,11 +13565,16 @@ typedef $$SurnameEventsTableProcessedTableManager =
       $$SurnameEventsTableUpdateCompanionBuilder,
       (SurnameEvent, $$SurnameEventsTableReferences),
       SurnameEvent,
-      PrefetchHooks Function({bool personId})
+      PrefetchHooks Function({
+        bool personId,
+        bool relatedPersonId,
+        bool relatedEventId,
+      })
     >;
 typedef $$FamiliesV2TableCreateCompanionBuilder =
     FamiliesV2Companion Function({
       required String id,
+      required String treeId,
       Value<String?> husbandId,
       Value<String?> wifeId,
       Value<DateTime?> marriageDate,
@@ -15232,8 +13585,8 @@ typedef $$FamiliesV2TableCreateCompanionBuilder =
       Value<bool> wifeTookHusbandName,
       Value<bool> husbandTookWifeName,
       Value<bool> hyphenatedSurname,
-      Value<String?> customSurnameChange,
       Value<bool> noNameChange,
+      Value<String?> customSurnameChange,
       Value<String?> wifeMarriedSurname,
       Value<String?> wifeNameChangeType,
       Value<String?> husbandMarriedSurname,
@@ -15248,7 +13601,6 @@ typedef $$FamiliesV2TableCreateCompanionBuilder =
       Value<String?> notes,
       Value<String?> privateNotes,
       required String uuid,
-      Value<String> syncStatus,
       Value<bool> isDeleted,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -15257,6 +13609,7 @@ typedef $$FamiliesV2TableCreateCompanionBuilder =
 typedef $$FamiliesV2TableUpdateCompanionBuilder =
     FamiliesV2Companion Function({
       Value<String> id,
+      Value<String> treeId,
       Value<String?> husbandId,
       Value<String?> wifeId,
       Value<DateTime?> marriageDate,
@@ -15267,8 +13620,8 @@ typedef $$FamiliesV2TableUpdateCompanionBuilder =
       Value<bool> wifeTookHusbandName,
       Value<bool> husbandTookWifeName,
       Value<bool> hyphenatedSurname,
-      Value<String?> customSurnameChange,
       Value<bool> noNameChange,
+      Value<String?> customSurnameChange,
       Value<String?> wifeMarriedSurname,
       Value<String?> wifeNameChangeType,
       Value<String?> husbandMarriedSurname,
@@ -15283,7 +13636,6 @@ typedef $$FamiliesV2TableUpdateCompanionBuilder =
       Value<String?> notes,
       Value<String?> privateNotes,
       Value<String> uuid,
-      Value<String> syncStatus,
       Value<bool> isDeleted,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -15293,6 +13645,25 @@ typedef $$FamiliesV2TableUpdateCompanionBuilder =
 final class $$FamiliesV2TableReferences
     extends BaseReferences<_$AppDatabase, $FamiliesV2Table, FamiliesV2Data> {
   $$FamiliesV2TableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $FamilyTreesTable _treeIdTable(_$AppDatabase db) =>
+      db.familyTrees.createAlias(
+        $_aliasNameGenerator(db.familiesV2.treeId, db.familyTrees.id),
+      );
+
+  $$FamilyTreesTableProcessedTableManager get treeId {
+    final $_column = $_itemColumn<String>('tree_id')!;
+
+    final manager = $$FamilyTreesTableTableManager(
+      $_db,
+      $_db.familyTrees,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_treeIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
 
   static $GenealogyPersonsTable _husbandIdTable(_$AppDatabase db) =>
       db.genealogyPersons.createAlias(
@@ -15410,13 +13781,13 @@ class $$FamiliesV2TableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get customSurnameChange => $composableBuilder(
-    column: $table.customSurnameChange,
+  ColumnFilters<bool> get noNameChange => $composableBuilder(
+    column: $table.noNameChange,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<bool> get noNameChange => $composableBuilder(
-    column: $table.noNameChange,
+  ColumnFilters<String> get customSurnameChange => $composableBuilder(
+    column: $table.customSurnameChange,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -15490,11 +13861,6 @@ class $$FamiliesV2TableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get syncStatus => $composableBuilder(
-    column: $table.syncStatus,
-    builder: (column) => ColumnFilters(column),
-  );
-
   ColumnFilters<bool> get isDeleted => $composableBuilder(
     column: $table.isDeleted,
     builder: (column) => ColumnFilters(column),
@@ -15509,6 +13875,29 @@ class $$FamiliesV2TableFilterComposer
     column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  $$FamilyTreesTableFilterComposer get treeId {
+    final $$FamilyTreesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.treeId,
+      referencedTable: $db.familyTrees,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FamilyTreesTableFilterComposer(
+            $db: $db,
+            $table: $db.familyTrees,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 
   $$GenealogyPersonsTableFilterComposer get husbandId {
     final $$GenealogyPersonsTableFilterComposer composer = $composerBuilder(
@@ -15636,13 +14025,13 @@ class $$FamiliesV2TableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get customSurnameChange => $composableBuilder(
-    column: $table.customSurnameChange,
+  ColumnOrderings<bool> get noNameChange => $composableBuilder(
+    column: $table.noNameChange,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<bool> get noNameChange => $composableBuilder(
-    column: $table.noNameChange,
+  ColumnOrderings<String> get customSurnameChange => $composableBuilder(
+    column: $table.customSurnameChange,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -15716,11 +14105,6 @@ class $$FamiliesV2TableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get syncStatus => $composableBuilder(
-    column: $table.syncStatus,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<bool> get isDeleted => $composableBuilder(
     column: $table.isDeleted,
     builder: (column) => ColumnOrderings(column),
@@ -15735,6 +14119,29 @@ class $$FamiliesV2TableOrderingComposer
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  $$FamilyTreesTableOrderingComposer get treeId {
+    final $$FamilyTreesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.treeId,
+      referencedTable: $db.familyTrees,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FamilyTreesTableOrderingComposer(
+            $db: $db,
+            $table: $db.familyTrees,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 
   $$GenealogyPersonsTableOrderingComposer get husbandId {
     final $$GenealogyPersonsTableOrderingComposer composer = $composerBuilder(
@@ -15835,13 +14242,13 @@ class $$FamiliesV2TableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<String> get customSurnameChange => $composableBuilder(
-    column: $table.customSurnameChange,
+  GeneratedColumn<bool> get noNameChange => $composableBuilder(
+    column: $table.noNameChange,
     builder: (column) => column,
   );
 
-  GeneratedColumn<bool> get noNameChange => $composableBuilder(
-    column: $table.noNameChange,
+  GeneratedColumn<String> get customSurnameChange => $composableBuilder(
+    column: $table.customSurnameChange,
     builder: (column) => column,
   );
 
@@ -15911,11 +14318,6 @@ class $$FamiliesV2TableAnnotationComposer
   GeneratedColumn<String> get uuid =>
       $composableBuilder(column: $table.uuid, builder: (column) => column);
 
-  GeneratedColumn<String> get syncStatus => $composableBuilder(
-    column: $table.syncStatus,
-    builder: (column) => column,
-  );
-
   GeneratedColumn<bool> get isDeleted =>
       $composableBuilder(column: $table.isDeleted, builder: (column) => column);
 
@@ -15924,6 +14326,29 @@ class $$FamiliesV2TableAnnotationComposer
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$FamilyTreesTableAnnotationComposer get treeId {
+    final $$FamilyTreesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.treeId,
+      referencedTable: $db.familyTrees,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FamilyTreesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.familyTrees,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 
   $$GenealogyPersonsTableAnnotationComposer get husbandId {
     final $$GenealogyPersonsTableAnnotationComposer composer = $composerBuilder(
@@ -16011,6 +14436,7 @@ class $$FamiliesV2TableTableManager
           (FamiliesV2Data, $$FamiliesV2TableReferences),
           FamiliesV2Data,
           PrefetchHooks Function({
+            bool treeId,
             bool husbandId,
             bool wifeId,
             bool familyChildrenV2Refs,
@@ -16030,6 +14456,7 @@ class $$FamiliesV2TableTableManager
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
+                Value<String> treeId = const Value.absent(),
                 Value<String?> husbandId = const Value.absent(),
                 Value<String?> wifeId = const Value.absent(),
                 Value<DateTime?> marriageDate = const Value.absent(),
@@ -16040,8 +14467,8 @@ class $$FamiliesV2TableTableManager
                 Value<bool> wifeTookHusbandName = const Value.absent(),
                 Value<bool> husbandTookWifeName = const Value.absent(),
                 Value<bool> hyphenatedSurname = const Value.absent(),
-                Value<String?> customSurnameChange = const Value.absent(),
                 Value<bool> noNameChange = const Value.absent(),
+                Value<String?> customSurnameChange = const Value.absent(),
                 Value<String?> wifeMarriedSurname = const Value.absent(),
                 Value<String?> wifeNameChangeType = const Value.absent(),
                 Value<String?> husbandMarriedSurname = const Value.absent(),
@@ -16056,13 +14483,13 @@ class $$FamiliesV2TableTableManager
                 Value<String?> notes = const Value.absent(),
                 Value<String?> privateNotes = const Value.absent(),
                 Value<String> uuid = const Value.absent(),
-                Value<String> syncStatus = const Value.absent(),
                 Value<bool> isDeleted = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => FamiliesV2Companion(
                 id: id,
+                treeId: treeId,
                 husbandId: husbandId,
                 wifeId: wifeId,
                 marriageDate: marriageDate,
@@ -16073,8 +14500,8 @@ class $$FamiliesV2TableTableManager
                 wifeTookHusbandName: wifeTookHusbandName,
                 husbandTookWifeName: husbandTookWifeName,
                 hyphenatedSurname: hyphenatedSurname,
-                customSurnameChange: customSurnameChange,
                 noNameChange: noNameChange,
+                customSurnameChange: customSurnameChange,
                 wifeMarriedSurname: wifeMarriedSurname,
                 wifeNameChangeType: wifeNameChangeType,
                 husbandMarriedSurname: husbandMarriedSurname,
@@ -16089,7 +14516,6 @@ class $$FamiliesV2TableTableManager
                 notes: notes,
                 privateNotes: privateNotes,
                 uuid: uuid,
-                syncStatus: syncStatus,
                 isDeleted: isDeleted,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -16098,6 +14524,7 @@ class $$FamiliesV2TableTableManager
           createCompanionCallback:
               ({
                 required String id,
+                required String treeId,
                 Value<String?> husbandId = const Value.absent(),
                 Value<String?> wifeId = const Value.absent(),
                 Value<DateTime?> marriageDate = const Value.absent(),
@@ -16108,8 +14535,8 @@ class $$FamiliesV2TableTableManager
                 Value<bool> wifeTookHusbandName = const Value.absent(),
                 Value<bool> husbandTookWifeName = const Value.absent(),
                 Value<bool> hyphenatedSurname = const Value.absent(),
-                Value<String?> customSurnameChange = const Value.absent(),
                 Value<bool> noNameChange = const Value.absent(),
+                Value<String?> customSurnameChange = const Value.absent(),
                 Value<String?> wifeMarriedSurname = const Value.absent(),
                 Value<String?> wifeNameChangeType = const Value.absent(),
                 Value<String?> husbandMarriedSurname = const Value.absent(),
@@ -16124,13 +14551,13 @@ class $$FamiliesV2TableTableManager
                 Value<String?> notes = const Value.absent(),
                 Value<String?> privateNotes = const Value.absent(),
                 required String uuid,
-                Value<String> syncStatus = const Value.absent(),
                 Value<bool> isDeleted = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => FamiliesV2Companion.insert(
                 id: id,
+                treeId: treeId,
                 husbandId: husbandId,
                 wifeId: wifeId,
                 marriageDate: marriageDate,
@@ -16141,8 +14568,8 @@ class $$FamiliesV2TableTableManager
                 wifeTookHusbandName: wifeTookHusbandName,
                 husbandTookWifeName: husbandTookWifeName,
                 hyphenatedSurname: hyphenatedSurname,
-                customSurnameChange: customSurnameChange,
                 noNameChange: noNameChange,
+                customSurnameChange: customSurnameChange,
                 wifeMarriedSurname: wifeMarriedSurname,
                 wifeNameChangeType: wifeNameChangeType,
                 husbandMarriedSurname: husbandMarriedSurname,
@@ -16157,7 +14584,6 @@ class $$FamiliesV2TableTableManager
                 notes: notes,
                 privateNotes: privateNotes,
                 uuid: uuid,
-                syncStatus: syncStatus,
                 isDeleted: isDeleted,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -16173,6 +14599,7 @@ class $$FamiliesV2TableTableManager
               .toList(),
           prefetchHooksCallback:
               ({
+                treeId = false,
                 husbandId = false,
                 wifeId = false,
                 familyChildrenV2Refs = false,
@@ -16198,6 +14625,20 @@ class $$FamiliesV2TableTableManager
                           dynamic
                         >
                       >(state) {
+                        if (treeId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.treeId,
+                                    referencedTable: $$FamiliesV2TableReferences
+                                        ._treeIdTable(db),
+                                    referencedColumn:
+                                        $$FamiliesV2TableReferences
+                                            ._treeIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
                         if (husbandId) {
                           state =
                               state.withJoin(
@@ -16273,6 +14714,7 @@ typedef $$FamiliesV2TableProcessedTableManager =
       (FamiliesV2Data, $$FamiliesV2TableReferences),
       FamiliesV2Data,
       PrefetchHooks Function({
+        bool treeId,
         bool husbandId,
         bool wifeId,
         bool familyChildrenV2Refs,
@@ -16290,7 +14732,6 @@ typedef $$FamilyChildrenV2TableCreateCompanionBuilder =
       Value<String?> maternalRelationship,
       Value<String?> notes,
       required String uuid,
-      Value<String> syncStatus,
       Value<bool> isDeleted,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -16308,7 +14749,6 @@ typedef $$FamilyChildrenV2TableUpdateCompanionBuilder =
       Value<String?> maternalRelationship,
       Value<String?> notes,
       Value<String> uuid,
-      Value<String> syncStatus,
       Value<bool> isDeleted,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -16416,11 +14856,6 @@ class $$FamilyChildrenV2TableFilterComposer
 
   ColumnFilters<String> get uuid => $composableBuilder(
     column: $table.uuid,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get syncStatus => $composableBuilder(
-    column: $table.syncStatus,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -16535,11 +14970,6 @@ class $$FamilyChildrenV2TableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get syncStatus => $composableBuilder(
-    column: $table.syncStatus,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<bool> get isDeleted => $composableBuilder(
     column: $table.isDeleted,
     builder: (column) => ColumnOrderings(column),
@@ -16645,11 +15075,6 @@ class $$FamilyChildrenV2TableAnnotationComposer
   GeneratedColumn<String> get uuid =>
       $composableBuilder(column: $table.uuid, builder: (column) => column);
 
-  GeneratedColumn<String> get syncStatus => $composableBuilder(
-    column: $table.syncStatus,
-    builder: (column) => column,
-  );
-
   GeneratedColumn<bool> get isDeleted =>
       $composableBuilder(column: $table.isDeleted, builder: (column) => column);
 
@@ -16746,7 +15171,6 @@ class $$FamilyChildrenV2TableTableManager
                 Value<String?> maternalRelationship = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
                 Value<String> uuid = const Value.absent(),
-                Value<String> syncStatus = const Value.absent(),
                 Value<bool> isDeleted = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -16762,7 +15186,6 @@ class $$FamilyChildrenV2TableTableManager
                 maternalRelationship: maternalRelationship,
                 notes: notes,
                 uuid: uuid,
-                syncStatus: syncStatus,
                 isDeleted: isDeleted,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -16780,7 +15203,6 @@ class $$FamilyChildrenV2TableTableManager
                 Value<String?> maternalRelationship = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
                 required String uuid,
-                Value<String> syncStatus = const Value.absent(),
                 Value<bool> isDeleted = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -16796,7 +15218,6 @@ class $$FamilyChildrenV2TableTableManager
                 maternalRelationship: maternalRelationship,
                 notes: notes,
                 uuid: uuid,
-                syncStatus: syncStatus,
                 isDeleted: isDeleted,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -16885,1499 +15306,6 @@ typedef $$FamilyChildrenV2TableProcessedTableManager =
       (FamilyChildrenV2Data, $$FamilyChildrenV2TableReferences),
       FamilyChildrenV2Data,
       PrefetchHooks Function({bool familyId, bool childId})
-    >;
-typedef $$PersonsTableCreateCompanionBuilder =
-    PersonsCompanion Function({
-      required String id,
-      required String treeId,
-      required String fullName,
-      Value<String?> firstName,
-      Value<String?> middleName,
-      Value<String?> lastName,
-      Value<String?> birthSurname,
-      Value<String?> marriedSurname,
-      Value<String?> prefix,
-      Value<String?> suffix,
-      Value<String?> nickname,
-      required String gender,
-      Value<DateTime?> birthDate,
-      Value<String?> birthDateDisplay,
-      Value<double?> birthDateSort,
-      Value<DateTime?> deathDate,
-      Value<String?> deathDateDisplay,
-      Value<double?> deathDateSort,
-      Value<String?> birthPlace,
-      Value<String?> currentPlace,
-      Value<String?> profilePhotoPath,
-      Value<String?> bio,
-      Value<String?> notes,
-      Value<bool> private,
-      Value<bool> isLiving,
-      required DateTime createdAt,
-      required DateTime updatedAt,
-      Value<int> rowid,
-    });
-typedef $$PersonsTableUpdateCompanionBuilder =
-    PersonsCompanion Function({
-      Value<String> id,
-      Value<String> treeId,
-      Value<String> fullName,
-      Value<String?> firstName,
-      Value<String?> middleName,
-      Value<String?> lastName,
-      Value<String?> birthSurname,
-      Value<String?> marriedSurname,
-      Value<String?> prefix,
-      Value<String?> suffix,
-      Value<String?> nickname,
-      Value<String> gender,
-      Value<DateTime?> birthDate,
-      Value<String?> birthDateDisplay,
-      Value<double?> birthDateSort,
-      Value<DateTime?> deathDate,
-      Value<String?> deathDateDisplay,
-      Value<double?> deathDateSort,
-      Value<String?> birthPlace,
-      Value<String?> currentPlace,
-      Value<String?> profilePhotoPath,
-      Value<String?> bio,
-      Value<String?> notes,
-      Value<bool> private,
-      Value<bool> isLiving,
-      Value<DateTime> createdAt,
-      Value<DateTime> updatedAt,
-      Value<int> rowid,
-    });
-
-final class $$PersonsTableReferences
-    extends BaseReferences<_$AppDatabase, $PersonsTable, Person> {
-  $$PersonsTableReferences(super.$_db, super.$_table, super.$_typedResult);
-
-  static $FamilyTreesTable _treeIdTable(_$AppDatabase db) => db.familyTrees
-      .createAlias($_aliasNameGenerator(db.persons.treeId, db.familyTrees.id));
-
-  $$FamilyTreesTableProcessedTableManager get treeId {
-    final $_column = $_itemColumn<String>('tree_id')!;
-
-    final manager = $$FamilyTreesTableTableManager(
-      $_db,
-      $_db.familyTrees,
-    ).filter((f) => f.id.sqlEquals($_column));
-    final item = $_typedResult.readTableOrNull(_treeIdTable($_db));
-    if (item == null) return manager;
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: [item]),
-    );
-  }
-
-  static MultiTypedResultKey<$RelationshipsTable, List<Relationship>>
-  _personAsSubjectRelationsTable(_$AppDatabase db) =>
-      MultiTypedResultKey.fromTable(
-        db.relationships,
-        aliasName: $_aliasNameGenerator(
-          db.persons.id,
-          db.relationships.personId,
-        ),
-      );
-
-  $$RelationshipsTableProcessedTableManager get personAsSubjectRelations {
-    final manager = $$RelationshipsTableTableManager(
-      $_db,
-      $_db.relationships,
-    ).filter((f) => f.personId.id.sqlEquals($_itemColumn<String>('id')!));
-
-    final cache = $_typedResult.readTableOrNull(
-      _personAsSubjectRelationsTable($_db),
-    );
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: cache),
-    );
-  }
-
-  static MultiTypedResultKey<$RelationshipsTable, List<Relationship>>
-  _personAsObjectRelationsTable(_$AppDatabase db) =>
-      MultiTypedResultKey.fromTable(
-        db.relationships,
-        aliasName: $_aliasNameGenerator(
-          db.persons.id,
-          db.relationships.relatedPersonId,
-        ),
-      );
-
-  $$RelationshipsTableProcessedTableManager get personAsObjectRelations {
-    final manager = $$RelationshipsTableTableManager($_db, $_db.relationships)
-        .filter(
-          (f) => f.relatedPersonId.id.sqlEquals($_itemColumn<String>('id')!),
-        );
-
-    final cache = $_typedResult.readTableOrNull(
-      _personAsObjectRelationsTable($_db),
-    );
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: cache),
-    );
-  }
-}
-
-class $$PersonsTableFilterComposer
-    extends Composer<_$AppDatabase, $PersonsTable> {
-  $$PersonsTableFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get fullName => $composableBuilder(
-    column: $table.fullName,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get firstName => $composableBuilder(
-    column: $table.firstName,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get middleName => $composableBuilder(
-    column: $table.middleName,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get lastName => $composableBuilder(
-    column: $table.lastName,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get birthSurname => $composableBuilder(
-    column: $table.birthSurname,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get marriedSurname => $composableBuilder(
-    column: $table.marriedSurname,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get prefix => $composableBuilder(
-    column: $table.prefix,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get suffix => $composableBuilder(
-    column: $table.suffix,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get nickname => $composableBuilder(
-    column: $table.nickname,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get gender => $composableBuilder(
-    column: $table.gender,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get birthDate => $composableBuilder(
-    column: $table.birthDate,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get birthDateDisplay => $composableBuilder(
-    column: $table.birthDateDisplay,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<double> get birthDateSort => $composableBuilder(
-    column: $table.birthDateSort,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get deathDate => $composableBuilder(
-    column: $table.deathDate,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get deathDateDisplay => $composableBuilder(
-    column: $table.deathDateDisplay,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<double> get deathDateSort => $composableBuilder(
-    column: $table.deathDateSort,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get birthPlace => $composableBuilder(
-    column: $table.birthPlace,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get currentPlace => $composableBuilder(
-    column: $table.currentPlace,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get profilePhotoPath => $composableBuilder(
-    column: $table.profilePhotoPath,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get bio => $composableBuilder(
-    column: $table.bio,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get notes => $composableBuilder(
-    column: $table.notes,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<bool> get private => $composableBuilder(
-    column: $table.private,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<bool> get isLiving => $composableBuilder(
-    column: $table.isLiving,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get createdAt => $composableBuilder(
-    column: $table.createdAt,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
-    column: $table.updatedAt,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  $$FamilyTreesTableFilterComposer get treeId {
-    final $$FamilyTreesTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.treeId,
-      referencedTable: $db.familyTrees,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$FamilyTreesTableFilterComposer(
-            $db: $db,
-            $table: $db.familyTrees,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
-
-  Expression<bool> personAsSubjectRelations(
-    Expression<bool> Function($$RelationshipsTableFilterComposer f) f,
-  ) {
-    final $$RelationshipsTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.relationships,
-      getReferencedColumn: (t) => t.personId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$RelationshipsTableFilterComposer(
-            $db: $db,
-            $table: $db.relationships,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-
-  Expression<bool> personAsObjectRelations(
-    Expression<bool> Function($$RelationshipsTableFilterComposer f) f,
-  ) {
-    final $$RelationshipsTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.relationships,
-      getReferencedColumn: (t) => t.relatedPersonId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$RelationshipsTableFilterComposer(
-            $db: $db,
-            $table: $db.relationships,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-}
-
-class $$PersonsTableOrderingComposer
-    extends Composer<_$AppDatabase, $PersonsTable> {
-  $$PersonsTableOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get fullName => $composableBuilder(
-    column: $table.fullName,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get firstName => $composableBuilder(
-    column: $table.firstName,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get middleName => $composableBuilder(
-    column: $table.middleName,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get lastName => $composableBuilder(
-    column: $table.lastName,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get birthSurname => $composableBuilder(
-    column: $table.birthSurname,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get marriedSurname => $composableBuilder(
-    column: $table.marriedSurname,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get prefix => $composableBuilder(
-    column: $table.prefix,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get suffix => $composableBuilder(
-    column: $table.suffix,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get nickname => $composableBuilder(
-    column: $table.nickname,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get gender => $composableBuilder(
-    column: $table.gender,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get birthDate => $composableBuilder(
-    column: $table.birthDate,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get birthDateDisplay => $composableBuilder(
-    column: $table.birthDateDisplay,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<double> get birthDateSort => $composableBuilder(
-    column: $table.birthDateSort,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get deathDate => $composableBuilder(
-    column: $table.deathDate,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get deathDateDisplay => $composableBuilder(
-    column: $table.deathDateDisplay,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<double> get deathDateSort => $composableBuilder(
-    column: $table.deathDateSort,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get birthPlace => $composableBuilder(
-    column: $table.birthPlace,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get currentPlace => $composableBuilder(
-    column: $table.currentPlace,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get profilePhotoPath => $composableBuilder(
-    column: $table.profilePhotoPath,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get bio => $composableBuilder(
-    column: $table.bio,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get notes => $composableBuilder(
-    column: $table.notes,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<bool> get private => $composableBuilder(
-    column: $table.private,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<bool> get isLiving => $composableBuilder(
-    column: $table.isLiving,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
-    column: $table.createdAt,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
-    column: $table.updatedAt,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  $$FamilyTreesTableOrderingComposer get treeId {
-    final $$FamilyTreesTableOrderingComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.treeId,
-      referencedTable: $db.familyTrees,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$FamilyTreesTableOrderingComposer(
-            $db: $db,
-            $table: $db.familyTrees,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
-}
-
-class $$PersonsTableAnnotationComposer
-    extends Composer<_$AppDatabase, $PersonsTable> {
-  $$PersonsTableAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<String> get id =>
-      $composableBuilder(column: $table.id, builder: (column) => column);
-
-  GeneratedColumn<String> get fullName =>
-      $composableBuilder(column: $table.fullName, builder: (column) => column);
-
-  GeneratedColumn<String> get firstName =>
-      $composableBuilder(column: $table.firstName, builder: (column) => column);
-
-  GeneratedColumn<String> get middleName => $composableBuilder(
-    column: $table.middleName,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get lastName =>
-      $composableBuilder(column: $table.lastName, builder: (column) => column);
-
-  GeneratedColumn<String> get birthSurname => $composableBuilder(
-    column: $table.birthSurname,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get marriedSurname => $composableBuilder(
-    column: $table.marriedSurname,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get prefix =>
-      $composableBuilder(column: $table.prefix, builder: (column) => column);
-
-  GeneratedColumn<String> get suffix =>
-      $composableBuilder(column: $table.suffix, builder: (column) => column);
-
-  GeneratedColumn<String> get nickname =>
-      $composableBuilder(column: $table.nickname, builder: (column) => column);
-
-  GeneratedColumn<String> get gender =>
-      $composableBuilder(column: $table.gender, builder: (column) => column);
-
-  GeneratedColumn<DateTime> get birthDate =>
-      $composableBuilder(column: $table.birthDate, builder: (column) => column);
-
-  GeneratedColumn<String> get birthDateDisplay => $composableBuilder(
-    column: $table.birthDateDisplay,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<double> get birthDateSort => $composableBuilder(
-    column: $table.birthDateSort,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<DateTime> get deathDate =>
-      $composableBuilder(column: $table.deathDate, builder: (column) => column);
-
-  GeneratedColumn<String> get deathDateDisplay => $composableBuilder(
-    column: $table.deathDateDisplay,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<double> get deathDateSort => $composableBuilder(
-    column: $table.deathDateSort,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get birthPlace => $composableBuilder(
-    column: $table.birthPlace,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get currentPlace => $composableBuilder(
-    column: $table.currentPlace,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get profilePhotoPath => $composableBuilder(
-    column: $table.profilePhotoPath,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get bio =>
-      $composableBuilder(column: $table.bio, builder: (column) => column);
-
-  GeneratedColumn<String> get notes =>
-      $composableBuilder(column: $table.notes, builder: (column) => column);
-
-  GeneratedColumn<bool> get private =>
-      $composableBuilder(column: $table.private, builder: (column) => column);
-
-  GeneratedColumn<bool> get isLiving =>
-      $composableBuilder(column: $table.isLiving, builder: (column) => column);
-
-  GeneratedColumn<DateTime> get createdAt =>
-      $composableBuilder(column: $table.createdAt, builder: (column) => column);
-
-  GeneratedColumn<DateTime> get updatedAt =>
-      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
-
-  $$FamilyTreesTableAnnotationComposer get treeId {
-    final $$FamilyTreesTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.treeId,
-      referencedTable: $db.familyTrees,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$FamilyTreesTableAnnotationComposer(
-            $db: $db,
-            $table: $db.familyTrees,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
-
-  Expression<T> personAsSubjectRelations<T extends Object>(
-    Expression<T> Function($$RelationshipsTableAnnotationComposer a) f,
-  ) {
-    final $$RelationshipsTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.relationships,
-      getReferencedColumn: (t) => t.personId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$RelationshipsTableAnnotationComposer(
-            $db: $db,
-            $table: $db.relationships,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-
-  Expression<T> personAsObjectRelations<T extends Object>(
-    Expression<T> Function($$RelationshipsTableAnnotationComposer a) f,
-  ) {
-    final $$RelationshipsTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.relationships,
-      getReferencedColumn: (t) => t.relatedPersonId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$RelationshipsTableAnnotationComposer(
-            $db: $db,
-            $table: $db.relationships,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-}
-
-class $$PersonsTableTableManager
-    extends
-        RootTableManager<
-          _$AppDatabase,
-          $PersonsTable,
-          Person,
-          $$PersonsTableFilterComposer,
-          $$PersonsTableOrderingComposer,
-          $$PersonsTableAnnotationComposer,
-          $$PersonsTableCreateCompanionBuilder,
-          $$PersonsTableUpdateCompanionBuilder,
-          (Person, $$PersonsTableReferences),
-          Person,
-          PrefetchHooks Function({
-            bool treeId,
-            bool personAsSubjectRelations,
-            bool personAsObjectRelations,
-          })
-        > {
-  $$PersonsTableTableManager(_$AppDatabase db, $PersonsTable table)
-    : super(
-        TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $$PersonsTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$PersonsTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$PersonsTableAnnotationComposer($db: db, $table: table),
-          updateCompanionCallback:
-              ({
-                Value<String> id = const Value.absent(),
-                Value<String> treeId = const Value.absent(),
-                Value<String> fullName = const Value.absent(),
-                Value<String?> firstName = const Value.absent(),
-                Value<String?> middleName = const Value.absent(),
-                Value<String?> lastName = const Value.absent(),
-                Value<String?> birthSurname = const Value.absent(),
-                Value<String?> marriedSurname = const Value.absent(),
-                Value<String?> prefix = const Value.absent(),
-                Value<String?> suffix = const Value.absent(),
-                Value<String?> nickname = const Value.absent(),
-                Value<String> gender = const Value.absent(),
-                Value<DateTime?> birthDate = const Value.absent(),
-                Value<String?> birthDateDisplay = const Value.absent(),
-                Value<double?> birthDateSort = const Value.absent(),
-                Value<DateTime?> deathDate = const Value.absent(),
-                Value<String?> deathDateDisplay = const Value.absent(),
-                Value<double?> deathDateSort = const Value.absent(),
-                Value<String?> birthPlace = const Value.absent(),
-                Value<String?> currentPlace = const Value.absent(),
-                Value<String?> profilePhotoPath = const Value.absent(),
-                Value<String?> bio = const Value.absent(),
-                Value<String?> notes = const Value.absent(),
-                Value<bool> private = const Value.absent(),
-                Value<bool> isLiving = const Value.absent(),
-                Value<DateTime> createdAt = const Value.absent(),
-                Value<DateTime> updatedAt = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
-              }) => PersonsCompanion(
-                id: id,
-                treeId: treeId,
-                fullName: fullName,
-                firstName: firstName,
-                middleName: middleName,
-                lastName: lastName,
-                birthSurname: birthSurname,
-                marriedSurname: marriedSurname,
-                prefix: prefix,
-                suffix: suffix,
-                nickname: nickname,
-                gender: gender,
-                birthDate: birthDate,
-                birthDateDisplay: birthDateDisplay,
-                birthDateSort: birthDateSort,
-                deathDate: deathDate,
-                deathDateDisplay: deathDateDisplay,
-                deathDateSort: deathDateSort,
-                birthPlace: birthPlace,
-                currentPlace: currentPlace,
-                profilePhotoPath: profilePhotoPath,
-                bio: bio,
-                notes: notes,
-                private: private,
-                isLiving: isLiving,
-                createdAt: createdAt,
-                updatedAt: updatedAt,
-                rowid: rowid,
-              ),
-          createCompanionCallback:
-              ({
-                required String id,
-                required String treeId,
-                required String fullName,
-                Value<String?> firstName = const Value.absent(),
-                Value<String?> middleName = const Value.absent(),
-                Value<String?> lastName = const Value.absent(),
-                Value<String?> birthSurname = const Value.absent(),
-                Value<String?> marriedSurname = const Value.absent(),
-                Value<String?> prefix = const Value.absent(),
-                Value<String?> suffix = const Value.absent(),
-                Value<String?> nickname = const Value.absent(),
-                required String gender,
-                Value<DateTime?> birthDate = const Value.absent(),
-                Value<String?> birthDateDisplay = const Value.absent(),
-                Value<double?> birthDateSort = const Value.absent(),
-                Value<DateTime?> deathDate = const Value.absent(),
-                Value<String?> deathDateDisplay = const Value.absent(),
-                Value<double?> deathDateSort = const Value.absent(),
-                Value<String?> birthPlace = const Value.absent(),
-                Value<String?> currentPlace = const Value.absent(),
-                Value<String?> profilePhotoPath = const Value.absent(),
-                Value<String?> bio = const Value.absent(),
-                Value<String?> notes = const Value.absent(),
-                Value<bool> private = const Value.absent(),
-                Value<bool> isLiving = const Value.absent(),
-                required DateTime createdAt,
-                required DateTime updatedAt,
-                Value<int> rowid = const Value.absent(),
-              }) => PersonsCompanion.insert(
-                id: id,
-                treeId: treeId,
-                fullName: fullName,
-                firstName: firstName,
-                middleName: middleName,
-                lastName: lastName,
-                birthSurname: birthSurname,
-                marriedSurname: marriedSurname,
-                prefix: prefix,
-                suffix: suffix,
-                nickname: nickname,
-                gender: gender,
-                birthDate: birthDate,
-                birthDateDisplay: birthDateDisplay,
-                birthDateSort: birthDateSort,
-                deathDate: deathDate,
-                deathDateDisplay: deathDateDisplay,
-                deathDateSort: deathDateSort,
-                birthPlace: birthPlace,
-                currentPlace: currentPlace,
-                profilePhotoPath: profilePhotoPath,
-                bio: bio,
-                notes: notes,
-                private: private,
-                isLiving: isLiving,
-                createdAt: createdAt,
-                updatedAt: updatedAt,
-                rowid: rowid,
-              ),
-          withReferenceMapper: (p0) => p0
-              .map(
-                (e) => (
-                  e.readTable(table),
-                  $$PersonsTableReferences(db, table, e),
-                ),
-              )
-              .toList(),
-          prefetchHooksCallback:
-              ({
-                treeId = false,
-                personAsSubjectRelations = false,
-                personAsObjectRelations = false,
-              }) {
-                return PrefetchHooks(
-                  db: db,
-                  explicitlyWatchedTables: [
-                    if (personAsSubjectRelations) db.relationships,
-                    if (personAsObjectRelations) db.relationships,
-                  ],
-                  addJoins:
-                      <
-                        T extends TableManagerState<
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic
-                        >
-                      >(state) {
-                        if (treeId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.treeId,
-                                    referencedTable: $$PersonsTableReferences
-                                        ._treeIdTable(db),
-                                    referencedColumn: $$PersonsTableReferences
-                                        ._treeIdTable(db)
-                                        .id,
-                                  )
-                                  as T;
-                        }
-
-                        return state;
-                      },
-                  getPrefetchedDataCallback: (items) async {
-                    return [
-                      if (personAsSubjectRelations)
-                        await $_getPrefetchedData<
-                          Person,
-                          $PersonsTable,
-                          Relationship
-                        >(
-                          currentTable: table,
-                          referencedTable: $$PersonsTableReferences
-                              ._personAsSubjectRelationsTable(db),
-                          managerFromTypedResult: (p0) =>
-                              $$PersonsTableReferences(
-                                db,
-                                table,
-                                p0,
-                              ).personAsSubjectRelations,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.personId == item.id,
-                              ),
-                          typedResults: items,
-                        ),
-                      if (personAsObjectRelations)
-                        await $_getPrefetchedData<
-                          Person,
-                          $PersonsTable,
-                          Relationship
-                        >(
-                          currentTable: table,
-                          referencedTable: $$PersonsTableReferences
-                              ._personAsObjectRelationsTable(db),
-                          managerFromTypedResult: (p0) =>
-                              $$PersonsTableReferences(
-                                db,
-                                table,
-                                p0,
-                              ).personAsObjectRelations,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.relatedPersonId == item.id,
-                              ),
-                          typedResults: items,
-                        ),
-                    ];
-                  },
-                );
-              },
-        ),
-      );
-}
-
-typedef $$PersonsTableProcessedTableManager =
-    ProcessedTableManager<
-      _$AppDatabase,
-      $PersonsTable,
-      Person,
-      $$PersonsTableFilterComposer,
-      $$PersonsTableOrderingComposer,
-      $$PersonsTableAnnotationComposer,
-      $$PersonsTableCreateCompanionBuilder,
-      $$PersonsTableUpdateCompanionBuilder,
-      (Person, $$PersonsTableReferences),
-      Person,
-      PrefetchHooks Function({
-        bool treeId,
-        bool personAsSubjectRelations,
-        bool personAsObjectRelations,
-      })
-    >;
-typedef $$RelationshipsTableCreateCompanionBuilder =
-    RelationshipsCompanion Function({
-      required String id,
-      required String treeId,
-      required String personId,
-      required String relatedPersonId,
-      required String relationshipType,
-      required DateTime createdAt,
-      Value<int> rowid,
-    });
-typedef $$RelationshipsTableUpdateCompanionBuilder =
-    RelationshipsCompanion Function({
-      Value<String> id,
-      Value<String> treeId,
-      Value<String> personId,
-      Value<String> relatedPersonId,
-      Value<String> relationshipType,
-      Value<DateTime> createdAt,
-      Value<int> rowid,
-    });
-
-final class $$RelationshipsTableReferences
-    extends BaseReferences<_$AppDatabase, $RelationshipsTable, Relationship> {
-  $$RelationshipsTableReferences(
-    super.$_db,
-    super.$_table,
-    super.$_typedResult,
-  );
-
-  static $FamilyTreesTable _treeIdTable(_$AppDatabase db) =>
-      db.familyTrees.createAlias(
-        $_aliasNameGenerator(db.relationships.treeId, db.familyTrees.id),
-      );
-
-  $$FamilyTreesTableProcessedTableManager get treeId {
-    final $_column = $_itemColumn<String>('tree_id')!;
-
-    final manager = $$FamilyTreesTableTableManager(
-      $_db,
-      $_db.familyTrees,
-    ).filter((f) => f.id.sqlEquals($_column));
-    final item = $_typedResult.readTableOrNull(_treeIdTable($_db));
-    if (item == null) return manager;
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: [item]),
-    );
-  }
-
-  static $PersonsTable _personIdTable(_$AppDatabase db) =>
-      db.persons.createAlias(
-        $_aliasNameGenerator(db.relationships.personId, db.persons.id),
-      );
-
-  $$PersonsTableProcessedTableManager get personId {
-    final $_column = $_itemColumn<String>('person_id')!;
-
-    final manager = $$PersonsTableTableManager(
-      $_db,
-      $_db.persons,
-    ).filter((f) => f.id.sqlEquals($_column));
-    final item = $_typedResult.readTableOrNull(_personIdTable($_db));
-    if (item == null) return manager;
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: [item]),
-    );
-  }
-
-  static $PersonsTable _relatedPersonIdTable(_$AppDatabase db) =>
-      db.persons.createAlias(
-        $_aliasNameGenerator(db.relationships.relatedPersonId, db.persons.id),
-      );
-
-  $$PersonsTableProcessedTableManager get relatedPersonId {
-    final $_column = $_itemColumn<String>('related_person_id')!;
-
-    final manager = $$PersonsTableTableManager(
-      $_db,
-      $_db.persons,
-    ).filter((f) => f.id.sqlEquals($_column));
-    final item = $_typedResult.readTableOrNull(_relatedPersonIdTable($_db));
-    if (item == null) return manager;
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: [item]),
-    );
-  }
-}
-
-class $$RelationshipsTableFilterComposer
-    extends Composer<_$AppDatabase, $RelationshipsTable> {
-  $$RelationshipsTableFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get relationshipType => $composableBuilder(
-    column: $table.relationshipType,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get createdAt => $composableBuilder(
-    column: $table.createdAt,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  $$FamilyTreesTableFilterComposer get treeId {
-    final $$FamilyTreesTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.treeId,
-      referencedTable: $db.familyTrees,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$FamilyTreesTableFilterComposer(
-            $db: $db,
-            $table: $db.familyTrees,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
-
-  $$PersonsTableFilterComposer get personId {
-    final $$PersonsTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.personId,
-      referencedTable: $db.persons,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$PersonsTableFilterComposer(
-            $db: $db,
-            $table: $db.persons,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
-
-  $$PersonsTableFilterComposer get relatedPersonId {
-    final $$PersonsTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.relatedPersonId,
-      referencedTable: $db.persons,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$PersonsTableFilterComposer(
-            $db: $db,
-            $table: $db.persons,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
-}
-
-class $$RelationshipsTableOrderingComposer
-    extends Composer<_$AppDatabase, $RelationshipsTable> {
-  $$RelationshipsTableOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get relationshipType => $composableBuilder(
-    column: $table.relationshipType,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
-    column: $table.createdAt,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  $$FamilyTreesTableOrderingComposer get treeId {
-    final $$FamilyTreesTableOrderingComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.treeId,
-      referencedTable: $db.familyTrees,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$FamilyTreesTableOrderingComposer(
-            $db: $db,
-            $table: $db.familyTrees,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
-
-  $$PersonsTableOrderingComposer get personId {
-    final $$PersonsTableOrderingComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.personId,
-      referencedTable: $db.persons,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$PersonsTableOrderingComposer(
-            $db: $db,
-            $table: $db.persons,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
-
-  $$PersonsTableOrderingComposer get relatedPersonId {
-    final $$PersonsTableOrderingComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.relatedPersonId,
-      referencedTable: $db.persons,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$PersonsTableOrderingComposer(
-            $db: $db,
-            $table: $db.persons,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
-}
-
-class $$RelationshipsTableAnnotationComposer
-    extends Composer<_$AppDatabase, $RelationshipsTable> {
-  $$RelationshipsTableAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<String> get id =>
-      $composableBuilder(column: $table.id, builder: (column) => column);
-
-  GeneratedColumn<String> get relationshipType => $composableBuilder(
-    column: $table.relationshipType,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<DateTime> get createdAt =>
-      $composableBuilder(column: $table.createdAt, builder: (column) => column);
-
-  $$FamilyTreesTableAnnotationComposer get treeId {
-    final $$FamilyTreesTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.treeId,
-      referencedTable: $db.familyTrees,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$FamilyTreesTableAnnotationComposer(
-            $db: $db,
-            $table: $db.familyTrees,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
-
-  $$PersonsTableAnnotationComposer get personId {
-    final $$PersonsTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.personId,
-      referencedTable: $db.persons,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$PersonsTableAnnotationComposer(
-            $db: $db,
-            $table: $db.persons,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
-
-  $$PersonsTableAnnotationComposer get relatedPersonId {
-    final $$PersonsTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.relatedPersonId,
-      referencedTable: $db.persons,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$PersonsTableAnnotationComposer(
-            $db: $db,
-            $table: $db.persons,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
-}
-
-class $$RelationshipsTableTableManager
-    extends
-        RootTableManager<
-          _$AppDatabase,
-          $RelationshipsTable,
-          Relationship,
-          $$RelationshipsTableFilterComposer,
-          $$RelationshipsTableOrderingComposer,
-          $$RelationshipsTableAnnotationComposer,
-          $$RelationshipsTableCreateCompanionBuilder,
-          $$RelationshipsTableUpdateCompanionBuilder,
-          (Relationship, $$RelationshipsTableReferences),
-          Relationship,
-          PrefetchHooks Function({
-            bool treeId,
-            bool personId,
-            bool relatedPersonId,
-          })
-        > {
-  $$RelationshipsTableTableManager(_$AppDatabase db, $RelationshipsTable table)
-    : super(
-        TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $$RelationshipsTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$RelationshipsTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$RelationshipsTableAnnotationComposer($db: db, $table: table),
-          updateCompanionCallback:
-              ({
-                Value<String> id = const Value.absent(),
-                Value<String> treeId = const Value.absent(),
-                Value<String> personId = const Value.absent(),
-                Value<String> relatedPersonId = const Value.absent(),
-                Value<String> relationshipType = const Value.absent(),
-                Value<DateTime> createdAt = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
-              }) => RelationshipsCompanion(
-                id: id,
-                treeId: treeId,
-                personId: personId,
-                relatedPersonId: relatedPersonId,
-                relationshipType: relationshipType,
-                createdAt: createdAt,
-                rowid: rowid,
-              ),
-          createCompanionCallback:
-              ({
-                required String id,
-                required String treeId,
-                required String personId,
-                required String relatedPersonId,
-                required String relationshipType,
-                required DateTime createdAt,
-                Value<int> rowid = const Value.absent(),
-              }) => RelationshipsCompanion.insert(
-                id: id,
-                treeId: treeId,
-                personId: personId,
-                relatedPersonId: relatedPersonId,
-                relationshipType: relationshipType,
-                createdAt: createdAt,
-                rowid: rowid,
-              ),
-          withReferenceMapper: (p0) => p0
-              .map(
-                (e) => (
-                  e.readTable(table),
-                  $$RelationshipsTableReferences(db, table, e),
-                ),
-              )
-              .toList(),
-          prefetchHooksCallback:
-              ({treeId = false, personId = false, relatedPersonId = false}) {
-                return PrefetchHooks(
-                  db: db,
-                  explicitlyWatchedTables: [],
-                  addJoins:
-                      <
-                        T extends TableManagerState<
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic,
-                          dynamic
-                        >
-                      >(state) {
-                        if (treeId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.treeId,
-                                    referencedTable:
-                                        $$RelationshipsTableReferences
-                                            ._treeIdTable(db),
-                                    referencedColumn:
-                                        $$RelationshipsTableReferences
-                                            ._treeIdTable(db)
-                                            .id,
-                                  )
-                                  as T;
-                        }
-                        if (personId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.personId,
-                                    referencedTable:
-                                        $$RelationshipsTableReferences
-                                            ._personIdTable(db),
-                                    referencedColumn:
-                                        $$RelationshipsTableReferences
-                                            ._personIdTable(db)
-                                            .id,
-                                  )
-                                  as T;
-                        }
-                        if (relatedPersonId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.relatedPersonId,
-                                    referencedTable:
-                                        $$RelationshipsTableReferences
-                                            ._relatedPersonIdTable(db),
-                                    referencedColumn:
-                                        $$RelationshipsTableReferences
-                                            ._relatedPersonIdTable(db)
-                                            .id,
-                                  )
-                                  as T;
-                        }
-
-                        return state;
-                      },
-                  getPrefetchedDataCallback: (items) async {
-                    return [];
-                  },
-                );
-              },
-        ),
-      );
-}
-
-typedef $$RelationshipsTableProcessedTableManager =
-    ProcessedTableManager<
-      _$AppDatabase,
-      $RelationshipsTable,
-      Relationship,
-      $$RelationshipsTableFilterComposer,
-      $$RelationshipsTableOrderingComposer,
-      $$RelationshipsTableAnnotationComposer,
-      $$RelationshipsTableCreateCompanionBuilder,
-      $$RelationshipsTableUpdateCompanionBuilder,
-      (Relationship, $$RelationshipsTableReferences),
-      Relationship,
-      PrefetchHooks Function({bool treeId, bool personId, bool relatedPersonId})
     >;
 typedef $$MediaItemsTableCreateCompanionBuilder =
     MediaItemsCompanion Function({
@@ -18831,56 +15759,72 @@ typedef $$MediaItemsTableProcessedTableManager =
       MediaItem,
       PrefetchHooks Function({bool personId, bool citationsRefs})
     >;
-typedef $$EventsTableCreateCompanionBuilder =
-    EventsCompanion Function({
+typedef $$DuplicateMarkersTableCreateCompanionBuilder =
+    DuplicateMarkersCompanion Function({
       required String id,
-      required String personId,
-      required String eventType,
-      Value<double?> dateSort,
-      Value<String?> dateDisplay,
-      Value<String?> place,
-      Value<String?> description,
-      Value<bool> isPrimary,
-      Value<double?> latitude,
-      Value<double?> longitude,
+      required String personAId,
+      required String personBId,
+      Value<String?> reason,
       required DateTime createdAt,
-      required DateTime updatedAt,
       Value<int> rowid,
     });
-typedef $$EventsTableUpdateCompanionBuilder =
-    EventsCompanion Function({
+typedef $$DuplicateMarkersTableUpdateCompanionBuilder =
+    DuplicateMarkersCompanion Function({
       Value<String> id,
-      Value<String> personId,
-      Value<String> eventType,
-      Value<double?> dateSort,
-      Value<String?> dateDisplay,
-      Value<String?> place,
-      Value<String?> description,
-      Value<bool> isPrimary,
-      Value<double?> latitude,
-      Value<double?> longitude,
+      Value<String> personAId,
+      Value<String> personBId,
+      Value<String?> reason,
       Value<DateTime> createdAt,
-      Value<DateTime> updatedAt,
       Value<int> rowid,
     });
 
-final class $$EventsTableReferences
-    extends BaseReferences<_$AppDatabase, $EventsTable, Event> {
-  $$EventsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+final class $$DuplicateMarkersTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $DuplicateMarkersTable, DuplicateMarker> {
+  $$DuplicateMarkersTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
 
-  static $GenealogyPersonsTable _personIdTable(_$AppDatabase db) =>
+  static $GenealogyPersonsTable _personAIdTable(_$AppDatabase db) =>
       db.genealogyPersons.createAlias(
-        $_aliasNameGenerator(db.events.personId, db.genealogyPersons.id),
+        $_aliasNameGenerator(
+          db.duplicateMarkers.personAId,
+          db.genealogyPersons.id,
+        ),
       );
 
-  $$GenealogyPersonsTableProcessedTableManager get personId {
-    final $_column = $_itemColumn<String>('person_id')!;
+  $$GenealogyPersonsTableProcessedTableManager get personAId {
+    final $_column = $_itemColumn<String>('person_a_id')!;
 
     final manager = $$GenealogyPersonsTableTableManager(
       $_db,
       $_db.genealogyPersons,
     ).filter((f) => f.id.sqlEquals($_column));
-    final item = $_typedResult.readTableOrNull(_personIdTable($_db));
+    final item = $_typedResult.readTableOrNull(_personAIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $GenealogyPersonsTable _personBIdTable(_$AppDatabase db) =>
+      db.genealogyPersons.createAlias(
+        $_aliasNameGenerator(
+          db.duplicateMarkers.personBId,
+          db.genealogyPersons.id,
+        ),
+      );
+
+  $$GenealogyPersonsTableProcessedTableManager get personBId {
+    final $_column = $_itemColumn<String>('person_b_id')!;
+
+    final manager = $$GenealogyPersonsTableTableManager(
+      $_db,
+      $_db.genealogyPersons,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_personBIdTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: [item]),
@@ -18888,9 +15832,9 @@ final class $$EventsTableReferences
   }
 }
 
-class $$EventsTableFilterComposer
-    extends Composer<_$AppDatabase, $EventsTable> {
-  $$EventsTableFilterComposer({
+class $$DuplicateMarkersTableFilterComposer
+    extends Composer<_$AppDatabase, $DuplicateMarkersTable> {
+  $$DuplicateMarkersTableFilterComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -18902,43 +15846,8 @@ class $$EventsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get eventType => $composableBuilder(
-    column: $table.eventType,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<double> get dateSort => $composableBuilder(
-    column: $table.dateSort,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get dateDisplay => $composableBuilder(
-    column: $table.dateDisplay,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get place => $composableBuilder(
-    column: $table.place,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get description => $composableBuilder(
-    column: $table.description,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<bool> get isPrimary => $composableBuilder(
-    column: $table.isPrimary,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<double> get latitude => $composableBuilder(
-    column: $table.latitude,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<double> get longitude => $composableBuilder(
-    column: $table.longitude,
+  ColumnFilters<String> get reason => $composableBuilder(
+    column: $table.reason,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -18947,15 +15856,33 @@ class $$EventsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
-    column: $table.updatedAt,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  $$GenealogyPersonsTableFilterComposer get personId {
+  $$GenealogyPersonsTableFilterComposer get personAId {
     final $$GenealogyPersonsTableFilterComposer composer = $composerBuilder(
       composer: this,
-      getCurrentColumn: (t) => t.personId,
+      getCurrentColumn: (t) => t.personAId,
+      referencedTable: $db.genealogyPersons,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GenealogyPersonsTableFilterComposer(
+            $db: $db,
+            $table: $db.genealogyPersons,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$GenealogyPersonsTableFilterComposer get personBId {
+    final $$GenealogyPersonsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.personBId,
       referencedTable: $db.genealogyPersons,
       getReferencedColumn: (t) => t.id,
       builder:
@@ -18976,9 +15903,9 @@ class $$EventsTableFilterComposer
   }
 }
 
-class $$EventsTableOrderingComposer
-    extends Composer<_$AppDatabase, $EventsTable> {
-  $$EventsTableOrderingComposer({
+class $$DuplicateMarkersTableOrderingComposer
+    extends Composer<_$AppDatabase, $DuplicateMarkersTable> {
+  $$DuplicateMarkersTableOrderingComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -18990,43 +15917,8 @@ class $$EventsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get eventType => $composableBuilder(
-    column: $table.eventType,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<double> get dateSort => $composableBuilder(
-    column: $table.dateSort,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get dateDisplay => $composableBuilder(
-    column: $table.dateDisplay,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get place => $composableBuilder(
-    column: $table.place,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get description => $composableBuilder(
-    column: $table.description,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<bool> get isPrimary => $composableBuilder(
-    column: $table.isPrimary,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<double> get latitude => $composableBuilder(
-    column: $table.latitude,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<double> get longitude => $composableBuilder(
-    column: $table.longitude,
+  ColumnOrderings<String> get reason => $composableBuilder(
+    column: $table.reason,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -19035,15 +15927,33 @@ class $$EventsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
-    column: $table.updatedAt,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  $$GenealogyPersonsTableOrderingComposer get personId {
+  $$GenealogyPersonsTableOrderingComposer get personAId {
     final $$GenealogyPersonsTableOrderingComposer composer = $composerBuilder(
       composer: this,
-      getCurrentColumn: (t) => t.personId,
+      getCurrentColumn: (t) => t.personAId,
+      referencedTable: $db.genealogyPersons,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GenealogyPersonsTableOrderingComposer(
+            $db: $db,
+            $table: $db.genealogyPersons,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$GenealogyPersonsTableOrderingComposer get personBId {
+    final $$GenealogyPersonsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.personBId,
       referencedTable: $db.genealogyPersons,
       getReferencedColumn: (t) => t.id,
       builder:
@@ -19064,9 +15974,9 @@ class $$EventsTableOrderingComposer
   }
 }
 
-class $$EventsTableAnnotationComposer
-    extends Composer<_$AppDatabase, $EventsTable> {
-  $$EventsTableAnnotationComposer({
+class $$DuplicateMarkersTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DuplicateMarkersTable> {
+  $$DuplicateMarkersTableAnnotationComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -19076,44 +15986,39 @@ class $$EventsTableAnnotationComposer
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<String> get eventType =>
-      $composableBuilder(column: $table.eventType, builder: (column) => column);
-
-  GeneratedColumn<double> get dateSort =>
-      $composableBuilder(column: $table.dateSort, builder: (column) => column);
-
-  GeneratedColumn<String> get dateDisplay => $composableBuilder(
-    column: $table.dateDisplay,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get place =>
-      $composableBuilder(column: $table.place, builder: (column) => column);
-
-  GeneratedColumn<String> get description => $composableBuilder(
-    column: $table.description,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<bool> get isPrimary =>
-      $composableBuilder(column: $table.isPrimary, builder: (column) => column);
-
-  GeneratedColumn<double> get latitude =>
-      $composableBuilder(column: $table.latitude, builder: (column) => column);
-
-  GeneratedColumn<double> get longitude =>
-      $composableBuilder(column: $table.longitude, builder: (column) => column);
+  GeneratedColumn<String> get reason =>
+      $composableBuilder(column: $table.reason, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get updatedAt =>
-      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
-
-  $$GenealogyPersonsTableAnnotationComposer get personId {
+  $$GenealogyPersonsTableAnnotationComposer get personAId {
     final $$GenealogyPersonsTableAnnotationComposer composer = $composerBuilder(
       composer: this,
-      getCurrentColumn: (t) => t.personId,
+      getCurrentColumn: (t) => t.personAId,
+      referencedTable: $db.genealogyPersons,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GenealogyPersonsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.genealogyPersons,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$GenealogyPersonsTableAnnotationComposer get personBId {
+    final $$GenealogyPersonsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.personBId,
       referencedTable: $db.genealogyPersons,
       getReferencedColumn: (t) => t.id,
       builder:
@@ -19134,99 +16039,75 @@ class $$EventsTableAnnotationComposer
   }
 }
 
-class $$EventsTableTableManager
+class $$DuplicateMarkersTableTableManager
     extends
         RootTableManager<
           _$AppDatabase,
-          $EventsTable,
-          Event,
-          $$EventsTableFilterComposer,
-          $$EventsTableOrderingComposer,
-          $$EventsTableAnnotationComposer,
-          $$EventsTableCreateCompanionBuilder,
-          $$EventsTableUpdateCompanionBuilder,
-          (Event, $$EventsTableReferences),
-          Event,
-          PrefetchHooks Function({bool personId})
+          $DuplicateMarkersTable,
+          DuplicateMarker,
+          $$DuplicateMarkersTableFilterComposer,
+          $$DuplicateMarkersTableOrderingComposer,
+          $$DuplicateMarkersTableAnnotationComposer,
+          $$DuplicateMarkersTableCreateCompanionBuilder,
+          $$DuplicateMarkersTableUpdateCompanionBuilder,
+          (DuplicateMarker, $$DuplicateMarkersTableReferences),
+          DuplicateMarker,
+          PrefetchHooks Function({bool personAId, bool personBId})
         > {
-  $$EventsTableTableManager(_$AppDatabase db, $EventsTable table)
-    : super(
+  $$DuplicateMarkersTableTableManager(
+    _$AppDatabase db,
+    $DuplicateMarkersTable table,
+  ) : super(
         TableManagerState(
           db: db,
           table: table,
           createFilteringComposer: () =>
-              $$EventsTableFilterComposer($db: db, $table: table),
+              $$DuplicateMarkersTableFilterComposer($db: db, $table: table),
           createOrderingComposer: () =>
-              $$EventsTableOrderingComposer($db: db, $table: table),
+              $$DuplicateMarkersTableOrderingComposer($db: db, $table: table),
           createComputedFieldComposer: () =>
-              $$EventsTableAnnotationComposer($db: db, $table: table),
+              $$DuplicateMarkersTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
-                Value<String> personId = const Value.absent(),
-                Value<String> eventType = const Value.absent(),
-                Value<double?> dateSort = const Value.absent(),
-                Value<String?> dateDisplay = const Value.absent(),
-                Value<String?> place = const Value.absent(),
-                Value<String?> description = const Value.absent(),
-                Value<bool> isPrimary = const Value.absent(),
-                Value<double?> latitude = const Value.absent(),
-                Value<double?> longitude = const Value.absent(),
+                Value<String> personAId = const Value.absent(),
+                Value<String> personBId = const Value.absent(),
+                Value<String?> reason = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
-                Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
-              }) => EventsCompanion(
+              }) => DuplicateMarkersCompanion(
                 id: id,
-                personId: personId,
-                eventType: eventType,
-                dateSort: dateSort,
-                dateDisplay: dateDisplay,
-                place: place,
-                description: description,
-                isPrimary: isPrimary,
-                latitude: latitude,
-                longitude: longitude,
+                personAId: personAId,
+                personBId: personBId,
+                reason: reason,
                 createdAt: createdAt,
-                updatedAt: updatedAt,
                 rowid: rowid,
               ),
           createCompanionCallback:
               ({
                 required String id,
-                required String personId,
-                required String eventType,
-                Value<double?> dateSort = const Value.absent(),
-                Value<String?> dateDisplay = const Value.absent(),
-                Value<String?> place = const Value.absent(),
-                Value<String?> description = const Value.absent(),
-                Value<bool> isPrimary = const Value.absent(),
-                Value<double?> latitude = const Value.absent(),
-                Value<double?> longitude = const Value.absent(),
+                required String personAId,
+                required String personBId,
+                Value<String?> reason = const Value.absent(),
                 required DateTime createdAt,
-                required DateTime updatedAt,
                 Value<int> rowid = const Value.absent(),
-              }) => EventsCompanion.insert(
+              }) => DuplicateMarkersCompanion.insert(
                 id: id,
-                personId: personId,
-                eventType: eventType,
-                dateSort: dateSort,
-                dateDisplay: dateDisplay,
-                place: place,
-                description: description,
-                isPrimary: isPrimary,
-                latitude: latitude,
-                longitude: longitude,
+                personAId: personAId,
+                personBId: personBId,
+                reason: reason,
                 createdAt: createdAt,
-                updatedAt: updatedAt,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map(
-                (e) =>
-                    (e.readTable(table), $$EventsTableReferences(db, table, e)),
+                (e) => (
+                  e.readTable(table),
+                  $$DuplicateMarkersTableReferences(db, table, e),
+                ),
               )
               .toList(),
-          prefetchHooksCallback: ({personId = false}) {
+          prefetchHooksCallback: ({personAId = false, personBId = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [],
@@ -19246,16 +16127,33 @@ class $$EventsTableTableManager
                       dynamic
                     >
                   >(state) {
-                    if (personId) {
+                    if (personAId) {
                       state =
                           state.withJoin(
                                 currentTable: table,
-                                currentColumn: table.personId,
-                                referencedTable: $$EventsTableReferences
-                                    ._personIdTable(db),
-                                referencedColumn: $$EventsTableReferences
-                                    ._personIdTable(db)
-                                    .id,
+                                currentColumn: table.personAId,
+                                referencedTable:
+                                    $$DuplicateMarkersTableReferences
+                                        ._personAIdTable(db),
+                                referencedColumn:
+                                    $$DuplicateMarkersTableReferences
+                                        ._personAIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+                    if (personBId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.personBId,
+                                referencedTable:
+                                    $$DuplicateMarkersTableReferences
+                                        ._personBIdTable(db),
+                                referencedColumn:
+                                    $$DuplicateMarkersTableReferences
+                                        ._personBIdTable(db)
+                                        .id,
                               )
                               as T;
                     }
@@ -19271,228 +16169,6 @@ class $$EventsTableTableManager
       );
 }
 
-typedef $$EventsTableProcessedTableManager =
-    ProcessedTableManager<
-      _$AppDatabase,
-      $EventsTable,
-      Event,
-      $$EventsTableFilterComposer,
-      $$EventsTableOrderingComposer,
-      $$EventsTableAnnotationComposer,
-      $$EventsTableCreateCompanionBuilder,
-      $$EventsTableUpdateCompanionBuilder,
-      (Event, $$EventsTableReferences),
-      Event,
-      PrefetchHooks Function({bool personId})
-    >;
-typedef $$DuplicateMarkersTableCreateCompanionBuilder =
-    DuplicateMarkersCompanion Function({
-      required String id,
-      required String treeId,
-      required String personAId,
-      required String personBId,
-      Value<String?> reason,
-      required DateTime createdAt,
-      Value<int> rowid,
-    });
-typedef $$DuplicateMarkersTableUpdateCompanionBuilder =
-    DuplicateMarkersCompanion Function({
-      Value<String> id,
-      Value<String> treeId,
-      Value<String> personAId,
-      Value<String> personBId,
-      Value<String?> reason,
-      Value<DateTime> createdAt,
-      Value<int> rowid,
-    });
-
-class $$DuplicateMarkersTableFilterComposer
-    extends Composer<_$AppDatabase, $DuplicateMarkersTable> {
-  $$DuplicateMarkersTableFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get treeId => $composableBuilder(
-    column: $table.treeId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get personAId => $composableBuilder(
-    column: $table.personAId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get personBId => $composableBuilder(
-    column: $table.personBId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get reason => $composableBuilder(
-    column: $table.reason,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get createdAt => $composableBuilder(
-    column: $table.createdAt,
-    builder: (column) => ColumnFilters(column),
-  );
-}
-
-class $$DuplicateMarkersTableOrderingComposer
-    extends Composer<_$AppDatabase, $DuplicateMarkersTable> {
-  $$DuplicateMarkersTableOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get treeId => $composableBuilder(
-    column: $table.treeId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get personAId => $composableBuilder(
-    column: $table.personAId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get personBId => $composableBuilder(
-    column: $table.personBId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get reason => $composableBuilder(
-    column: $table.reason,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
-    column: $table.createdAt,
-    builder: (column) => ColumnOrderings(column),
-  );
-}
-
-class $$DuplicateMarkersTableAnnotationComposer
-    extends Composer<_$AppDatabase, $DuplicateMarkersTable> {
-  $$DuplicateMarkersTableAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<String> get id =>
-      $composableBuilder(column: $table.id, builder: (column) => column);
-
-  GeneratedColumn<String> get treeId =>
-      $composableBuilder(column: $table.treeId, builder: (column) => column);
-
-  GeneratedColumn<String> get personAId =>
-      $composableBuilder(column: $table.personAId, builder: (column) => column);
-
-  GeneratedColumn<String> get personBId =>
-      $composableBuilder(column: $table.personBId, builder: (column) => column);
-
-  GeneratedColumn<String> get reason =>
-      $composableBuilder(column: $table.reason, builder: (column) => column);
-
-  GeneratedColumn<DateTime> get createdAt =>
-      $composableBuilder(column: $table.createdAt, builder: (column) => column);
-}
-
-class $$DuplicateMarkersTableTableManager
-    extends
-        RootTableManager<
-          _$AppDatabase,
-          $DuplicateMarkersTable,
-          DuplicateMarker,
-          $$DuplicateMarkersTableFilterComposer,
-          $$DuplicateMarkersTableOrderingComposer,
-          $$DuplicateMarkersTableAnnotationComposer,
-          $$DuplicateMarkersTableCreateCompanionBuilder,
-          $$DuplicateMarkersTableUpdateCompanionBuilder,
-          (
-            DuplicateMarker,
-            BaseReferences<
-              _$AppDatabase,
-              $DuplicateMarkersTable,
-              DuplicateMarker
-            >,
-          ),
-          DuplicateMarker,
-          PrefetchHooks Function()
-        > {
-  $$DuplicateMarkersTableTableManager(
-    _$AppDatabase db,
-    $DuplicateMarkersTable table,
-  ) : super(
-        TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $$DuplicateMarkersTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$DuplicateMarkersTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$DuplicateMarkersTableAnnotationComposer($db: db, $table: table),
-          updateCompanionCallback:
-              ({
-                Value<String> id = const Value.absent(),
-                Value<String> treeId = const Value.absent(),
-                Value<String> personAId = const Value.absent(),
-                Value<String> personBId = const Value.absent(),
-                Value<String?> reason = const Value.absent(),
-                Value<DateTime> createdAt = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
-              }) => DuplicateMarkersCompanion(
-                id: id,
-                treeId: treeId,
-                personAId: personAId,
-                personBId: personBId,
-                reason: reason,
-                createdAt: createdAt,
-                rowid: rowid,
-              ),
-          createCompanionCallback:
-              ({
-                required String id,
-                required String treeId,
-                required String personAId,
-                required String personBId,
-                Value<String?> reason = const Value.absent(),
-                required DateTime createdAt,
-                Value<int> rowid = const Value.absent(),
-              }) => DuplicateMarkersCompanion.insert(
-                id: id,
-                treeId: treeId,
-                personAId: personAId,
-                personBId: personBId,
-                reason: reason,
-                createdAt: createdAt,
-                rowid: rowid,
-              ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
-          prefetchHooksCallback: null,
-        ),
-      );
-}
-
 typedef $$DuplicateMarkersTableProcessedTableManager =
     ProcessedTableManager<
       _$AppDatabase,
@@ -19503,12 +16179,9 @@ typedef $$DuplicateMarkersTableProcessedTableManager =
       $$DuplicateMarkersTableAnnotationComposer,
       $$DuplicateMarkersTableCreateCompanionBuilder,
       $$DuplicateMarkersTableUpdateCompanionBuilder,
-      (
-        DuplicateMarker,
-        BaseReferences<_$AppDatabase, $DuplicateMarkersTable, DuplicateMarker>,
-      ),
+      (DuplicateMarker, $$DuplicateMarkersTableReferences),
       DuplicateMarker,
-      PrefetchHooks Function()
+      PrefetchHooks Function({bool personAId, bool personBId})
     >;
 typedef $$CitationsTableCreateCompanionBuilder =
     CitationsCompanion Function({
@@ -21078,277 +17751,6 @@ typedef $$TodosTableProcessedTableManager =
       Todo,
       PrefetchHooks Function({bool personId})
     >;
-typedef $$SyncChangeLogTableCreateCompanionBuilder =
-    SyncChangeLogCompanion Function({
-      required String id,
-      required String sourceTableName,
-      required String recordUuid,
-      required String changeType,
-      Value<String?> changeData,
-      required DateTime changedAt,
-      Value<String> syncStatus,
-      Value<String> deviceId,
-      Value<int> rowid,
-    });
-typedef $$SyncChangeLogTableUpdateCompanionBuilder =
-    SyncChangeLogCompanion Function({
-      Value<String> id,
-      Value<String> sourceTableName,
-      Value<String> recordUuid,
-      Value<String> changeType,
-      Value<String?> changeData,
-      Value<DateTime> changedAt,
-      Value<String> syncStatus,
-      Value<String> deviceId,
-      Value<int> rowid,
-    });
-
-class $$SyncChangeLogTableFilterComposer
-    extends Composer<_$AppDatabase, $SyncChangeLogTable> {
-  $$SyncChangeLogTableFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get sourceTableName => $composableBuilder(
-    column: $table.sourceTableName,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get recordUuid => $composableBuilder(
-    column: $table.recordUuid,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get changeType => $composableBuilder(
-    column: $table.changeType,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get changeData => $composableBuilder(
-    column: $table.changeData,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get changedAt => $composableBuilder(
-    column: $table.changedAt,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get syncStatus => $composableBuilder(
-    column: $table.syncStatus,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get deviceId => $composableBuilder(
-    column: $table.deviceId,
-    builder: (column) => ColumnFilters(column),
-  );
-}
-
-class $$SyncChangeLogTableOrderingComposer
-    extends Composer<_$AppDatabase, $SyncChangeLogTable> {
-  $$SyncChangeLogTableOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get sourceTableName => $composableBuilder(
-    column: $table.sourceTableName,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get recordUuid => $composableBuilder(
-    column: $table.recordUuid,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get changeType => $composableBuilder(
-    column: $table.changeType,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get changeData => $composableBuilder(
-    column: $table.changeData,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get changedAt => $composableBuilder(
-    column: $table.changedAt,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get syncStatus => $composableBuilder(
-    column: $table.syncStatus,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get deviceId => $composableBuilder(
-    column: $table.deviceId,
-    builder: (column) => ColumnOrderings(column),
-  );
-}
-
-class $$SyncChangeLogTableAnnotationComposer
-    extends Composer<_$AppDatabase, $SyncChangeLogTable> {
-  $$SyncChangeLogTableAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<String> get id =>
-      $composableBuilder(column: $table.id, builder: (column) => column);
-
-  GeneratedColumn<String> get sourceTableName => $composableBuilder(
-    column: $table.sourceTableName,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get recordUuid => $composableBuilder(
-    column: $table.recordUuid,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get changeType => $composableBuilder(
-    column: $table.changeType,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get changeData => $composableBuilder(
-    column: $table.changeData,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<DateTime> get changedAt =>
-      $composableBuilder(column: $table.changedAt, builder: (column) => column);
-
-  GeneratedColumn<String> get syncStatus => $composableBuilder(
-    column: $table.syncStatus,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get deviceId =>
-      $composableBuilder(column: $table.deviceId, builder: (column) => column);
-}
-
-class $$SyncChangeLogTableTableManager
-    extends
-        RootTableManager<
-          _$AppDatabase,
-          $SyncChangeLogTable,
-          SyncChangeLogData,
-          $$SyncChangeLogTableFilterComposer,
-          $$SyncChangeLogTableOrderingComposer,
-          $$SyncChangeLogTableAnnotationComposer,
-          $$SyncChangeLogTableCreateCompanionBuilder,
-          $$SyncChangeLogTableUpdateCompanionBuilder,
-          (
-            SyncChangeLogData,
-            BaseReferences<
-              _$AppDatabase,
-              $SyncChangeLogTable,
-              SyncChangeLogData
-            >,
-          ),
-          SyncChangeLogData,
-          PrefetchHooks Function()
-        > {
-  $$SyncChangeLogTableTableManager(_$AppDatabase db, $SyncChangeLogTable table)
-    : super(
-        TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $$SyncChangeLogTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$SyncChangeLogTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$SyncChangeLogTableAnnotationComposer($db: db, $table: table),
-          updateCompanionCallback:
-              ({
-                Value<String> id = const Value.absent(),
-                Value<String> sourceTableName = const Value.absent(),
-                Value<String> recordUuid = const Value.absent(),
-                Value<String> changeType = const Value.absent(),
-                Value<String?> changeData = const Value.absent(),
-                Value<DateTime> changedAt = const Value.absent(),
-                Value<String> syncStatus = const Value.absent(),
-                Value<String> deviceId = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
-              }) => SyncChangeLogCompanion(
-                id: id,
-                sourceTableName: sourceTableName,
-                recordUuid: recordUuid,
-                changeType: changeType,
-                changeData: changeData,
-                changedAt: changedAt,
-                syncStatus: syncStatus,
-                deviceId: deviceId,
-                rowid: rowid,
-              ),
-          createCompanionCallback:
-              ({
-                required String id,
-                required String sourceTableName,
-                required String recordUuid,
-                required String changeType,
-                Value<String?> changeData = const Value.absent(),
-                required DateTime changedAt,
-                Value<String> syncStatus = const Value.absent(),
-                Value<String> deviceId = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
-              }) => SyncChangeLogCompanion.insert(
-                id: id,
-                sourceTableName: sourceTableName,
-                recordUuid: recordUuid,
-                changeType: changeType,
-                changeData: changeData,
-                changedAt: changedAt,
-                syncStatus: syncStatus,
-                deviceId: deviceId,
-                rowid: rowid,
-              ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
-          prefetchHooksCallback: null,
-        ),
-      );
-}
-
-typedef $$SyncChangeLogTableProcessedTableManager =
-    ProcessedTableManager<
-      _$AppDatabase,
-      $SyncChangeLogTable,
-      SyncChangeLogData,
-      $$SyncChangeLogTableFilterComposer,
-      $$SyncChangeLogTableOrderingComposer,
-      $$SyncChangeLogTableAnnotationComposer,
-      $$SyncChangeLogTableCreateCompanionBuilder,
-      $$SyncChangeLogTableUpdateCompanionBuilder,
-      (
-        SyncChangeLogData,
-        BaseReferences<_$AppDatabase, $SyncChangeLogTable, SyncChangeLogData>,
-      ),
-      SyncChangeLogData,
-      PrefetchHooks Function()
-    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -21357,20 +17759,16 @@ class $AppDatabaseManager {
       $$FamilyTreesTableTableManager(_db, _db.familyTrees);
   $$GenealogyPersonsTableTableManager get genealogyPersons =>
       $$GenealogyPersonsTableTableManager(_db, _db.genealogyPersons);
+  $$EventsTableTableManager get events =>
+      $$EventsTableTableManager(_db, _db.events);
   $$SurnameEventsTableTableManager get surnameEvents =>
       $$SurnameEventsTableTableManager(_db, _db.surnameEvents);
   $$FamiliesV2TableTableManager get familiesV2 =>
       $$FamiliesV2TableTableManager(_db, _db.familiesV2);
   $$FamilyChildrenV2TableTableManager get familyChildrenV2 =>
       $$FamilyChildrenV2TableTableManager(_db, _db.familyChildrenV2);
-  $$PersonsTableTableManager get persons =>
-      $$PersonsTableTableManager(_db, _db.persons);
-  $$RelationshipsTableTableManager get relationships =>
-      $$RelationshipsTableTableManager(_db, _db.relationships);
   $$MediaItemsTableTableManager get mediaItems =>
       $$MediaItemsTableTableManager(_db, _db.mediaItems);
-  $$EventsTableTableManager get events =>
-      $$EventsTableTableManager(_db, _db.events);
   $$DuplicateMarkersTableTableManager get duplicateMarkers =>
       $$DuplicateMarkersTableTableManager(_db, _db.duplicateMarkers);
   $$CitationsTableTableManager get citations =>
@@ -21381,6 +17779,4 @@ class $AppDatabaseManager {
       $$ResearchNotesTableTableManager(_db, _db.researchNotes);
   $$TodosTableTableManager get todos =>
       $$TodosTableTableManager(_db, _db.todos);
-  $$SyncChangeLogTableTableManager get syncChangeLog =>
-      $$SyncChangeLogTableTableManager(_db, _db.syncChangeLog);
 }

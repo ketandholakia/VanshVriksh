@@ -1,5 +1,27 @@
 import 'package:drift/drift.dart';
 
+import 'family_trees_table.dart';
+
+/// Canonical person record.
+///
+/// Identity and lifecycle rules:
+/// * [id] is the immutable database identity, assigned once at insert.
+/// * [uuid] is a stable external identity (survives export/import and merges).
+/// * [treeId] is mandatory ownership: a person can never exist outside a tree,
+///   and the tree cannot be deleted while it still holds people.
+/// * Deletion is a **soft delete** ([isDeleted]); hard deletes are rejected by
+///   the `RESTRICT` actions on every table that references a person.
+/// * [mergedIntoId] records a merge (this person was folded into another one)
+///   and is an integrity-checked self reference.
+///
+/// There are deliberately no `sync_status` / `version` / `last_synced_at`
+/// columns: no sync engine exists, so they would be write-only fields that
+/// invite the false impression that sync works.
+@TableIndex(name: 'idx_genealogy_persons_tree_id', columns: {#treeId})
+@TableIndex(
+  name: 'idx_genealogy_persons_merged_into',
+  columns: {#mergedIntoId},
+)
 class GenealogyPersons extends Table {
   TextColumn get id => text()();
 
@@ -16,16 +38,19 @@ class GenealogyPersons extends Table {
   TextColumn get customDisplayName => text().nullable()();
 
   TextColumn get gender => text()();
+
   DateTimeColumn get birthDate => dateTime().nullable()();
   TextColumn get birthDateQualifier => text().nullable()();
   TextColumn get birthPlace => text().nullable()();
   RealColumn get birthPlaceLat => real().nullable()();
   RealColumn get birthPlaceLng => real().nullable()();
+
   DateTimeColumn get deathDate => dateTime().nullable()();
   TextColumn get deathDateQualifier => text().nullable()();
   TextColumn get deathPlace => text().nullable()();
   RealColumn get deathPlaceLat => real().nullable()();
   RealColumn get deathPlaceLng => real().nullable()();
+
   TextColumn get currentPlace => text().nullable()();
   BoolColumn get isLiving => boolean().withDefault(const Constant(true))();
 
@@ -40,17 +65,24 @@ class GenealogyPersons extends Table {
   BoolColumn get isPrivate => boolean().withDefault(const Constant(false))();
   IntColumn get privacyLevel => integer().withDefault(const Constant(0))();
 
-  TextColumn get treeId => text()();
+  /// Owning tree. Mandatory, integrity checked.
+  @ReferenceName('personsInTree')
+  TextColumn get treeId => text().references(FamilyTrees, #id, onDelete: KeyAction.restrict)();
 
+  /// Stable external identity.
   TextColumn get uuid => text().unique()();
-  TextColumn get syncStatus => text().withDefault(const Constant('pending'))();
+
   BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
-  DateTimeColumn get lastSyncedAt => dateTime().nullable()();
 
-  IntColumn get version => integer().withDefault(const Constant(1))();
-  TextColumn get mergedIntoId => text().nullable()();
+  /// Set when this person was merged into another person.
+  @ReferenceName('mergedDuplicates')
+  TextColumn get mergedIntoId => text().nullable().references(
+        GenealogyPersons,
+        #id,
+        onDelete: KeyAction.setNull,
+      )();
 
   @override
   Set<Column> get primaryKey => {id};

@@ -89,9 +89,6 @@ class GenealogyRepository {
         privacyLevel: Value(privacyLevel),
         displayNameFormat: Value(displayNameFormat),
         customDisplayName: Value(customDisplayName?.trim()),
-        syncStatus: const Value('pending'),
-        isDeleted: const Value(false),
-        version: const Value(1),
         mergedIntoId: Value(mergedIntoId),
       ),
     );
@@ -199,40 +196,66 @@ class GenealogyRepository {
 
   Future<List<GenealogyPerson>> getPeopleByTree(String treeId) => _personDao.getPeopleByTree(treeId);
 
-  /// Duplicate markers for [treeId], excluding markers whose people have been
-  /// deleted (or merged away).
+  /// Duplicate markers whose two people are both live and both in [treeId].
+  ///
+  /// The marker no longer stores a tree of its own: tree ownership is derived
+  /// from the people it links, so it cannot drift out of sync with them.
   Future<List<DuplicateMarker>> getDuplicateMarkers(String treeId) async {
-    final markers = await (_database.select(_database.duplicateMarkers)
-          ..where((t) => t.treeId.equals(treeId)))
-        .get();
+    final markers = await _database.select(_database.duplicateMarkers).get();
     if (markers.isEmpty) return const [];
 
-    final live = (await _personDao.getLivePeopleByIds([
-      for (final m in markers) ...[m.personAId, m.personBId],
-    ]))
-        .map((p) => p.id)
-        .toSet();
+    final people = await _personDao.getLivePeopleByIds([
+      for (final marker in markers) ...[marker.personAId, marker.personBId],
+    ]);
+    final treeByPerson = {for (final person in people) person.id: person.treeId};
 
     return markers
-        .where((m) => live.contains(m.personAId) && live.contains(m.personBId))
+        .where(
+          (marker) =>
+              treeByPerson[marker.personAId] == treeId &&
+              treeByPerson[marker.personBId] == treeId,
+        )
         .toList();
   }
 
+  /// Marks two people as suspected duplicates.
+  ///
+  /// The pair is stored in a canonical order (`UNIQUE(person_a_id,
+  /// person_b_id)`), so marking the same two people in either argument order is
+  /// a single marker.
   Future<void> markAsDuplicate({
     required String treeId,
     required String sourceId,
     required String targetId,
     String? reason,
   }) async {
+    if (sourceId == targetId) {
+      throw ArgumentError('A person cannot be a duplicate of themselves.');
+    }
+    final first = await _personDao.getPersonById(sourceId);
+    final second = await _personDao.getPersonById(targetId);
+    if (first == null || second == null) {
+      throw ArgumentError('Both people must exist to mark them as duplicates.');
+    }
+    if (first.treeId != treeId || second.treeId != treeId) {
+      throw ArgumentError(
+        'Both people must belong to tree $treeId to be marked as duplicates.',
+      );
+    }
+
+    final (personAId, personBId) = sourceId.compareTo(targetId) <= 0
+        ? (sourceId, targetId)
+        : (targetId, sourceId);
+
     await _database.into(_database.duplicateMarkers).insert(
       DuplicateMarkersCompanion.insert(
         id: IdGenerator.newId(),
-        personAId: sourceId,
-        personBId: targetId,
-        treeId: treeId,
+        personAId: personAId,
+        personBId: personBId,
         reason: Value(reason),
         createdAt: DateTime.now(),
       ),
+      mode: InsertMode.insertOrIgnore,
     );
   }
 
@@ -652,6 +675,7 @@ class GenealogyRepository {
     await _personDao.createFamily(
       FamiliesV2Companion.insert(
         id: id,
+        treeId: treeId,
         husbandId: Value(husbandId),
         wifeId: Value(wifeId),
         marriageDate: Value(marriageDate),

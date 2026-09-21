@@ -1,15 +1,17 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:drift/native.dart';
+import 'package:vanshvriksh/core/constants/app_constants.dart';
 import 'package:vanshvriksh/data/database/app_database.dart';
 import 'package:vanshvriksh/features/gedcom/gedcom_parser.dart';
 import 'package:vanshvriksh/features/gedcom/gedcom_importer.dart';
+
+import '../../support/test_database.dart';
 
 void main() {
   group('GedcomImporter', () {
     late AppDatabase db;
 
-    setUp(() {
-      db = AppDatabase.forTesting(NativeDatabase.memory());
+    setUp(() async {
+      db = await createTestDatabase();
     });
 
     tearDown(() async {
@@ -34,7 +36,7 @@ void main() {
       final nodes = GedcomParser.parseLines(lines);
       final importer = GedcomImporter(db);
       
-      await importer.importGedcom(nodes, 'test-tree');
+      await importer.importGedcom(nodes, AppConstants.defaultTreeId);
 
       final persons = await db.select(db.genealogyPersons).get();
       expect(persons.length, 2);

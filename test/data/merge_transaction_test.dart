@@ -8,12 +8,13 @@
 // collide, throw, and leave the tree half-rewritten.
 
 import 'package:drift/drift.dart' hide isNull, isNotNull;
-import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:vanshvriksh/data/database/app_database.dart';
 import 'package:vanshvriksh/data/repositories/genealogy_repository.dart';
 import 'package:vanshvriksh/data/repositories/relationship_repository.dart';
+
+import '../support/test_database.dart';
 
 void main() {
   const treeId = 'default-tree';
@@ -22,8 +23,8 @@ void main() {
   late GenealogyRepository repository;
   late RelationshipRepository relationships;
 
-  setUp(() {
-    db = AppDatabase.forTesting(NativeDatabase.memory());
+  setUp(() async {
+    db = await createTestDatabase();
     repository = GenealogyRepository(db);
     relationships = RelationshipRepository(db);
   });

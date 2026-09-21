@@ -1,9 +1,10 @@
-import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:vanshvriksh/data/database/app_database.dart';
 import 'package:vanshvriksh/data/repositories/genealogy_repository.dart';
 import 'package:vanshvriksh/data/repositories/relationship_repository.dart';
+
+import '../../support/test_database.dart';
 
 void main() {
   const treeId = 'default-tree';
@@ -12,8 +13,8 @@ void main() {
   late GenealogyRepository repository;
   late RelationshipRepository relationshipRepository;
 
-  setUp(() {
-    db = AppDatabase.forTesting(NativeDatabase.memory());
+  setUp(() async {
+    db = await createTestDatabase();
     repository = GenealogyRepository(db);
     relationshipRepository = RelationshipRepository(db);
   });
@@ -119,13 +120,11 @@ void main() {
     expect(links.length, 1);
     expect(links.single.childId, child2Id);
 
-    final relationships = await relationshipRepository.getRelationshipsByTree(treeId);
-    final parentChild = relationships
-        .where((r) => r.relationshipType == 'parent_child')
-        .toList();
+    final parentChild =
+        await relationshipRepository.getParentChildRelationships(treeId);
     expect(parentChild.length, 1);
-    expect(parentChild.single.personId, parentId);
-    expect(parentChild.single.relatedPersonId, child2Id);
+    expect(parentChild.single.parentId, parentId);
+    expect(parentChild.single.childId, child2Id);
   });
 
   test('reassigns spouse families to the survivor', () async {
@@ -151,13 +150,10 @@ void main() {
     expect(family.husbandId, husbandId);
     expect(family.wifeId, replacementId);
 
-    final relationships = await relationshipRepository.getRelationshipsByTree(treeId);
-    final spouses = relationships
-        .where((r) => r.relationshipType == 'spouse')
-        .toList();
-    expect(spouses.length, 1);
-    expect(spouses.single.personId, husbandId);
-    expect(spouses.single.relatedPersonId, replacementId);
+    final partnerships = await relationshipRepository.getPartnerships(treeId);
+    expect(partnerships.length, 1);
+    expect(partnerships.single.partnerIds, contains(husbandId));
+    expect(partnerships.single.partnerIds, contains(replacementId));
   });
 
   test('rejects merging a person into themselves', () async {

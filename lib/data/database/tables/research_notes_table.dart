@@ -2,10 +2,18 @@ import 'package:drift/drift.dart';
 
 import 'genealogy_persons_table.dart';
 
+/// A research note. May be person-scoped ([personId] nullable) or tree-level.
+///
+/// `RESTRICT` on delete: notes are the user's own working record.
+@TableIndex(name: 'idx_research_notes_person_id', columns: {#personId})
 class ResearchNotes extends Table {
   TextColumn get id => text()();
 
-  TextColumn get personId => text().nullable().references(GenealogyPersons, #id)();
+  TextColumn get personId => text().nullable().references(
+        GenealogyPersons,
+        #id,
+        onDelete: KeyAction.restrict,
+      )();
 
   TextColumn get noteText => text()();
 

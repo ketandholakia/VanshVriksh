@@ -5,7 +5,6 @@ import '../../data/database/app_database.dart';
 import '../../data/providers/genealogy_repository_provider.dart';
 import '../../data/providers/relationship_repository_provider.dart';
 import '../../core/extensions/genealogy_person_extensions.dart';
-
 class IntegrityIssue {
   const IntegrityIssue({
     required this.severity,
@@ -25,22 +24,18 @@ final integrityIssuesProvider = FutureProvider<List<IntegrityIssue>>((ref) async
   final relationshipRepo = ref.watch(relationshipRepositoryProvider);
 
   final people = await personRepo.getPeopleByTree(AppConstants.defaultTreeId);
-  final relationships =
-      await relationshipRepo.getRelationshipsByTree(AppConstants.defaultTreeId);
+  final parentChildLinks = await relationshipRepo.getParentChildRelationships(
+    AppConstants.defaultTreeId,
+  );
 
   final issues = <IntegrityIssue>[];
   final byId = {for (final person in people) person.id: person};
 
-  final parentChildRels = relationships
-      .where((rel) => rel.relationshipType == 'parent_child')
-      .toList();
-
   for (final person in people) {
     if (person.birthDate == null) continue;
 
-    for (final rel
-        in parentChildRels.where((r) => r.relatedPersonId == person.id)) {
-      final parent = byId[rel.personId];
+    for (final link in parentChildLinks.where((l) => l.childId == person.id)) {
+      final parent = byId[link.parentId];
       if (parent == null || parent.birthDate == null) continue;
 
       final ageGap = person.birthDate!.difference(parent.birthDate!).inDays / 365.25;
@@ -76,9 +71,9 @@ final integrityIssuesProvider = FutureProvider<List<IntegrityIssue>>((ref) async
     if (!visited.add(personId)) return false;
 
     stack.add(personId);
-    final children = parentChildRels
-        .where((rel) => rel.personId == personId)
-        .map((rel) => rel.relatedPersonId);
+    final children = parentChildLinks
+        .where((link) => link.parentId == personId)
+        .map((link) => link.childId);
 
     for (final childId in children) {
       if (dfs(childId)) return true;

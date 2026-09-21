@@ -2,10 +2,16 @@ import 'package:drift/drift.dart';
 
 import 'genealogy_persons_table.dart';
 
+/// A dated, person-scoped life event (birth, marriage, baptism, residence...).
+///
+/// Owned through [personId]. `RESTRICT` on delete: an event must never be
+/// silently destroyed with its person; the person delete path is a soft delete
+/// and keeps these rows.
+@TableIndex(name: 'idx_events_person_id', columns: {#personId})
 class Events extends Table {
   TextColumn get id => text()();
 
-  TextColumn get personId => text().references(GenealogyPersons, #id)();
+  TextColumn get personId => text().references(GenealogyPersons, #id, onDelete: KeyAction.restrict)();
 
   TextColumn get eventType => text()();
 
