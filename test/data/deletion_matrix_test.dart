@@ -554,14 +554,6 @@ void main() {
               createdAt: now,
             ),
           );
-      await db.into(db.todos).insert(
-            TodosCompanion.insert(
-              id: 'todo-1',
-              personId: Value(family.kid),
-              taskText: 'todo',
-              createdAt: now,
-            ),
-          );
       await people.markAsDuplicate(
         treeId: treeId,
         sourceId: family.dad,
@@ -576,7 +568,6 @@ void main() {
       expect(preview.events, 1);
       expect(preview.mediaItems, 1);
       expect(preview.researchNotes, 1);
-      expect(preview.todos, 1);
       expect(preview.surnameEvents, 0);
       expect(preview.duplicateMarkers, 1);
     });

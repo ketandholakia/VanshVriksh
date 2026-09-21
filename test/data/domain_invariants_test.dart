@@ -100,9 +100,6 @@ const invariantQueries = <String, String>{
     SELECT 'research_notes', n.id FROM research_notes n
     LEFT JOIN genealogy_persons p ON p.id = n.person_id WHERE p.id IS NULL
     UNION ALL
-    SELECT 'todos', t.id FROM todos t
-    LEFT JOIN genealogy_persons p ON p.id = t.person_id WHERE p.id IS NULL
-    UNION ALL
     SELECT 'surname_events', s.id FROM surname_events s
     LEFT JOIN genealogy_persons p ON p.id = s.person_id WHERE p.id IS NULL
   ''',
@@ -501,14 +498,6 @@ void main() {
               createdAt: now,
             ),
           );
-      await db.into(db.todos).insert(
-            TodosCompanion.insert(
-              id: 't1',
-              personId: Value(family.kidA),
-              taskText: 'task',
-              createdAt: now,
-            ),
-          );
       await people.markAsDuplicate(
         treeId: treeId,
         sourceId: family.kidA,
@@ -523,7 +512,6 @@ void main() {
       expect(await db.select(db.events).get(), isEmpty);
       expect(await db.select(db.mediaItems).get(), isEmpty);
       expect(await db.select(db.researchNotes).get(), isEmpty);
-      expect(await db.select(db.todos).get(), isEmpty);
       expect(await db.select(db.surnameEvents).get(), isEmpty);
       expect(await db.select(db.duplicateMarkers).get(), isEmpty);
       expect(await db.select(db.familyTrees).get(), isEmpty);

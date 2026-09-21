@@ -567,12 +567,6 @@ class GenealogyRepository {
       await (_database.update(_database.researchNotes)
             ..where((t) => t.personId.equals(duplicateId)))
           .write(ResearchNotesCompanion(personId: Value(survivorId)));
-      // To-dos are person-scoped as well: without this they would be orphaned on
-      // a retired person.
-      await (_database.update(_database.todos)
-            ..where((t) => t.personId.equals(duplicateId)))
-          .write(TodosCompanion(personId: Value(survivorId)));
-      await _repointCitationLinks(duplicateId, survivorId);
       // A tree that was rooted at the duplicate now roots at the survivor.
       await (_database.update(_database.familyTrees)
             ..where((t) => t.rootPersonId.equals(duplicateId)))
@@ -907,57 +901,6 @@ class GenealogyRepository {
       }
     }
     return false;
-  }
-
-  /// Moves `citation_links` rows from [fromPersonId] to [toPersonId].
-  ///
-  /// `citation_links` has the composite primary key
-  /// `(citation_id, entity_type, entity_id)`, so a plain UPDATE collides when
-  /// the survivor already cites the same source. In that case the duplicate's
-  /// link is dropped instead of overwriting the survivor's.
-  Future<void> _repointCitationLinks(
-    String fromPersonId,
-    String toPersonId,
-  ) async {
-    final links = await (_database.select(_database.citationLinks)
-          ..where(
-            (t) =>
-                t.entityType.equals('person') &
-                t.entityId.equals(fromPersonId),
-          ))
-        .get();
-
-    for (final link in links) {
-      final existing = await (_database.select(_database.citationLinks)
-            ..where(
-              (t) =>
-                  t.citationId.equals(link.citationId) &
-                  t.entityType.equals(link.entityType) &
-                  t.entityId.equals(toPersonId),
-            ))
-          .getSingleOrNull();
-
-      final deleteDuplicate = _database.delete(_database.citationLinks)
-        ..where(
-          (t) =>
-              t.citationId.equals(link.citationId) &
-              t.entityType.equals(link.entityType) &
-              t.entityId.equals(fromPersonId),
-        );
-
-      if (existing != null) {
-        await deleteDuplicate.go();
-      } else {
-        await (_database.update(_database.citationLinks)
-              ..where(
-                (t) =>
-                    t.citationId.equals(link.citationId) &
-                    t.entityType.equals(link.entityType) &
-                    t.entityId.equals(fromPersonId),
-              ))
-            .write(CitationLinksCompanion(entityId: Value(toPersonId)));
-      }
-    }
   }
 
   static String? _keep(String? survivor, String? duplicate) {

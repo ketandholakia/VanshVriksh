@@ -13,7 +13,6 @@ typedef TreePurgePreview = ({
   int events,
   int mediaItems,
   int researchNotes,
-  int todos,
   int surnameEvents,
   int duplicateMarkers,
 });
@@ -128,10 +127,6 @@ class FamilyTreeRepository {
         (personIds) => _database.select(_database.researchNotes)
           ..where((t) => t.personId.isIn(personIds)),
       )(personIds),
-      todos: await _count(
-        (personIds) => _database.select(_database.todos)
-          ..where((t) => t.personId.isIn(personIds)),
-      )(personIds),
       surnameEvents: await _count(
         (personIds) => _database.select(_database.surnameEvents)
           ..where((t) => t.personId.isIn(personIds)),
@@ -150,10 +145,9 @@ class FamilyTreeRepository {
   /// Deleting a tree is the one place where records are destroyed rather than
   /// flagged, so the operation is explicit and complete: people (including the
   /// soft-deleted ones), families, child links, events, media rows, research
-  /// notes, to-dos, surname events, duplicate markers, and the polymorphic
-  /// `citation_links` rows that have no foreign key to look after them.
+  /// notes, surname events and duplicate markers.
   ///
-  /// Media and profile-photo **files** are not deleted — they are returned in
+  /// Media and profile-photo **files** are not deleted - they are returned in
   /// [TreePurgeResult.orphanedFilePaths] so the storage layer can remove them.
   Future<TreePurgeResult> purgeTree(String treeId) async {
     final tree = await getFamilyTreeById(treeId);
@@ -184,21 +178,6 @@ class FamilyTreeRepository {
       ];
 
       if (personIds.isNotEmpty) {
-        // References that no foreign key guards.
-        await (_database.delete(_database.citationLinks)
-              ..where(
-                (t) =>
-                    t.entityType.equals('person') & t.entityId.isIn(personIds),
-              ))
-            .go();
-
-        final mediaIds = mediaItems.map((item) => item.id).toList();
-        if (mediaIds.isNotEmpty) {
-          await (_database.update(_database.citations)
-                ..where((t) => t.imageMediaId.isIn(mediaIds)))
-              .write(const CitationsCompanion(imageMediaId: Value(null)));
-        }
-
         await (_database.delete(_database.duplicateMarkers)
               ..where(
                 (t) =>
@@ -243,9 +222,6 @@ class FamilyTreeRepository {
               ..where((t) => t.personId.isIn(personIds)))
             .go();
         await (_database.delete(_database.researchNotes)
-              ..where((t) => t.personId.isIn(personIds)))
-            .go();
-        await (_database.delete(_database.todos)
               ..where((t) => t.personId.isIn(personIds)))
             .go();
         await (_database.delete(_database.surnameEvents)

@@ -458,14 +458,6 @@ void main() {
               updatedAt: now,
             ),
           );
-      await db.into(db.todos).insert(
-            TodosCompanion.insert(
-              id: 't1',
-              personId: Value(duplicate),
-              taskText: 'find the register',
-              createdAt: now,
-            ),
-          );
       await db.into(db.mediaItems).insert(
             MediaItemsCompanion.insert(
               id: 'm1',
@@ -496,7 +488,6 @@ void main() {
       await people.mergePeople(survivorId: survivor, duplicateId: duplicate);
 
       expect((await db.select(db.events).get()).single.personId, survivor);
-      expect((await db.select(db.todos).get()).single.personId, survivor);
       expect((await db.select(db.mediaItems).get()).single.personId, survivor);
       expect(
         (await db.select(db.researchNotes).get()).single.personId,

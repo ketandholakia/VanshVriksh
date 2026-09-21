@@ -185,69 +185,6 @@ void main() {
       },
     );
 
-    test('citation links are repointed, and a clash is dropped not overwritten',
-        () async {
-      final survivor = await addPerson(firstName: 'Ram');
-      final duplicate = await addPerson(firstName: 'Ram');
-      final now = DateTime(2000);
-
-      await db.into(db.citations).insert(
-            CitationsCompanion.insert(
-              id: 'citation-shared',
-              sourceTitle: 'Census 1901',
-              citationText: 'Census entry',
-              createdAt: now,
-            ),
-          );
-      await db.into(db.citations).insert(
-            CitationsCompanion.insert(
-              id: 'citation-only-duplicate',
-              sourceTitle: 'Birth register',
-              citationText: 'Register entry',
-              createdAt: now,
-            ),
-          );
-      // The survivor already cites the shared source.
-      await db.into(db.citationLinks).insert(
-            CitationLinksCompanion.insert(
-              citationId: 'citation-shared',
-              entityType: 'person',
-              entityId: survivor,
-            ),
-          );
-      await db.into(db.citationLinks).insert(
-            CitationLinksCompanion.insert(
-              citationId: 'citation-shared',
-              entityType: 'person',
-              entityId: duplicate,
-            ),
-          );
-      await db.into(db.citationLinks).insert(
-            CitationLinksCompanion.insert(
-              citationId: 'citation-only-duplicate',
-              entityType: 'person',
-              entityId: duplicate,
-            ),
-          );
-
-      await repository.mergePeople(
-        survivorId: survivor,
-        duplicateId: duplicate,
-      );
-
-      final links = await db.select(db.citationLinks).get();
-      expect(links, hasLength(2));
-      expect(
-        links.where((l) => l.entityId == duplicate),
-        isEmpty,
-        reason: 'nothing still points at the duplicate',
-      );
-      expect(
-        links.map((l) => l.citationId).toSet(),
-        {'citation-shared', 'citation-only-duplicate'},
-      );
-    });
-
     test('person-scoped rows all follow the survivor', () async {
       final survivor = await addPerson(firstName: 'Ram');
       final duplicate = await addPerson(firstName: 'Ram');

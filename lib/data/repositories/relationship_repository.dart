@@ -7,6 +7,7 @@ import '../../features/people/person_relationship_models.dart';
 import '../database/app_database.dart';
 import '../database/daos/genealogy_person_dao.dart';
 import '../database/daos/relationship_dao.dart';
+import '../models/family_graph.dart';
 import '../models/relationship_edges.dart';
 
 class RelationshipRepository {
@@ -380,6 +381,41 @@ class RelationshipRepository {
     return g == 'F' || g == 'FEMALE';
   }
 
+  /// Loads one tree's whole family structure in **three** queries.
+  ///
+  /// The tree and fan-chart views traverse the family graph repeatedly; asking
+  /// the database for parents/spouses/children once per node turns a single
+  /// rebuild into hundreds of queries. This returns the graph those views walk.
+  Future<FamilyGraph> loadFamilyGraph(String treeId) async {
+    final people = await (_database.select(_database.genealogyPersons)
+          ..where(
+            (t) => t.treeId.equals(treeId) & t.isDeleted.equals(false),
+          ))
+        .get();
+    final families = await (_database.select(_database.familiesV2)
+          ..where(
+            (t) => t.treeId.equals(treeId) & t.isDeleted.equals(false),
+          ))
+        .get();
+
+    final familyIds = families.map((family) => family.id).toList();
+    final childLinks = familyIds.isEmpty
+        ? const <FamilyChildrenV2Data>[]
+        : await (_database.select(_database.familyChildrenV2)
+              ..where(
+                (t) =>
+                    t.familyId.isIn(familyIds) &
+                    t.isDeleted.equals(false),
+              ))
+            .get();
+
+    return FamilyGraph(
+      people: {for (final person in people) person.id: person},
+      families: families,
+      childLinks: childLinks,
+    );
+  }
+
   /// Ticks whenever the families of [personId] change. Typed as the rows it
   /// actually carries, not as `void`.
   Stream<List<FamiliesV2Data>> watchRelationshipsForPerson(String personId) {
@@ -423,8 +459,20 @@ class RelationshipRepository {
           ..where(
             (t) => t.treeId.equals(treeId) & t.isDeleted.equals(false),
           ));
-    final linksQuery = (_database.select(_database.familyChildrenV2)
-          ..where((t) => t.isDeleted.equals(false)));
+    // Only this tree's links are read: the previous version watched the whole
+    // child-link table and filtered in Dart, so any change anywhere rebuilt the
+    // tree from a full table scan.
+    final linksQuery = (_database.select(_database.familyChildrenV2).join([
+      innerJoin(
+        _database.familiesV2,
+        _database.familiesV2.id.equalsExp(_database.familyChildrenV2.familyId),
+      ),
+    ])
+          ..where(
+            _database.familiesV2.treeId.equals(treeId) &
+                _database.familyChildrenV2.isDeleted.equals(false),
+          ))
+        .map((row) => row.readTable(_database.familyChildrenV2));
     final peopleQuery = (_database.select(_database.genealogyPersons)
           ..where(
             (t) => t.treeId.equals(treeId) & t.isDeleted.equals(false),
@@ -440,7 +488,7 @@ class RelationshipRepository {
       peopleQuery.watch(),
       (families, links, people) => _toParentChildRelationships(
         (families: families, links: links),
-        {for (final p in people) p.id},
+        {for (final person in people) person.id},
       ),
     );
   }

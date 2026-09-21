@@ -3,8 +3,6 @@ import 'package:drift/drift.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/constants/relationship_types.dart';
 import '../models/relationship_edges.dart';
-import 'tables/citation_links_table.dart';
-import 'tables/citations_table.dart';
 import 'tables/duplicate_markers_table.dart';
 import 'tables/events_table.dart';
 import 'tables/families_v2_table.dart';
@@ -14,7 +12,6 @@ import 'tables/genealogy_persons_table.dart';
 import 'tables/media_items_table.dart';
 import 'tables/research_notes_table.dart';
 import 'tables/surname_events_table.dart';
-import 'tables/todos_table.dart';
 import 'daos/events_dao.dart';
 import 'daos/genealogy_person_dao.dart';
 import 'daos/research_notes_dao.dart';
@@ -51,10 +48,7 @@ part 'app_database.g.dart';
     MediaItems,
     Events,
     DuplicateMarkers,
-    Citations,
-    CitationLinks,
     ResearchNotes,
-    Todos,
   ],
   daos: [
     GenealogyPersonDao,
@@ -124,6 +118,10 @@ class AppDatabase extends _$AppDatabase {
     await customStatement('DROP TABLE IF EXISTS persons');
     await customStatement('DROP TABLE IF EXISTS relationships');
     await customStatement('DROP TABLE IF EXISTS sync_change_log');
+    // Tables that earlier versions carried but that no code ever used.
+    await customStatement('DROP TABLE IF EXISTS citations');
+    await customStatement('DROP TABLE IF EXISTS citation_links');
+    await customStatement('DROP TABLE IF EXISTS todos');
     await _verifyUpgrade(
       importedPeople: importedPeople,
       importedLinks: importedLinks,
@@ -145,10 +143,7 @@ class AppDatabase extends _$AppDatabase {
     await ensure('media_items', () => m.createTable(mediaItems));
     await ensure('events', () => m.createTable(events));
     await ensure('duplicate_markers', () => m.createTable(duplicateMarkers));
-    await ensure('citations', () => m.createTable(citations));
-    await ensure('citation_links', () => m.createTable(citationLinks));
     await ensure('research_notes', () => m.createTable(researchNotes));
-    await ensure('todos', () => m.createTable(todos));
   }
 
   /// Rebuilds every canonical table so the physical schema matches the model:
@@ -175,7 +170,6 @@ class AppDatabase extends _$AppDatabase {
     await m.alterTable(TableMigration(events));
     await m.alterTable(TableMigration(mediaItems));
     await m.alterTable(TableMigration(researchNotes));
-    await m.alterTable(TableMigration(todos));
   }
 
   /// Older `persons` tables lack columns that later versions added. They are

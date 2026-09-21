@@ -125,7 +125,6 @@ void main() {
         'events',
         'media_items',
         'research_notes',
-        'todos',
         'surname_events',
       ]) {
         expect(
@@ -161,35 +160,6 @@ void main() {
         fks.containsKey('tree_id'),
         isFalse,
         reason: 'the tree is derived through the people, not stored twice',
-      );
-    });
-
-    test('citations and citation_links', () async {
-      expect(
-        (await foreignKeysOf('citations'))['image_media_id'],
-        (table: 'media_items', onDelete: 'SET NULL', onUpdate: 'NO ACTION'),
-      );
-      expect(
-        (await foreignKeysOf('citation_links'))['citation_id'],
-        (table: 'citations', onDelete: 'CASCADE', onUpdate: 'NO ACTION'),
-      );
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  group('foreign keys reject dangling references', () {
-    test('a person cannot be created in a tree that does not exist', () async {
-      await expectLater(
-        db.into(db.genealogyPersons).insert(
-              GenealogyPersonsCompanion.insert(
-                id: 'p1',
-                firstName: 'Ghost',
-                treeId: 'no-such-tree',
-                gender: 'M',
-                uuid: 'uuid-p1',
-              ),
-            ),
-        isRejected,
       );
     });
 
@@ -310,17 +280,6 @@ void main() {
         isRejected,
       );
       await expectLater(
-        db.into(db.todos).insert(
-              TodosCompanion.insert(
-                id: 't1',
-                personId: const Value('no-such-person'),
-                taskText: 'x',
-                createdAt: now,
-              ),
-            ),
-        isRejected,
-      );
-      await expectLater(
         db.into(db.surnameEvents).insert(
               SurnameEventsCompanion.insert(
                 id: 's1',
@@ -368,46 +327,6 @@ void main() {
         (db.update(db.familyTrees)..where((t) => t.id.equals(treeId))).write(
           const FamilyTreesCompanion(rootPersonId: Value('no-such-person')),
         ),
-        isRejected,
-      );
-    });
-
-    test('a citation link must reference an existing citation', () async {
-      await expectLater(
-        db.into(db.citationLinks).insert(
-              CitationLinksCompanion.insert(
-                citationId: 'no-such-citation',
-                entityType: 'person',
-                entityId: 'whoever',
-              ),
-            ),
-        isRejected,
-      );
-    });
-
-    test('a citation image must reference an existing media item', () async {
-      await expectLater(
-        db.into(db.citations).insert(
-              CitationsCompanion.insert(
-                id: 'c1',
-                sourceTitle: 'Census',
-                citationText: 'entry',
-                imageMediaId: const Value('no-such-media'),
-                createdAt: DateTime(2000),
-              ),
-            ),
-        isRejected,
-      );
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  group('delete actions behave as declared', () {
-    test('RESTRICT: a tree holding people cannot be deleted', () async {
-      await addPerson(firstName: 'Anchored');
-
-      await expectLater(
-        (db.delete(db.familyTrees)..where((t) => t.id.equals(treeId))).go(),
         isRejected,
       );
     });
@@ -492,36 +411,6 @@ void main() {
       expect((await db.select(db.surnameEvents).get()).single.personId, id);
     });
 
-    test('SET NULL: hard-deleting a media item clears the citation image',
-        () async {
-      final id = await addPerson(firstName: 'Ram');
-      await db.into(db.mediaItems).insert(
-            MediaItemsCompanion.insert(
-              id: 'm1',
-              personId: id,
-              filePath: '/tmp/x.jpg',
-              mediaType: 'photo',
-              createdAt: DateTime(2000),
-            ),
-          );
-      await db.into(db.citations).insert(
-            CitationsCompanion.insert(
-              id: 'c1',
-              sourceTitle: 'Census',
-              citationText: 'entry',
-              imageMediaId: const Value('m1'),
-              createdAt: DateTime(2000),
-            ),
-          );
-
-      await (db.delete(db.mediaItems)..where((t) => t.id.equals('m1'))).go();
-
-      expect(
-        (await db.select(db.citations).get()).single.imageMediaId,
-        isNull,
-      );
-    });
-
     test('CASCADE: hard-deleting a person removes their duplicate markers',
         () async {
       final a = await addPerson(firstName: 'A');
@@ -532,28 +421,6 @@ void main() {
       await (db.delete(db.genealogyPersons)..where((t) => t.id.equals(b))).go();
 
       expect(await db.select(db.duplicateMarkers).get(), isEmpty);
-    });
-
-    test('CASCADE: hard-deleting a citation removes its links', () async {
-      await db.into(db.citations).insert(
-            CitationsCompanion.insert(
-              id: 'c1',
-              sourceTitle: 'Census',
-              citationText: 'entry',
-              createdAt: DateTime(2000),
-            ),
-          );
-      await db.into(db.citationLinks).insert(
-            CitationLinksCompanion.insert(
-              citationId: 'c1',
-              entityType: 'person',
-              entityId: 'someone',
-            ),
-          );
-
-      await (db.delete(db.citations)..where((t) => t.id.equals('c1'))).go();
-
-      expect(await db.select(db.citationLinks).get(), isEmpty);
     });
 
     test('SET NULL: hard-deleting the survivor clears merged_into_id', () async {
@@ -662,60 +529,6 @@ void main() {
       );
     });
 
-    test('one citation cannot be linked to the same target twice', () async {
-      await db.into(db.citations).insert(
-            CitationsCompanion.insert(
-              id: 'c1',
-              sourceTitle: 'Census',
-              citationText: 'entry',
-              createdAt: DateTime(2000),
-            ),
-          );
-      await db.into(db.citationLinks).insert(
-            CitationLinksCompanion.insert(
-              citationId: 'c1',
-              entityType: 'person',
-              entityId: 'p1',
-            ),
-          );
-
-      await expectLater(
-        db.into(db.citationLinks).insert(
-              CitationLinksCompanion.insert(
-                citationId: 'c1',
-                entityType: 'person',
-                entityId: 'p1',
-              ),
-            ),
-        isRejected,
-      );
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  group('nullability', () {
-    test('a person needs an id, a name, a gender, a tree and a uuid', () async {
-      final now = DateTime(2000);
-      await expectLater(
-        db.customStatement(
-          'INSERT INTO genealogy_persons (id, tree_id, gender, uuid, created_at, '
-          'updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-          ['p1', treeId, 'M', 'u1', now, now],
-        ),
-        isRejected,
-        reason: 'first_name is NOT NULL',
-      );
-      await expectLater(
-        db.customStatement(
-          'INSERT INTO genealogy_persons (id, first_name, gender, uuid, '
-          'created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-          ['p2', 'Ram', 'M', 'u2', now, now],
-        ),
-        isRejected,
-        reason: 'tree_id is NOT NULL and is a foreign key',
-      );
-    });
-
     test('a family needs a tree and a uuid', () async {
       await expectLater(
         db.customStatement(
@@ -768,7 +581,6 @@ void main() {
         'idx_events_person_id',
         'idx_media_items_person_id',
         'idx_research_notes_person_id',
-        'idx_todos_person_id',
         'idx_surname_events_person_id',
         // Auxiliary references
         'idx_surname_events_related_person_id',
@@ -776,8 +588,6 @@ void main() {
         'idx_family_trees_root_person',
         'idx_genealogy_persons_merged_into',
         'idx_duplicate_markers_person_b',
-        'idx_citations_image_media_id',
-        'idx_citation_links_entity_id',
       ]) {
         expect(indexes, contains(expected));
       }

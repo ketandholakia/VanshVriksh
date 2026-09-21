@@ -42,19 +42,20 @@ final basicFamilyTreeProvider =
       final relationshipRepository = ref.watch(relationshipRepositoryProvider);
 
       final rootPerson = await personRepository.getPersonById(personId);
-      if (rootPerson == null) {
+      if (rootPerson == null || rootPerson.isDeleted) {
         return null;
       }
 
-      final parents = await relationshipRepository.getParents(personId);
-      final spouses = await relationshipRepository.getSpouses(personId);
-      final children = await relationshipRepository.getChildren(personId);
+      // One graph load instead of three separate relationship queries.
+      final graph = await relationshipRepository.loadFamilyGraph(
+        rootPerson.treeId,
+      );
 
       return BasicFamilyTreeData(
-        rootPerson: rootPerson,
-        parents: parents,
-        spouses: spouses,
-        children: children,
+        rootPerson: graph.person(personId) ?? rootPerson,
+        parents: graph.parentsOf(personId),
+        spouses: graph.spousesOf(personId),
+        children: graph.childrenOf(personId),
       );
     });
 
@@ -66,7 +67,14 @@ final multiGenFamilyTreeProvider =
       final relationshipRepository = ref.watch(relationshipRepositoryProvider);
 
       final rootPerson = await personRepository.getPersonById(personId);
-      if (rootPerson == null) return null;
+      if (rootPerson == null || rootPerson.isDeleted) return null;
+
+      // The whole traversal runs against one in-memory graph. Previously every
+      // node cost separate parents/spouses/children queries, so a three-up,
+      // two-down walk of a few dozen people issued hundreds of queries.
+      final graph = await relationshipRepository.loadFamilyGraph(
+        rootPerson.treeId,
+      );
 
       final nodes = <String, GenealogyPerson>{rootPerson.id: rootPerson};
       final edges = <TreeEdge>[];
@@ -76,14 +84,13 @@ final multiGenFamilyTreeProvider =
       const maxUpDepth = 3; // Ancestors
       const maxDownDepth = 2; // Descendants
 
-      // Fetch ancestors BFS
+      // Walk ancestors breadth-first.
       var currentUpQueue = [rootPerson.id];
       for (var depth = 1; depth <= maxUpDepth; depth++) {
         if (currentUpQueue.isEmpty) break;
         final nextQueue = <String>[];
         for (final id in currentUpQueue) {
-          final parents = await relationshipRepository.getParents(id);
-          for (final parent in parents) {
+          for (final parent in graph.parentsOf(id)) {
             nodes[parent.id] = parent;
             edges.add(TreeEdge(sourceId: parent.id, targetId: id, relationType: 'parent_child'));
             if (!visitedNodes.contains(parent.id)) {
@@ -95,14 +102,13 @@ final multiGenFamilyTreeProvider =
         currentUpQueue = nextQueue;
       }
 
-      // Fetch descendants BFS
+      // Walk descendants breadth-first.
       var currentDownQueue = [rootPerson.id];
       for (var depth = 1; depth <= maxDownDepth; depth++) {
         if (currentDownQueue.isEmpty) break;
         final nextQueue = <String>[];
         for (final id in currentDownQueue) {
-          final children = await relationshipRepository.getChildren(id);
-          for (final child in children) {
+          for (final child in graph.childrenOf(id)) {
             nodes[child.id] = child;
             edges.add(TreeEdge(sourceId: id, targetId: child.id, relationType: 'parent_child'));
             if (!visitedNodes.contains(child.id)) {
@@ -114,14 +120,10 @@ final multiGenFamilyTreeProvider =
         currentDownQueue = nextQueue;
       }
 
-      // Fetch spouses for everyone found (optional depth for spouses, but let's just do it for everyone in nodes so far)
-      final allNodeIds = nodes.keys.toList();
-      for (final id in allNodeIds) {
-        final spouses = await relationshipRepository.getSpouses(id);
-        for (final spouse in spouses) {
-          if (!nodes.containsKey(spouse.id)) {
-            nodes[spouse.id] = spouse;
-          }
+      // Attach the spouses of everyone found.
+      for (final id in nodes.keys.toList()) {
+        for (final spouse in graph.spousesOf(id)) {
+          nodes[spouse.id] = spouse;
           edges.add(TreeEdge(sourceId: id, targetId: spouse.id, relationType: 'spouse'));
         }
       }
@@ -141,9 +143,15 @@ final ancestryFanChartProvider =
       final relationshipRepository = ref.watch(relationshipRepositoryProvider);
 
       final rootPerson = await personRepository.getPersonById(personId);
-      if (rootPerson == null) {
+      if (rootPerson == null || rootPerson.isDeleted) {
         return null;
       }
+
+      // One graph load for the whole fan: the loop below asks for parents of many
+      // people, generation after generation.
+      final graph = await relationshipRepository.loadFamilyGraph(
+        rootPerson.treeId,
+      );
 
       final maxGenerations =
           await ref.watch(fanChartAncestorGenerationsProvider.future);
@@ -157,7 +165,7 @@ final ancestryFanChartProvider =
         final nextGenerationPersons = <GenealogyPerson>[];
 
         for (final child in currentGenerationPersons) {
-          final parents = await relationshipRepository.getParents(child.id);
+          final parents = graph.parentsOf(child.id);
 
           GenealogyPerson? father;
           GenealogyPerson? mother;

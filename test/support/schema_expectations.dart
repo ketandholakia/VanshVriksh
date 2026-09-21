@@ -10,27 +10,14 @@
 // `PRAGMA table_info`.
 //
 // Schema version: 13. Last reviewed: 2026-09-21.
+//
+// `citations`, `citation_links` and `todos` are deliberately absent. Earlier
+// versions created them, but no code ever produced or read them, so they were
+// removed instead of being carried as dead architecture. A feature that needs
+// them can add them back through a normal schema change.
 
 /// Table name → its columns, in physical order.
 const Map<String, List<String>> expectedColumns = {
-  'citation_links': [
-    'citation_id|1|1|null',
-    'entity_type|1|2|null',
-    'entity_id|1|3|null',
-    'confidence|0|0|null',
-    'notes|0|0|null',
-  ],
-  'citations': [
-    'id|1|1|null',
-    'source_title|1|0|null',
-    'source_type|0|0|null',
-    'repository|0|0|null',
-    'citation_text|1|0|null',
-    'url|0|0|null',
-    'image_media_id|0|0|null',
-    'accessed_date|0|0|null',
-    'created_at|1|0|null',
-  ],
   'duplicate_markers': [
     'id|1|1|null',
     'person_a_id|1|0|null',
@@ -187,25 +174,10 @@ const Map<String, List<String>> expectedColumns = {
     "created_at|1|0|CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)",
     "updated_at|1|0|CAST(strftime('%s', CURRENT_TIMESTAMP) AS INTEGER)",
   ],
-  'todos': [
-    'id|1|1|null',
-    'person_id|0|0|null',
-    'task_text|1|0|null',
-    'due_date|0|0|null',
-    'priority|1|0|1',
-    'completed|1|0|0',
-    'created_at|1|0|null',
-  ],
 };
 
 /// Table → its foreign keys: `column|parent table|on delete`.
 const Map<String, List<String>> expectedForeignKeys = {
-  'citation_links': [
-    'citation_id|citations|CASCADE',
-  ],
-  'citations': [
-    'image_media_id|media_items|SET NULL',
-  ],
   'duplicate_markers': [
     'person_a_id|genealogy_persons|CASCADE',
     'person_b_id|genealogy_persons|CASCADE',
@@ -240,15 +212,10 @@ const Map<String, List<String>> expectedForeignKeys = {
     'related_person_id|genealogy_persons|SET NULL',
     'related_event_id|events|SET NULL',
   ],
-  'todos': [
-    'person_id|genealogy_persons|RESTRICT',
-  ],
 };
 
 /// Every named index the canonical schema declares.
 const Set<String> expectedIndexes = {
-  'idx_citation_links_entity_id',
-  'idx_citations_image_media_id',
   'idx_duplicate_markers_person_b',
   'idx_events_person_id',
   'idx_families_v2_husband_id',
@@ -263,7 +230,6 @@ const Set<String> expectedIndexes = {
   'idx_surname_events_person_id',
   'idx_surname_events_related_event_id',
   'idx_surname_events_related_person_id',
-  'idx_todos_person_id',
 };
 
 /// Table → its UNIQUE constraints, as comma-joined column lists.
