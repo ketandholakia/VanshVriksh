@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/extensions/genealogy_person_extensions.dart';
-import '../../core/widgets/person_avatar.dart';
 import '../../data/database/app_database.dart';
 import '../people/people_providers.dart';
 import '../settings/app_settings_provider.dart';

@@ -7,7 +7,6 @@ import '../../data/providers/genealogy_repository_provider.dart';
 import '../../data/providers/relationship_repository_provider.dart';
 import '../people/people_providers.dart';
 import '../settings/app_settings_provider.dart';
-import '../../core/extensions/genealogy_person_extensions.dart';
 import '../settings/fan_chart_settings_provider.dart';
 import 'tree_models.dart';
 

@@ -15,9 +15,8 @@ import 'dart:io';
 
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-// Transitive dependency of drift; used to build the legacy fixture without
-// touching the app's own migration logic.
-// ignore: depend_on_referenced_packages
+// Used to build the legacy fixture without touching the app's own
+// migration logic.
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 import 'package:vanshvriksh/data/database/app_database.dart';

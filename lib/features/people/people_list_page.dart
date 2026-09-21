@@ -24,7 +24,7 @@ class _PeopleListPageState extends ConsumerState<PeopleListPage> {
   String _displayName(GenealogyPerson person) {
     final parts = <String>[
       if ((person.prefix ?? '').trim().isNotEmpty) person.prefix!.trim(),
-      if ((person.firstName ?? '').trim().isNotEmpty) person.firstName!.trim(),
+      if (person.firstName.trim().isNotEmpty) person.firstName.trim(),
       if ((person.middleName ?? '').trim().isNotEmpty)
         person.middleName!.trim(),
       if ((person.lastName ?? '').trim().isNotEmpty) person.lastName!.trim(),

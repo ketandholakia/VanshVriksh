@@ -69,9 +69,9 @@ class GedcomParser {
         if (stack.isNotEmpty) {
           final parent = stack.last;
           if (tag == 'CONT') {
-            parent.value = (parent.value ?? '') + '\n' + (value ?? '');
+            parent.value = '${parent.value ?? ''}\n${value ?? ''}';
           } else {
-            parent.value = (parent.value ?? '') + (value ?? '');
+            parent.value = '${parent.value ?? ''}${value ?? ''}';
           }
         }
         continue;
