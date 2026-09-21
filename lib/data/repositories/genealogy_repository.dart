@@ -3,7 +3,22 @@ import 'package:drift/drift.dart';
 import '../../core/utils/id_generator.dart';
 import '../database/app_database.dart';
 import '../database/daos/genealogy_person_dao.dart';
+import '../models/relationship_edges.dart';
 import '../../features/duplicates/duplicate_detection_providers.dart';
+
+/// The schema default for `genealogy_persons.display_name_format`, used by the
+/// merge contract to decide when a recorded format beats the default.
+const String defaultDisplayNameFormat = 'birth_married';
+
+/// What a merge did, so callers and tests can see the outcome.
+typedef MergeResult = ({
+  int partnershipsMoved,
+  int partnershipsCollapsed,
+  int childLinksMoved,
+  int childLinksCollapsed,
+  int duplicateMarkersRewritten,
+  int duplicateMarkersRemoved,
+});
 
 class GenealogyRepository {
   GenealogyRepository(this._database);
@@ -328,7 +343,62 @@ class GenealogyRepository {
     );
   }
 
-  Future<void> mergePeople({
+  /// Merges [duplicateId] into [survivorId] as one atomic operation.
+  ///
+  /// ## Contract
+  ///
+  /// **Survivor identity** — the caller chooses the survivor; the operation never
+  /// picks one. The survivor keeps its `id`, `uuid`, `tree_id` and `created_at`.
+  /// The duplicate is *retired*, not erased: its row keeps `is_deleted = true`,
+  /// its original `uuid` (so an external reference to that identity can still be
+  /// resolved) and gains `merged_into_id = survivorId`.
+  ///
+  /// **Preconditions**, all checked before anything is written: different people;
+  /// both exist; neither is deleted or already merged; both belong to the same
+  /// tree. A cross-tree merge is refused, because it would silently move
+  /// person-scoped rows and families between two ownership roots.
+  ///
+  /// **Field conflicts** — the survivor's value wins unless it is absent, in
+  /// which case the duplicate's is taken; a caller can override that per field
+  /// with a `preferred*Source` argument. For non-null columns with a schema
+  /// default, a non-default value wins over the default. `is_living` is derived
+  /// from the merged death date rather than inherited, privacy is the union of
+  /// both records, and the stricter privacy level wins.
+  ///
+  /// **Partnerships** — the duplicate's partner slots move to the survivor:
+  ///  * the family that contains *both* people is retired (a family with the same
+  ///    person in both slots is not a relationship) and its children are re-homed
+  ///    on a single-parent family of the survivor;
+  ///  * a family that would become a duplicate of one the survivor already has
+  ///    (same other partner) is collapsed: its children move onto the surviving
+  ///    family and the redundant family is retired;
+  ///  * otherwise the duplicate's slot is reassigned to the survivor.
+  /// A merged pair therefore cannot end up with a self-relationship or a
+  /// duplicate couple.
+  ///
+  /// **Child links** — the duplicate's links move to the survivor; a link that
+  /// already exists for the pair is collapsed onto the existing row
+  /// (`UNIQUE(family_id, child_id)` counts soft-deleted rows too), and a link that
+  /// would give one child the same parent twice is removed as redundant.
+  ///
+  /// **Duplicate markers** — a marker that named both people is resolved and
+  /// removed; a marker naming the duplicate and a *third* person is rewritten
+  /// onto the survivor rather than discarded; markers that never mentioned the
+  /// duplicate are left untouched.
+  ///
+  /// **Other references** are repointed: surname events (as subject and as
+  /// related person), events, media items, research notes, to-dos, citation links
+  /// (which have a composite primary key) and a tree root that pointed at the
+  /// duplicate.
+  ///
+  /// **Sync / version** — there is no sync engine and, since schema v12, no
+  /// sync/version columns, so a merge writes none. `updated_at` is set on both
+  /// rows.
+  ///
+  /// **Atomicity** — everything runs in one transaction. Any failure rolls the
+  /// entire merge back: no partial merge, no orphaned rows and no invalid
+  /// references survive.
+  Future<MergeResult> mergePeople({
     required String survivorId,
     required String duplicateId,
     String? preferredBirthDateSource,
@@ -347,64 +417,127 @@ class GenealogyRepository {
     if (survivor == null || duplicate == null) {
       throw ArgumentError('Both people must exist to merge them.');
     }
-    if (survivor.isDeleted) {
-      throw ArgumentError('The survivor has been deleted: $survivorId');
+    if (survivor.isDeleted || survivor.mergedIntoId != null) {
+      throw ArgumentError('The survivor is already retired: $survivorId');
     }
-    if (duplicate.isDeleted) {
+    if (duplicate.isDeleted || duplicate.mergedIntoId != null) {
+      throw ArgumentError('The duplicate is already retired: $duplicateId');
+    }
+    if (survivor.treeId != duplicate.treeId) {
       throw ArgumentError(
-        'The duplicate has already been deleted: $duplicateId',
+        'Both people must belong to the same tree to be merged.'
+        '($survivorId is in ${survivor.treeId}, $duplicateId is in '
+        '${duplicate.treeId}).',
       );
     }
 
     final now = DateTime.now();
+    var partnershipsMoved = 0;
+    var partnershipsCollapsed = 0;
+    var childLinksMoved = 0;
+    var childLinksCollapsed = 0;
+    var markersRewritten = 0;
+    var markersRemoved = 0;
 
-    // A merge rewrites families, child links, person-scoped rows and both
-    // person rows. It has to be all-or-nothing: a half-applied merge cannot be
-    // repaired by the user.
-    await _database.transaction(() async {
-      // 1. Move the duplicate's partner slots onto the survivor. A family that
-      //    already contains the survivor keeps the survivor's existing slot.
-      final duplicateFamilies =
-          await _personDao.getFamiliesForPerson(duplicateId);
-      for (final family in duplicateFamilies) {
-        final survivorIsPartner =
-            family.husbandId == survivorId || family.wifeId == survivorId;
-        final reassignedSlot = survivorIsPartner ? null : survivorId;
+    // A merge rewrites families, child links, person-scoped rows and both person
+    // rows. It has to be all-or-nothing: a half-applied merge cannot be repaired
+    // by the user.
+    return _database.transaction(() async {
+      // 1. Partnerships.
+      for (final family in await _personDao.getFamiliesForPerson(duplicateId)) {
+        final duplicateIsHusband = family.husbandId == duplicateId;
+        final otherPartnerId =
+            duplicateIsHusband ? family.wifeId : family.husbandId;
+
+        // Their own family: both slots hold the two people being merged.
+        if (otherPartnerId == survivorId) {
+          // Retire it *before* re-homing: a family with the same person in both
+          // slots is not a relationship, and while it is still live the
+          // re-homing check would treat it as an existing parentage.
+          final children = await _personDao.getChildrenForFamily(family.id);
+          await _personDao.markFamilyDeleted(family.id, now);
+          if (children.isNotEmpty) {
+            final rehomed = await _rehomeChildren(
+              fromFamilyId: family.id,
+              toFamilyId: await _singleParentFamilyFor(survivorId, now),
+              now: now,
+            );
+            childLinksMoved += rehomed.moved;
+            childLinksCollapsed += rehomed.collapsed;
+          }
+          partnershipsCollapsed++;
+          continue;
+        }
+
+        // A partnership the survivor already records with the same person.
+        if (otherPartnerId != null) {
+          final existing = await _familyForPairOf(survivorId, otherPartnerId);
+          if (existing != null && existing.id != family.id) {
+            await _personDao.markFamilyDeleted(family.id, now);
+            final rehomed = await _rehomeChildren(
+              fromFamilyId: family.id,
+              toFamilyId: existing.id,
+              now: now,
+            );
+            childLinksMoved += rehomed.moved;
+            childLinksCollapsed += rehomed.collapsed;
+            partnershipsCollapsed++;
+            continue;
+          }
+        }
+
         await _personDao.updateFamilyFields(
           family.id,
-          family.husbandId == duplicateId
-              ? FamiliesV2Companion(husbandId: Value(reassignedSlot))
-              : FamiliesV2Companion(wifeId: Value(reassignedSlot)),
+          duplicateIsHusband
+              ? FamiliesV2Companion(
+                  husbandId: Value(survivorId),
+                  updatedAt: Value(now),
+                )
+              : FamiliesV2Companion(
+                  wifeId: Value(survivorId),
+                  updatedAt: Value(now),
+                ),
         );
+        partnershipsMoved++;
       }
 
-    final duplicateChildLinks = await (_database.select(_database.familyChildrenV2)
-          ..where(
-            (t) =>
-                t.childId.equals(duplicateId) & t.isDeleted.equals(false),
-          ))
-        .get();
-    for (final link in duplicateChildLinks) {
-      // `UNIQUE(family_id, child_id)` ignores soft delete, so this clash check
-      // must consider ALL rows for (family, survivor), not just live ones.
-      final existing =
-          await _personDao.getFamilyChildLink(link.familyId, survivorId);
-      if (existing != null) {
-        if (existing.isDeleted) {
-          // A live link is about to exist for this pair again, so un-delete it.
-          await _personDao.restoreFamilyChild(existing.id, now);
+      // 2. Child links of the duplicate.
+      final duplicateChildLinks =
+          await (_database.select(_database.familyChildrenV2)
+                ..where(
+                  (t) =>
+                      t.childId.equals(duplicateId) &
+                      t.isDeleted.equals(false),
+                ))
+              .get();
+      for (final link in duplicateChildLinks) {
+        // `UNIQUE(family_id, child_id)` counts soft-deleted rows too, so this
+        // clash check must consider them.
+        final existing =
+            await _personDao.getFamilyChildLink(link.familyId, survivorId);
+        if (existing != null) {
+          if (existing.isDeleted) {
+            // A live link is about to exist for this pair again.
+            await _personDao.restoreFamilyChild(existing.id, now);
+          }
+          await _personDao.removeFamilyChildLinkRow(link.id);
+          childLinksCollapsed++;
+        } else {
+          await _personDao.updateFamilyChildFields(
+            link.id,
+            FamilyChildrenV2Companion(
+              childId: Value(survivorId),
+              updatedAt: Value(now),
+            ),
+          );
+          childLinksMoved++;
         }
-        await _personDao.removeFamilyChildLinkRow(link.id);
-      } else {
-        await _personDao.updateFamilyChildFields(
-          link.id,
-          FamilyChildrenV2Companion(
-            childId: Value(survivorId),
-            updatedAt: Value(now),
-          ),
-        );
       }
-    }
+
+      // 2b. Moving a family onto the survivor (rather than a link) can leave one
+      //     child linked through two of the survivor's families, which would
+      //     record the same parent twice. The extra link is removed.
+      childLinksCollapsed += await _collapseDuplicateParentageOf(survivorId, now);
 
       // 3. Repoint every row that references the duplicate.
       await (_database.update(_database.surnameEvents)
@@ -434,7 +567,16 @@ class GenealogyRepository {
       await (_database.update(_database.researchNotes)
             ..where((t) => t.personId.equals(duplicateId)))
           .write(ResearchNotesCompanion(personId: Value(survivorId)));
+      // To-dos are person-scoped as well: without this they would be orphaned on
+      // a retired person.
+      await (_database.update(_database.todos)
+            ..where((t) => t.personId.equals(duplicateId)))
+          .write(TodosCompanion(personId: Value(survivorId)));
       await _repointCitationLinks(duplicateId, survivorId);
+      // A tree that was rooted at the duplicate now roots at the survivor.
+      await (_database.update(_database.familyTrees)
+            ..where((t) => t.rootPersonId.equals(duplicateId)))
+          .write(FamilyTreesCompanion(rootPersonId: Value(survivorId)));
 
       // 4. Merge the duplicate's data into the survivor. Every field the model
       //    carries is considered, so nothing is dropped silently.
@@ -470,6 +612,12 @@ class GenealogyRepository {
           nickname: Value(_keep(survivor.nickname, duplicate.nickname)),
           customDisplayName: Value(
             _keep(survivor.customDisplayName, duplicate.customDisplayName),
+          ),
+          // Non-null column with a schema default: a non-default value wins.
+          displayNameFormat: Value(
+            survivor.displayNameFormat == defaultDisplayNameFormat
+                ? duplicate.displayNameFormat
+                : survivor.displayNameFormat,
           ),
           gender: Value(mergedGender),
           birthDate: Value(mergedBirthDate),
@@ -541,7 +689,7 @@ class GenealogyRepository {
         ),
       );
 
-      // 5. Retire the duplicate and clear the markers that mentioned it.
+      // 5. Retire the duplicate and resolve the markers that named it.
       await _personDao.updatePersonFields(
         duplicateId,
         GenealogyPersonsCompanion(
@@ -551,16 +699,214 @@ class GenealogyRepository {
         ),
       );
 
+      final markers = await (_database.select(_database.duplicateMarkers)
+            ..where(
+              (t) =>
+                  t.personAId.equals(duplicateId) |
+                  t.personBId.equals(duplicateId),
+            ))
+          .get();
+      for (final marker in markers) {
+        final otherId = marker.personAId == duplicateId
+            ? marker.personBId
+            : marker.personAId;
+        if (otherId != survivorId) {
+          // The suspicion about a third person moves to the survivor; the marker
+          // is information, not a row to throw away.
+          final (low, high) = survivorId.compareTo(otherId) <= 0
+              ? (survivorId, otherId)
+              : (otherId, survivorId);
+          await _database.into(_database.duplicateMarkers).insert(
+            DuplicateMarkersCompanion.insert(
+              id: IdGenerator.newId(),
+              personAId: low,
+              personBId: high,
+              reason: Value(marker.reason),
+              createdAt: now,
+            ),
+            mode: InsertMode.insertOrIgnore,
+          );
+          markersRewritten++;
+        } else {
+          markersRemoved++;
+        }
+      }
       await (_database.delete(_database.duplicateMarkers)
             ..where(
               (t) =>
-                  t.personAId.equals(survivorId) |
-                  t.personBId.equals(survivorId) |
                   t.personAId.equals(duplicateId) |
                   t.personBId.equals(duplicateId),
             ))
           .go();
+
+      return (
+        partnershipsMoved: partnershipsMoved,
+        partnershipsCollapsed: partnershipsCollapsed,
+        childLinksMoved: childLinksMoved,
+        childLinksCollapsed: childLinksCollapsed,
+        duplicateMarkersRewritten: markersRewritten,
+        duplicateMarkersRemoved: markersRemoved,
+      );
     });
+  }
+
+  /// Removes surplus child links created by a merge: after a family has moved
+  /// onto the survivor, a child can be linked through more than one of the
+  /// survivor's families. Keeping both would record the same parent twice, so the
+  /// child keeps one link — preferring the family that records a partner, because
+  /// a child with both parents is more informative.
+  Future<int> _collapseDuplicateParentageOf(
+    String personId,
+    DateTime now,
+  ) async {
+    final families = await _personDao.getFamiliesForPerson(personId);
+    if (families.length < 2) return 0;
+
+    final linksByChild = <String, List<FamilyChildrenV2Data>>{};
+    for (final family in families) {
+      for (final link in await _personDao.getChildrenForFamily(family.id)) {
+        linksByChild.putIfAbsent(link.childId, () => []).add(link);
+      }
+    }
+
+    int partnerCount(String familyId) {
+      final family = families.firstWhere((f) => f.id == familyId);
+      return (family.husbandId != null ? 1 : 0) + (family.wifeId != null ? 1 : 0);
+    }
+
+    var removed = 0;
+    for (final entry in linksByChild.entries) {
+      if (entry.value.length < 2) continue;
+      entry.value.sort(
+        (a, b) => partnerCount(b.familyId).compareTo(partnerCount(a.familyId)),
+      );
+      for (final surplus in entry.value.skip(1)) {
+        await _personDao.markFamilyChildDeleted(surplus.id, now);
+        removed++;
+      }
+    }
+    return removed;
+  }
+
+  /// The live partnership family of the pair, or null when they are not
+  /// partners.
+  Future<FamiliesV2Data?> _familyForPairOf(
+    String personAId,
+    String personBId,
+  ) async {
+    for (final family in await _personDao.getFamiliesForPerson(personAId)) {
+      if (family.husbandId == personBId || family.wifeId == personBId) {
+        return family;
+      }
+    }
+    return null;
+  }
+
+  /// A live family in which [personId] is the only recorded partner, creating one
+  /// when the person has none.
+  Future<String> _singleParentFamilyFor(String personId, DateTime now) async {
+    final person = await _personDao.getPersonById(personId);
+    if (person == null) {
+      throw ArgumentError('Person not found: $personId');
+    }
+
+    for (final family in await _personDao.getFamiliesForPerson(personId)) {
+      final isSoloHusband =
+          family.husbandId == personId && family.wifeId == null;
+      final isSoloWife = family.wifeId == personId && family.husbandId == null;
+      if (isSoloHusband || isSoloWife) return family.id;
+    }
+
+    final isFemale = isFemaleGender(person.gender);
+    final id = IdGenerator.newId();
+    await _personDao.createFamily(
+      FamiliesV2Companion.insert(
+        id: id,
+        treeId: person.treeId,
+        husbandId: Value(isFemale ? null : personId),
+        wifeId: Value(isFemale ? personId : null),
+        uuid: IdGenerator.newId(),
+        createdAt: Value(now),
+        updatedAt: Value(now),
+      ),
+    );
+    return id;
+  }
+
+  /// Moves the live child links of [fromFamilyId] onto [toFamilyId], collapsing
+  /// any link that already exists there and any link that would give the child
+  /// the same parent twice.
+  Future<({int moved, int collapsed})> _rehomeChildren({
+    required String fromFamilyId,
+    required String toFamilyId,
+    required DateTime now,
+  }) async {
+    var moved = 0;
+    var collapsed = 0;
+
+    for (final link in await _personDao.getChildrenForFamily(fromFamilyId)) {
+      final existing =
+          await _personDao.getFamilyChildLink(toFamilyId, link.childId);
+      if (existing != null) {
+        if (existing.isDeleted) {
+          await _personDao.restoreFamilyChild(existing.id, now);
+        }
+        await _personDao.removeFamilyChildLinkRow(link.id);
+        collapsed++;
+        continue;
+      }
+
+      final targetFamily = await _personDao.getFamilyById(toFamilyId);
+      final redundant = targetFamily != null &&
+          await _childAlreadyLinkedViaAnotherFamily(
+            childId: link.childId,
+            family: targetFamily,
+          );
+      if (redundant) {
+        await _personDao.removeFamilyChildLinkRow(link.id);
+        collapsed++;
+        continue;
+      }
+
+      await _personDao.updateFamilyChildFields(
+        link.id,
+        FamilyChildrenV2Companion(
+          familyId: Value(toFamilyId),
+          updatedAt: Value(now),
+        ),
+      );
+      moved++;
+    }
+
+    return (moved: moved, collapsed: collapsed);
+  }
+
+  /// True when [childId] is already linked through a live family other than
+  /// [family] that shares one of its partners — i.e. the parentage already
+  /// exists and a second link would duplicate it.
+  Future<bool> _childAlreadyLinkedViaAnotherFamily({
+    required String childId,
+    required FamiliesV2Data family,
+  }) async {
+    final partnerIds = [
+      if (family.husbandId != null) family.husbandId!,
+      if (family.wifeId != null) family.wifeId!,
+    ];
+    if (partnerIds.isEmpty) return false;
+
+    final links = await (_database.select(_database.familyChildrenV2)
+          ..where((t) => t.childId.equals(childId) & t.isDeleted.equals(false)))
+        .get();
+
+    for (final link in links) {
+      if (link.familyId == family.id) continue;
+      final otherFamily = await _personDao.getFamilyById(link.familyId);
+      if (otherFamily == null || otherFamily.isDeleted) continue;
+      for (final partnerId in [otherFamily.husbandId, otherFamily.wifeId]) {
+        if (partnerId != null && partnerIds.contains(partnerId)) return true;
+      }
+    }
+    return false;
   }
 
   /// Moves `citation_links` rows from [fromPersonId] to [toPersonId].
