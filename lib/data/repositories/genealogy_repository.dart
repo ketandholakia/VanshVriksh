@@ -125,7 +125,6 @@ class GenealogyRepository {
       biography: person.biography,
       notes: person.notes,
       isPrivate: person.isPrivate,
-      customDisplayName: person.customDisplayName,
     );
   }
 

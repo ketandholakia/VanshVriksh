@@ -21,7 +21,6 @@ class PersonSaveData {
     this.deathDate,
     this.biography,
     this.notes,
-    this.customDisplayName,
     this.isPrivate = false,
     this.isLiving = true,
   });
@@ -41,7 +40,6 @@ class PersonSaveData {
   final DateTime? deathDate;
   final String? biography;
   final String? notes;
-  final String? customDisplayName;
   final bool isPrivate;
   final bool isLiving;
 }

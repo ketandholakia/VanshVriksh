@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'main_shell_page.dart';
@@ -14,21 +12,11 @@ import '../features/people/people_list_page.dart';
 import '../features/people/person_form_page.dart';
 import '../features/person_facts/person_facts_page.dart';
 import '../features/person_facts/person_fact_form_page.dart';
-import '../features/genealogy/genealogy_person_form_page.dart';
-import '../features/genealogy/genealogy_link_family_page.dart';
-import '../features/genealogy/genealogy_people_list_page.dart';
-import '../features/genealogy/genealogy_person_profile_page.dart';
-import '../data/database/app_database.dart';
-import '../data/providers/genealogy_repository_provider.dart';
-import '../data/repositories/genealogy_repository.dart';
 import '../features/people/person_profile_page.dart';
 import '../features/relationships/add_relationship_page.dart';
-import '../features/settings/app_settings_provider.dart';
 import '../features/settings/settings_page.dart';
 import '../features/tree/family_fan_chart_page.dart';
 import '../features/tree/family_tree_page.dart';
-
-part 'genealogy_tree_page.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
@@ -189,61 +177,6 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) {
         final id = state.pathParameters['id']!;
         return PersonProfilePage(personId: id);
-      },
-    ),
-    GoRoute(
-      path: '/v2/people/add',
-      name: 'genealogy-person-add',
-      builder: (context, state) {
-        final linkPersonId = state.uri.queryParameters['linkPersonId'];
-        final relationKind = state.uri.queryParameters['relationKind'];
-        final initialGender = state.uri.queryParameters['initialGender'];
-        final returnTo = state.uri.queryParameters['returnTo'];
-        return GenealogyPersonFormPage(
-          linkPersonId: linkPersonId,
-          relationKind: relationKind,
-          initialGender: initialGender,
-          returnTo: returnTo,
-        );
-      },
-    ),
-    GoRoute(
-      path: '/v2/people',
-      name: 'genealogy-people',
-      builder: (context, state) => const GenealogyPeopleListPage(),
-    ),
-    GoRoute(
-      path: '/v2/people/:id',
-      name: 'genealogy-person-profile',
-      builder: (context, state) {
-        final id = state.pathParameters['id']!;
-        return GenealogyPersonProfilePage(personId: id);
-      },
-    ),
-    GoRoute(
-      path: '/v2/people/:id/edit',
-      name: 'genealogy-person-edit',
-      builder: (context, state) {
-        final id = state.pathParameters['id']!;
-        final returnTo = state.uri.queryParameters['returnTo'];
-        return GenealogyPersonFormPage(personId: id, returnTo: returnTo);
-      },
-    ),
-    GoRoute(
-      path: '/v2/people/:id/link/:type',
-      name: 'genealogy-link-family',
-      builder: (context, state) {
-        final id = state.pathParameters['id']!;
-        final type = state.pathParameters['type']!;
-        return GenealogyLinkFamilyPage(personId: id, linkType: type);
-      },
-    ),
-    GoRoute(
-      path: '/v2/tree/:id',
-      name: 'genealogy-tree',
-      builder: (context, state) {
-        final id = state.pathParameters['id']!;
-        return GenealogyTreePage(personId: id);
       },
     ),
   ],
