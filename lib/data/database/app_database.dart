@@ -67,7 +67,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -91,7 +91,7 @@ class AppDatabase extends _$AppDatabase {
       );
 
   // ---------------------------------------------------------------------------
-  // Migration to the canonical schema (v12)
+  // Migration to the canonical schema (v13)
   // ---------------------------------------------------------------------------
 
   /// Brings **any** pre-v12 database to the canonical model, atomically.

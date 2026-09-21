@@ -1,7 +1,5 @@
 import 'package:drift/drift.dart';
 
-import 'family_trees_table.dart';
-
 /// Canonical person record.
 ///
 /// Identity and lifecycle rules:
@@ -66,8 +64,13 @@ class GenealogyPersons extends Table {
   IntColumn get privacyLevel => integer().withDefault(const Constant(0))();
 
   /// Owning tree. Mandatory, integrity checked.
-  @ReferenceName('personsInTree')
-  TextColumn get treeId => text().references(FamilyTrees, #id, onDelete: KeyAction.restrict)();
+  ///
+  /// Declared as a raw table constraint rather than with `.references()`:
+  /// `family_trees.root_person_id` points back at this table, and when drift sees
+  /// that cycle it silently drops one of the two references — historically the
+  /// one it dropped was *this* mandatory ownership key, leaving `tree_id`
+  /// unconstrained. A table constraint keeps both directions enforced.
+  TextColumn get treeId => text()();
 
   /// Stable external identity.
   TextColumn get uuid => text().unique()();
@@ -86,4 +89,9 @@ class GenealogyPersons extends Table {
 
   @override
   Set<Column> get primaryKey => {id};
+
+  @override
+  List<String> get customConstraints => [
+        'FOREIGN KEY (tree_id) REFERENCES family_trees (id) ON DELETE RESTRICT',
+      ];
 }

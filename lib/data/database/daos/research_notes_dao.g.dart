@@ -4,7 +4,6 @@ part of 'research_notes_dao.dart';
 
 // ignore_for_file: type=lint
 mixin _$ResearchNotesDaoMixin on DatabaseAccessor<AppDatabase> {
-  $FamilyTreesTable get familyTrees => attachedDatabase.familyTrees;
   $GenealogyPersonsTable get genealogyPersons =>
       attachedDatabase.genealogyPersons;
   $ResearchNotesTable get researchNotes => attachedDatabase.researchNotes;
@@ -14,8 +13,6 @@ mixin _$ResearchNotesDaoMixin on DatabaseAccessor<AppDatabase> {
 class ResearchNotesDaoManager {
   final _$ResearchNotesDaoMixin _db;
   ResearchNotesDaoManager(this._db);
-  $$FamilyTreesTableTableManager get familyTrees =>
-      $$FamilyTreesTableTableManager(_db.attachedDatabase, _db.familyTrees);
   $$GenealogyPersonsTableTableManager get genealogyPersons =>
       $$GenealogyPersonsTableTableManager(
         _db.attachedDatabase,

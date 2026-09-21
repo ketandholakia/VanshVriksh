@@ -3,442 +3,6 @@
 part of 'app_database.dart';
 
 // ignore_for_file: type=lint
-class $FamilyTreesTable extends FamilyTrees
-    with TableInfo<$FamilyTreesTable, FamilyTree> {
-  @override
-  final GeneratedDatabase attachedDatabase;
-  final String? _alias;
-  $FamilyTreesTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _idMeta = const VerificationMeta('id');
-  @override
-  late final GeneratedColumn<String> id = GeneratedColumn<String>(
-    'id',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _treeNameMeta = const VerificationMeta(
-    'treeName',
-  );
-  @override
-  late final GeneratedColumn<String> treeName = GeneratedColumn<String>(
-    'tree_name',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _descriptionMeta = const VerificationMeta(
-    'description',
-  );
-  @override
-  late final GeneratedColumn<String> description = GeneratedColumn<String>(
-    'description',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _rootPersonIdMeta = const VerificationMeta(
-    'rootPersonId',
-  );
-  @override
-  late final GeneratedColumn<String> rootPersonId = GeneratedColumn<String>(
-    'root_person_id',
-    aliasedName,
-    true,
-    type: DriftSqlType.string,
-    requiredDuringInsert: false,
-  );
-  static const VerificationMeta _createdAtMeta = const VerificationMeta(
-    'createdAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
-    'created_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
-    'updatedAt',
-  );
-  @override
-  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
-    'updated_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: true,
-  );
-  @override
-  List<GeneratedColumn> get $columns => [
-    id,
-    treeName,
-    description,
-    rootPersonId,
-    createdAt,
-    updatedAt,
-  ];
-  @override
-  String get aliasedName => _alias ?? actualTableName;
-  @override
-  String get actualTableName => $name;
-  static const String $name = 'family_trees';
-  @override
-  VerificationContext validateIntegrity(
-    Insertable<FamilyTree> instance, {
-    bool isInserting = false,
-  }) {
-    final context = VerificationContext();
-    final data = instance.toColumns(true);
-    if (data.containsKey('id')) {
-      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
-    } else if (isInserting) {
-      context.missing(_idMeta);
-    }
-    if (data.containsKey('tree_name')) {
-      context.handle(
-        _treeNameMeta,
-        treeName.isAcceptableOrUnknown(data['tree_name']!, _treeNameMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_treeNameMeta);
-    }
-    if (data.containsKey('description')) {
-      context.handle(
-        _descriptionMeta,
-        description.isAcceptableOrUnknown(
-          data['description']!,
-          _descriptionMeta,
-        ),
-      );
-    }
-    if (data.containsKey('root_person_id')) {
-      context.handle(
-        _rootPersonIdMeta,
-        rootPersonId.isAcceptableOrUnknown(
-          data['root_person_id']!,
-          _rootPersonIdMeta,
-        ),
-      );
-    }
-    if (data.containsKey('created_at')) {
-      context.handle(
-        _createdAtMeta,
-        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_createdAtMeta);
-    }
-    if (data.containsKey('updated_at')) {
-      context.handle(
-        _updatedAtMeta,
-        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_updatedAtMeta);
-    }
-    return context;
-  }
-
-  @override
-  Set<GeneratedColumn> get $primaryKey => {id};
-  @override
-  FamilyTree map(Map<String, dynamic> data, {String? tablePrefix}) {
-    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return FamilyTree(
-      id: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}id'],
-      )!,
-      treeName: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}tree_name'],
-      )!,
-      description: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}description'],
-      ),
-      rootPersonId: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}root_person_id'],
-      ),
-      createdAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}created_at'],
-      )!,
-      updatedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}updated_at'],
-      )!,
-    );
-  }
-
-  @override
-  $FamilyTreesTable createAlias(String alias) {
-    return $FamilyTreesTable(attachedDatabase, alias);
-  }
-}
-
-class FamilyTree extends DataClass implements Insertable<FamilyTree> {
-  final String id;
-  final String treeName;
-  final String? description;
-
-  /// The person the tree is conceptually rooted at.
-  ///
-  /// Deliberately **not** a foreign key: `genealogy_persons.tree_id` already
-  /// references this table, and drift resolves that table-level cycle by
-  /// dropping one of the two constraints — which silently removed the mandatory
-  /// ownership key on people. Ownership is the constraint that matters, so this
-  /// optional pointer is validated in the repository/migration instead.
-  final String? rootPersonId;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-  const FamilyTree({
-    required this.id,
-    required this.treeName,
-    this.description,
-    this.rootPersonId,
-    required this.createdAt,
-    required this.updatedAt,
-  });
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    map['id'] = Variable<String>(id);
-    map['tree_name'] = Variable<String>(treeName);
-    if (!nullToAbsent || description != null) {
-      map['description'] = Variable<String>(description);
-    }
-    if (!nullToAbsent || rootPersonId != null) {
-      map['root_person_id'] = Variable<String>(rootPersonId);
-    }
-    map['created_at'] = Variable<DateTime>(createdAt);
-    map['updated_at'] = Variable<DateTime>(updatedAt);
-    return map;
-  }
-
-  FamilyTreesCompanion toCompanion(bool nullToAbsent) {
-    return FamilyTreesCompanion(
-      id: Value(id),
-      treeName: Value(treeName),
-      description: description == null && nullToAbsent
-          ? const Value.absent()
-          : Value(description),
-      rootPersonId: rootPersonId == null && nullToAbsent
-          ? const Value.absent()
-          : Value(rootPersonId),
-      createdAt: Value(createdAt),
-      updatedAt: Value(updatedAt),
-    );
-  }
-
-  factory FamilyTree.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return FamilyTree(
-      id: serializer.fromJson<String>(json['id']),
-      treeName: serializer.fromJson<String>(json['treeName']),
-      description: serializer.fromJson<String?>(json['description']),
-      rootPersonId: serializer.fromJson<String?>(json['rootPersonId']),
-      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
-      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
-    );
-  }
-  @override
-  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
-    serializer ??= driftRuntimeOptions.defaultSerializer;
-    return <String, dynamic>{
-      'id': serializer.toJson<String>(id),
-      'treeName': serializer.toJson<String>(treeName),
-      'description': serializer.toJson<String?>(description),
-      'rootPersonId': serializer.toJson<String?>(rootPersonId),
-      'createdAt': serializer.toJson<DateTime>(createdAt),
-      'updatedAt': serializer.toJson<DateTime>(updatedAt),
-    };
-  }
-
-  FamilyTree copyWith({
-    String? id,
-    String? treeName,
-    Value<String?> description = const Value.absent(),
-    Value<String?> rootPersonId = const Value.absent(),
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  }) => FamilyTree(
-    id: id ?? this.id,
-    treeName: treeName ?? this.treeName,
-    description: description.present ? description.value : this.description,
-    rootPersonId: rootPersonId.present ? rootPersonId.value : this.rootPersonId,
-    createdAt: createdAt ?? this.createdAt,
-    updatedAt: updatedAt ?? this.updatedAt,
-  );
-  FamilyTree copyWithCompanion(FamilyTreesCompanion data) {
-    return FamilyTree(
-      id: data.id.present ? data.id.value : this.id,
-      treeName: data.treeName.present ? data.treeName.value : this.treeName,
-      description: data.description.present
-          ? data.description.value
-          : this.description,
-      rootPersonId: data.rootPersonId.present
-          ? data.rootPersonId.value
-          : this.rootPersonId,
-      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
-      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
-    );
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('FamilyTree(')
-          ..write('id: $id, ')
-          ..write('treeName: $treeName, ')
-          ..write('description: $description, ')
-          ..write('rootPersonId: $rootPersonId, ')
-          ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
-          ..write(')'))
-        .toString();
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    id,
-    treeName,
-    description,
-    rootPersonId,
-    createdAt,
-    updatedAt,
-  );
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is FamilyTree &&
-          other.id == this.id &&
-          other.treeName == this.treeName &&
-          other.description == this.description &&
-          other.rootPersonId == this.rootPersonId &&
-          other.createdAt == this.createdAt &&
-          other.updatedAt == this.updatedAt);
-}
-
-class FamilyTreesCompanion extends UpdateCompanion<FamilyTree> {
-  final Value<String> id;
-  final Value<String> treeName;
-  final Value<String?> description;
-  final Value<String?> rootPersonId;
-  final Value<DateTime> createdAt;
-  final Value<DateTime> updatedAt;
-  final Value<int> rowid;
-  const FamilyTreesCompanion({
-    this.id = const Value.absent(),
-    this.treeName = const Value.absent(),
-    this.description = const Value.absent(),
-    this.rootPersonId = const Value.absent(),
-    this.createdAt = const Value.absent(),
-    this.updatedAt = const Value.absent(),
-    this.rowid = const Value.absent(),
-  });
-  FamilyTreesCompanion.insert({
-    required String id,
-    required String treeName,
-    this.description = const Value.absent(),
-    this.rootPersonId = const Value.absent(),
-    required DateTime createdAt,
-    required DateTime updatedAt,
-    this.rowid = const Value.absent(),
-  }) : id = Value(id),
-       treeName = Value(treeName),
-       createdAt = Value(createdAt),
-       updatedAt = Value(updatedAt);
-  static Insertable<FamilyTree> custom({
-    Expression<String>? id,
-    Expression<String>? treeName,
-    Expression<String>? description,
-    Expression<String>? rootPersonId,
-    Expression<DateTime>? createdAt,
-    Expression<DateTime>? updatedAt,
-    Expression<int>? rowid,
-  }) {
-    return RawValuesInsertable({
-      if (id != null) 'id': id,
-      if (treeName != null) 'tree_name': treeName,
-      if (description != null) 'description': description,
-      if (rootPersonId != null) 'root_person_id': rootPersonId,
-      if (createdAt != null) 'created_at': createdAt,
-      if (updatedAt != null) 'updated_at': updatedAt,
-      if (rowid != null) 'rowid': rowid,
-    });
-  }
-
-  FamilyTreesCompanion copyWith({
-    Value<String>? id,
-    Value<String>? treeName,
-    Value<String?>? description,
-    Value<String?>? rootPersonId,
-    Value<DateTime>? createdAt,
-    Value<DateTime>? updatedAt,
-    Value<int>? rowid,
-  }) {
-    return FamilyTreesCompanion(
-      id: id ?? this.id,
-      treeName: treeName ?? this.treeName,
-      description: description ?? this.description,
-      rootPersonId: rootPersonId ?? this.rootPersonId,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
-      rowid: rowid ?? this.rowid,
-    );
-  }
-
-  @override
-  Map<String, Expression> toColumns(bool nullToAbsent) {
-    final map = <String, Expression>{};
-    if (id.present) {
-      map['id'] = Variable<String>(id.value);
-    }
-    if (treeName.present) {
-      map['tree_name'] = Variable<String>(treeName.value);
-    }
-    if (description.present) {
-      map['description'] = Variable<String>(description.value);
-    }
-    if (rootPersonId.present) {
-      map['root_person_id'] = Variable<String>(rootPersonId.value);
-    }
-    if (createdAt.present) {
-      map['created_at'] = Variable<DateTime>(createdAt.value);
-    }
-    if (updatedAt.present) {
-      map['updated_at'] = Variable<DateTime>(updatedAt.value);
-    }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
-    return map;
-  }
-
-  @override
-  String toString() {
-    return (StringBuffer('FamilyTreesCompanion(')
-          ..write('id: $id, ')
-          ..write('treeName: $treeName, ')
-          ..write('description: $description, ')
-          ..write('rootPersonId: $rootPersonId, ')
-          ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt, ')
-          ..write('rowid: $rowid')
-          ..write(')'))
-        .toString();
-  }
-}
-
 class $GenealogyPersonsTable extends GenealogyPersons
     with TableInfo<$GenealogyPersonsTable, GenealogyPerson> {
   @override
@@ -807,9 +371,6 @@ class $GenealogyPersonsTable extends GenealogyPersons
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES family_trees (id) ON DELETE RESTRICT',
-    ),
   );
   static const VerificationMeta _uuidMeta = const VerificationMeta('uuid');
   @override
@@ -1409,6 +970,12 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
   final int privacyLevel;
 
   /// Owning tree. Mandatory, integrity checked.
+  ///
+  /// Declared as a raw table constraint rather than with `.references()`:
+  /// `family_trees.root_person_id` points back at this table, and when drift sees
+  /// that cycle it silently drops one of the two references — historically the
+  /// one it dropped was *this* mandatory ownership key, leaving `tree_id`
+  /// unconstrained. A table constraint keeps both directions enforced.
   final String treeId;
 
   /// Stable external identity.
@@ -2513,6 +2080,448 @@ class GenealogyPersonsCompanion extends UpdateCompanion<GenealogyPerson> {
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('mergedIntoId: $mergedIntoId, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $FamilyTreesTable extends FamilyTrees
+    with TableInfo<$FamilyTreesTable, FamilyTree> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $FamilyTreesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _treeNameMeta = const VerificationMeta(
+    'treeName',
+  );
+  @override
+  late final GeneratedColumn<String> treeName = GeneratedColumn<String>(
+    'tree_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _descriptionMeta = const VerificationMeta(
+    'description',
+  );
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+    'description',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _rootPersonIdMeta = const VerificationMeta(
+    'rootPersonId',
+  );
+  @override
+  late final GeneratedColumn<String> rootPersonId = GeneratedColumn<String>(
+    'root_person_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES genealogy_persons (id) ON DELETE SET NULL',
+    ),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    treeName,
+    description,
+    rootPersonId,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'family_trees';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<FamilyTree> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('tree_name')) {
+      context.handle(
+        _treeNameMeta,
+        treeName.isAcceptableOrUnknown(data['tree_name']!, _treeNameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_treeNameMeta);
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+        _descriptionMeta,
+        description.isAcceptableOrUnknown(
+          data['description']!,
+          _descriptionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('root_person_id')) {
+      context.handle(
+        _rootPersonIdMeta,
+        rootPersonId.isAcceptableOrUnknown(
+          data['root_person_id']!,
+          _rootPersonIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  FamilyTree map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return FamilyTree(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      treeName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tree_name'],
+      )!,
+      description: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}description'],
+      ),
+      rootPersonId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}root_person_id'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $FamilyTreesTable createAlias(String alias) {
+    return $FamilyTreesTable(attachedDatabase, alias);
+  }
+}
+
+class FamilyTree extends DataClass implements Insertable<FamilyTree> {
+  final String id;
+  final String treeName;
+  final String? description;
+
+  /// The person the tree is conceptually rooted at.
+  ///
+  /// Integrity checked and cleared on delete (`SET NULL`): if the person row is
+  /// ever hard-deleted the root is emptied rather than left dangling.
+  ///
+  /// This reference points back at `genealogy_persons` from `family_trees`, the
+  /// same pair of tables the mandatory ownership key on people points across. The
+  /// two together form a cycle, and drift drops one reference when it sees a
+  /// cycle — so the ownership key is declared as a raw table constraint instead
+  /// (see `genealogy_persons_table.dart`). Both are enforced; neither is dropped.
+  final String? rootPersonId;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const FamilyTree({
+    required this.id,
+    required this.treeName,
+    this.description,
+    this.rootPersonId,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['tree_name'] = Variable<String>(treeName);
+    if (!nullToAbsent || description != null) {
+      map['description'] = Variable<String>(description);
+    }
+    if (!nullToAbsent || rootPersonId != null) {
+      map['root_person_id'] = Variable<String>(rootPersonId);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  FamilyTreesCompanion toCompanion(bool nullToAbsent) {
+    return FamilyTreesCompanion(
+      id: Value(id),
+      treeName: Value(treeName),
+      description: description == null && nullToAbsent
+          ? const Value.absent()
+          : Value(description),
+      rootPersonId: rootPersonId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(rootPersonId),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory FamilyTree.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return FamilyTree(
+      id: serializer.fromJson<String>(json['id']),
+      treeName: serializer.fromJson<String>(json['treeName']),
+      description: serializer.fromJson<String?>(json['description']),
+      rootPersonId: serializer.fromJson<String?>(json['rootPersonId']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'treeName': serializer.toJson<String>(treeName),
+      'description': serializer.toJson<String?>(description),
+      'rootPersonId': serializer.toJson<String?>(rootPersonId),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  FamilyTree copyWith({
+    String? id,
+    String? treeName,
+    Value<String?> description = const Value.absent(),
+    Value<String?> rootPersonId = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) => FamilyTree(
+    id: id ?? this.id,
+    treeName: treeName ?? this.treeName,
+    description: description.present ? description.value : this.description,
+    rootPersonId: rootPersonId.present ? rootPersonId.value : this.rootPersonId,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  FamilyTree copyWithCompanion(FamilyTreesCompanion data) {
+    return FamilyTree(
+      id: data.id.present ? data.id.value : this.id,
+      treeName: data.treeName.present ? data.treeName.value : this.treeName,
+      description: data.description.present
+          ? data.description.value
+          : this.description,
+      rootPersonId: data.rootPersonId.present
+          ? data.rootPersonId.value
+          : this.rootPersonId,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FamilyTree(')
+          ..write('id: $id, ')
+          ..write('treeName: $treeName, ')
+          ..write('description: $description, ')
+          ..write('rootPersonId: $rootPersonId, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    treeName,
+    description,
+    rootPersonId,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is FamilyTree &&
+          other.id == this.id &&
+          other.treeName == this.treeName &&
+          other.description == this.description &&
+          other.rootPersonId == this.rootPersonId &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class FamilyTreesCompanion extends UpdateCompanion<FamilyTree> {
+  final Value<String> id;
+  final Value<String> treeName;
+  final Value<String?> description;
+  final Value<String?> rootPersonId;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const FamilyTreesCompanion({
+    this.id = const Value.absent(),
+    this.treeName = const Value.absent(),
+    this.description = const Value.absent(),
+    this.rootPersonId = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  FamilyTreesCompanion.insert({
+    required String id,
+    required String treeName,
+    this.description = const Value.absent(),
+    this.rootPersonId = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       treeName = Value(treeName),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<FamilyTree> custom({
+    Expression<String>? id,
+    Expression<String>? treeName,
+    Expression<String>? description,
+    Expression<String>? rootPersonId,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (treeName != null) 'tree_name': treeName,
+      if (description != null) 'description': description,
+      if (rootPersonId != null) 'root_person_id': rootPersonId,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  FamilyTreesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? treeName,
+    Value<String?>? description,
+    Value<String?>? rootPersonId,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return FamilyTreesCompanion(
+      id: id ?? this.id,
+      treeName: treeName ?? this.treeName,
+      description: description ?? this.description,
+      rootPersonId: rootPersonId ?? this.rootPersonId,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (treeName.present) {
+      map['tree_name'] = Variable<String>(treeName.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
+    if (rootPersonId.present) {
+      map['root_person_id'] = Variable<String>(rootPersonId.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FamilyTreesCompanion(')
+          ..write('id: $id, ')
+          ..write('treeName: $treeName, ')
+          ..write('description: $description, ')
+          ..write('rootPersonId: $rootPersonId, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -7826,7 +7835,7 @@ class $CitationsTable extends Citations
     type: DriftSqlType.string,
     requiredDuringInsert: false,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES media_items (id)',
+      'REFERENCES media_items (id) ON DELETE SET NULL',
     ),
   );
   static const VerificationMeta _accessedDateMeta = const VerificationMeta(
@@ -8007,6 +8016,9 @@ class Citation extends DataClass implements Insertable<Citation> {
   final String? repository;
   final String citationText;
   final String? url;
+
+  /// Auxiliary pointer to a scanned image: cleared rather than blocking the
+  /// media row's removal.
   final String? imageMediaId;
   final String? accessedDate;
   final DateTime createdAt;
@@ -8352,7 +8364,7 @@ class $CitationLinksTable extends CitationLinks
     type: DriftSqlType.string,
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'REFERENCES citations (id)',
+      'REFERENCES citations (id) ON DELETE CASCADE',
     ),
   );
   static const VerificationMeta _entityTypeMeta = const VerificationMeta(
@@ -8492,6 +8504,7 @@ class $CitationLinksTable extends CitationLinks
 }
 
 class CitationLink extends DataClass implements Insertable<CitationLink> {
+  /// CASCADE: a link has no meaning without the citation it belongs to.
   final String citationId;
   final String entityType;
   final String entityId;
@@ -9721,10 +9734,10 @@ class TodosCompanion extends UpdateCompanion<Todo> {
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
-  late final $FamilyTreesTable familyTrees = $FamilyTreesTable(this);
   late final $GenealogyPersonsTable genealogyPersons = $GenealogyPersonsTable(
     this,
   );
+  late final $FamilyTreesTable familyTrees = $FamilyTreesTable(this);
   late final $EventsTable events = $EventsTable(this);
   late final $SurnameEventsTable surnameEvents = $SurnameEventsTable(this);
   late final $FamiliesV2Table familiesV2 = $FamiliesV2Table(this);
@@ -9755,6 +9768,14 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'idx_surname_events_person_id',
     'CREATE INDEX idx_surname_events_person_id ON surname_events (person_id)',
   );
+  late final Index idxSurnameEventsRelatedPersonId = Index(
+    'idx_surname_events_related_person_id',
+    'CREATE INDEX idx_surname_events_related_person_id ON surname_events (related_person_id)',
+  );
+  late final Index idxSurnameEventsRelatedEventId = Index(
+    'idx_surname_events_related_event_id',
+    'CREATE INDEX idx_surname_events_related_event_id ON surname_events (related_event_id)',
+  );
   late final Index idxFamiliesV2TreeId = Index(
     'idx_families_v2_tree_id',
     'CREATE INDEX idx_families_v2_tree_id ON families_v2 (tree_id)',
@@ -9783,6 +9804,14 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'idx_duplicate_markers_person_b',
     'CREATE INDEX idx_duplicate_markers_person_b ON duplicate_markers (person_b_id)',
   );
+  late final Index idxCitationsImageMediaId = Index(
+    'idx_citations_image_media_id',
+    'CREATE INDEX idx_citations_image_media_id ON citations (image_media_id)',
+  );
+  late final Index idxCitationLinksEntityId = Index(
+    'idx_citation_links_entity_id',
+    'CREATE INDEX idx_citation_links_entity_id ON citation_links (entity_id)',
+  );
   late final Index idxResearchNotesPersonId = Index(
     'idx_research_notes_person_id',
     'CREATE INDEX idx_research_notes_person_id ON research_notes (person_id)',
@@ -9803,8 +9832,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
-    familyTrees,
     genealogyPersons,
+    familyTrees,
     events,
     surnameEvents,
     familiesV2,
@@ -9819,6 +9848,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     idxGenealogyPersonsTreeId,
     idxGenealogyPersonsMergedInto,
     idxSurnameEventsPersonId,
+    idxSurnameEventsRelatedPersonId,
+    idxSurnameEventsRelatedEventId,
     idxFamiliesV2TreeId,
     idxFamiliesV2HusbandId,
     idxFamiliesV2WifeId,
@@ -9826,6 +9857,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     idxMediaItemsPersonId,
     idxEventsPersonId,
     idxDuplicateMarkersPersonB,
+    idxCitationsImageMediaId,
+    idxCitationLinksEntityId,
     idxResearchNotesPersonId,
     idxTodosPersonId,
   ];
@@ -9837,6 +9870,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('genealogy_persons', kind: UpdateKind.update)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'genealogy_persons',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('family_trees', kind: UpdateKind.update)],
     ),
     WritePropagation(
       on: TableUpdateQuery.onTableName(
@@ -9866,431 +9906,23 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       ),
       result: [TableUpdate('duplicate_markers', kind: UpdateKind.delete)],
     ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'media_items',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('citations', kind: UpdateKind.update)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'citations',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('citation_links', kind: UpdateKind.delete)],
+    ),
   ]);
 }
 
-typedef $$FamilyTreesTableCreateCompanionBuilder =
-    FamilyTreesCompanion Function({
-      required String id,
-      required String treeName,
-      Value<String?> description,
-      Value<String?> rootPersonId,
-      required DateTime createdAt,
-      required DateTime updatedAt,
-      Value<int> rowid,
-    });
-typedef $$FamilyTreesTableUpdateCompanionBuilder =
-    FamilyTreesCompanion Function({
-      Value<String> id,
-      Value<String> treeName,
-      Value<String?> description,
-      Value<String?> rootPersonId,
-      Value<DateTime> createdAt,
-      Value<DateTime> updatedAt,
-      Value<int> rowid,
-    });
-
-final class $$FamilyTreesTableReferences
-    extends BaseReferences<_$AppDatabase, $FamilyTreesTable, FamilyTree> {
-  $$FamilyTreesTableReferences(super.$_db, super.$_table, super.$_typedResult);
-
-  static MultiTypedResultKey<$GenealogyPersonsTable, List<GenealogyPerson>>
-  _personsInTreeTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
-    db.genealogyPersons,
-    aliasName: $_aliasNameGenerator(
-      db.familyTrees.id,
-      db.genealogyPersons.treeId,
-    ),
-  );
-
-  $$GenealogyPersonsTableProcessedTableManager get personsInTree {
-    final manager = $$GenealogyPersonsTableTableManager(
-      $_db,
-      $_db.genealogyPersons,
-    ).filter((f) => f.treeId.id.sqlEquals($_itemColumn<String>('id')!));
-
-    final cache = $_typedResult.readTableOrNull(_personsInTreeTable($_db));
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: cache),
-    );
-  }
-
-  static MultiTypedResultKey<$FamiliesV2Table, List<FamiliesV2Data>>
-  _familiesInTreeTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
-    db.familiesV2,
-    aliasName: $_aliasNameGenerator(db.familyTrees.id, db.familiesV2.treeId),
-  );
-
-  $$FamiliesV2TableProcessedTableManager get familiesInTree {
-    final manager = $$FamiliesV2TableTableManager(
-      $_db,
-      $_db.familiesV2,
-    ).filter((f) => f.treeId.id.sqlEquals($_itemColumn<String>('id')!));
-
-    final cache = $_typedResult.readTableOrNull(_familiesInTreeTable($_db));
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: cache),
-    );
-  }
-}
-
-class $$FamilyTreesTableFilterComposer
-    extends Composer<_$AppDatabase, $FamilyTreesTable> {
-  $$FamilyTreesTableFilterComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnFilters<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get treeName => $composableBuilder(
-    column: $table.treeName,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get description => $composableBuilder(
-    column: $table.description,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get rootPersonId => $composableBuilder(
-    column: $table.rootPersonId,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get createdAt => $composableBuilder(
-    column: $table.createdAt,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
-    column: $table.updatedAt,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  Expression<bool> personsInTree(
-    Expression<bool> Function($$GenealogyPersonsTableFilterComposer f) f,
-  ) {
-    final $$GenealogyPersonsTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.genealogyPersons,
-      getReferencedColumn: (t) => t.treeId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$GenealogyPersonsTableFilterComposer(
-            $db: $db,
-            $table: $db.genealogyPersons,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-
-  Expression<bool> familiesInTree(
-    Expression<bool> Function($$FamiliesV2TableFilterComposer f) f,
-  ) {
-    final $$FamiliesV2TableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.familiesV2,
-      getReferencedColumn: (t) => t.treeId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$FamiliesV2TableFilterComposer(
-            $db: $db,
-            $table: $db.familiesV2,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-}
-
-class $$FamilyTreesTableOrderingComposer
-    extends Composer<_$AppDatabase, $FamilyTreesTable> {
-  $$FamilyTreesTableOrderingComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  ColumnOrderings<String> get id => $composableBuilder(
-    column: $table.id,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get treeName => $composableBuilder(
-    column: $table.treeName,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get description => $composableBuilder(
-    column: $table.description,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get rootPersonId => $composableBuilder(
-    column: $table.rootPersonId,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
-    column: $table.createdAt,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
-    column: $table.updatedAt,
-    builder: (column) => ColumnOrderings(column),
-  );
-}
-
-class $$FamilyTreesTableAnnotationComposer
-    extends Composer<_$AppDatabase, $FamilyTreesTable> {
-  $$FamilyTreesTableAnnotationComposer({
-    required super.$db,
-    required super.$table,
-    super.joinBuilder,
-    super.$addJoinBuilderToRootComposer,
-    super.$removeJoinBuilderFromRootComposer,
-  });
-  GeneratedColumn<String> get id =>
-      $composableBuilder(column: $table.id, builder: (column) => column);
-
-  GeneratedColumn<String> get treeName =>
-      $composableBuilder(column: $table.treeName, builder: (column) => column);
-
-  GeneratedColumn<String> get description => $composableBuilder(
-    column: $table.description,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get rootPersonId => $composableBuilder(
-    column: $table.rootPersonId,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<DateTime> get createdAt =>
-      $composableBuilder(column: $table.createdAt, builder: (column) => column);
-
-  GeneratedColumn<DateTime> get updatedAt =>
-      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
-
-  Expression<T> personsInTree<T extends Object>(
-    Expression<T> Function($$GenealogyPersonsTableAnnotationComposer a) f,
-  ) {
-    final $$GenealogyPersonsTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.genealogyPersons,
-      getReferencedColumn: (t) => t.treeId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$GenealogyPersonsTableAnnotationComposer(
-            $db: $db,
-            $table: $db.genealogyPersons,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-
-  Expression<T> familiesInTree<T extends Object>(
-    Expression<T> Function($$FamiliesV2TableAnnotationComposer a) f,
-  ) {
-    final $$FamiliesV2TableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.familiesV2,
-      getReferencedColumn: (t) => t.treeId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$FamiliesV2TableAnnotationComposer(
-            $db: $db,
-            $table: $db.familiesV2,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
-}
-
-class $$FamilyTreesTableTableManager
-    extends
-        RootTableManager<
-          _$AppDatabase,
-          $FamilyTreesTable,
-          FamilyTree,
-          $$FamilyTreesTableFilterComposer,
-          $$FamilyTreesTableOrderingComposer,
-          $$FamilyTreesTableAnnotationComposer,
-          $$FamilyTreesTableCreateCompanionBuilder,
-          $$FamilyTreesTableUpdateCompanionBuilder,
-          (FamilyTree, $$FamilyTreesTableReferences),
-          FamilyTree,
-          PrefetchHooks Function({bool personsInTree, bool familiesInTree})
-        > {
-  $$FamilyTreesTableTableManager(_$AppDatabase db, $FamilyTreesTable table)
-    : super(
-        TableManagerState(
-          db: db,
-          table: table,
-          createFilteringComposer: () =>
-              $$FamilyTreesTableFilterComposer($db: db, $table: table),
-          createOrderingComposer: () =>
-              $$FamilyTreesTableOrderingComposer($db: db, $table: table),
-          createComputedFieldComposer: () =>
-              $$FamilyTreesTableAnnotationComposer($db: db, $table: table),
-          updateCompanionCallback:
-              ({
-                Value<String> id = const Value.absent(),
-                Value<String> treeName = const Value.absent(),
-                Value<String?> description = const Value.absent(),
-                Value<String?> rootPersonId = const Value.absent(),
-                Value<DateTime> createdAt = const Value.absent(),
-                Value<DateTime> updatedAt = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
-              }) => FamilyTreesCompanion(
-                id: id,
-                treeName: treeName,
-                description: description,
-                rootPersonId: rootPersonId,
-                createdAt: createdAt,
-                updatedAt: updatedAt,
-                rowid: rowid,
-              ),
-          createCompanionCallback:
-              ({
-                required String id,
-                required String treeName,
-                Value<String?> description = const Value.absent(),
-                Value<String?> rootPersonId = const Value.absent(),
-                required DateTime createdAt,
-                required DateTime updatedAt,
-                Value<int> rowid = const Value.absent(),
-              }) => FamilyTreesCompanion.insert(
-                id: id,
-                treeName: treeName,
-                description: description,
-                rootPersonId: rootPersonId,
-                createdAt: createdAt,
-                updatedAt: updatedAt,
-                rowid: rowid,
-              ),
-          withReferenceMapper: (p0) => p0
-              .map(
-                (e) => (
-                  e.readTable(table),
-                  $$FamilyTreesTableReferences(db, table, e),
-                ),
-              )
-              .toList(),
-          prefetchHooksCallback:
-              ({personsInTree = false, familiesInTree = false}) {
-                return PrefetchHooks(
-                  db: db,
-                  explicitlyWatchedTables: [
-                    if (personsInTree) db.genealogyPersons,
-                    if (familiesInTree) db.familiesV2,
-                  ],
-                  addJoins: null,
-                  getPrefetchedDataCallback: (items) async {
-                    return [
-                      if (personsInTree)
-                        await $_getPrefetchedData<
-                          FamilyTree,
-                          $FamilyTreesTable,
-                          GenealogyPerson
-                        >(
-                          currentTable: table,
-                          referencedTable: $$FamilyTreesTableReferences
-                              ._personsInTreeTable(db),
-                          managerFromTypedResult: (p0) =>
-                              $$FamilyTreesTableReferences(
-                                db,
-                                table,
-                                p0,
-                              ).personsInTree,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.treeId == item.id,
-                              ),
-                          typedResults: items,
-                        ),
-                      if (familiesInTree)
-                        await $_getPrefetchedData<
-                          FamilyTree,
-                          $FamilyTreesTable,
-                          FamiliesV2Data
-                        >(
-                          currentTable: table,
-                          referencedTable: $$FamilyTreesTableReferences
-                              ._familiesInTreeTable(db),
-                          managerFromTypedResult: (p0) =>
-                              $$FamilyTreesTableReferences(
-                                db,
-                                table,
-                                p0,
-                              ).familiesInTree,
-                          referencedItemsForCurrentItem:
-                              (item, referencedItems) => referencedItems.where(
-                                (e) => e.treeId == item.id,
-                              ),
-                          typedResults: items,
-                        ),
-                    ];
-                  },
-                );
-              },
-        ),
-      );
-}
-
-typedef $$FamilyTreesTableProcessedTableManager =
-    ProcessedTableManager<
-      _$AppDatabase,
-      $FamilyTreesTable,
-      FamilyTree,
-      $$FamilyTreesTableFilterComposer,
-      $$FamilyTreesTableOrderingComposer,
-      $$FamilyTreesTableAnnotationComposer,
-      $$FamilyTreesTableCreateCompanionBuilder,
-      $$FamilyTreesTableUpdateCompanionBuilder,
-      (FamilyTree, $$FamilyTreesTableReferences),
-      FamilyTree,
-      PrefetchHooks Function({bool personsInTree, bool familiesInTree})
-    >;
 typedef $$GenealogyPersonsTableCreateCompanionBuilder =
     GenealogyPersonsCompanion Function({
       required String id,
@@ -10385,25 +10017,6 @@ final class $$GenealogyPersonsTableReferences
     super.$_typedResult,
   );
 
-  static $FamilyTreesTable _treeIdTable(_$AppDatabase db) =>
-      db.familyTrees.createAlias(
-        $_aliasNameGenerator(db.genealogyPersons.treeId, db.familyTrees.id),
-      );
-
-  $$FamilyTreesTableProcessedTableManager get treeId {
-    final $_column = $_itemColumn<String>('tree_id')!;
-
-    final manager = $$FamilyTreesTableTableManager(
-      $_db,
-      $_db.familyTrees,
-    ).filter((f) => f.id.sqlEquals($_column));
-    final item = $_typedResult.readTableOrNull(_treeIdTable($_db));
-    if (item == null) return manager;
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: [item]),
-    );
-  }
-
   static $GenealogyPersonsTable _mergedIntoIdTable(_$AppDatabase db) =>
       db.genealogyPersons.createAlias(
         $_aliasNameGenerator(
@@ -10423,6 +10036,27 @@ final class $$GenealogyPersonsTableReferences
     if (item == null) return manager;
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<$FamilyTreesTable, List<FamilyTree>>
+  _rootOfTreesTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.familyTrees,
+    aliasName: $_aliasNameGenerator(
+      db.genealogyPersons.id,
+      db.familyTrees.rootPersonId,
+    ),
+  );
+
+  $$FamilyTreesTableProcessedTableManager get rootOfTrees {
+    final manager = $$FamilyTreesTableTableManager(
+      $_db,
+      $_db.familyTrees,
+    ).filter((f) => f.rootPersonId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_rootOfTreesTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
     );
   }
 
@@ -10781,6 +10415,11 @@ class $$GenealogyPersonsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get treeId => $composableBuilder(
+    column: $table.treeId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get uuid => $composableBuilder(
     column: $table.uuid,
     builder: (column) => ColumnFilters(column),
@@ -10800,29 +10439,6 @@ class $$GenealogyPersonsTableFilterComposer
     column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
-
-  $$FamilyTreesTableFilterComposer get treeId {
-    final $$FamilyTreesTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.treeId,
-      referencedTable: $db.familyTrees,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$FamilyTreesTableFilterComposer(
-            $db: $db,
-            $table: $db.familyTrees,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
 
   $$GenealogyPersonsTableFilterComposer get mergedIntoId {
     final $$GenealogyPersonsTableFilterComposer composer = $composerBuilder(
@@ -10845,6 +10461,31 @@ class $$GenealogyPersonsTableFilterComposer
           ),
     );
     return composer;
+  }
+
+  Expression<bool> rootOfTrees(
+    Expression<bool> Function($$FamilyTreesTableFilterComposer f) f,
+  ) {
+    final $$FamilyTreesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.familyTrees,
+      getReferencedColumn: (t) => t.rootPersonId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FamilyTreesTableFilterComposer(
+            $db: $db,
+            $table: $db.familyTrees,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
   }
 
   Expression<bool> eventsRefs(
@@ -11242,6 +10883,11 @@ class $$GenealogyPersonsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get treeId => $composableBuilder(
+    column: $table.treeId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get uuid => $composableBuilder(
     column: $table.uuid,
     builder: (column) => ColumnOrderings(column),
@@ -11261,29 +10907,6 @@ class $$GenealogyPersonsTableOrderingComposer
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
-
-  $$FamilyTreesTableOrderingComposer get treeId {
-    final $$FamilyTreesTableOrderingComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.treeId,
-      referencedTable: $db.familyTrees,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$FamilyTreesTableOrderingComposer(
-            $db: $db,
-            $table: $db.familyTrees,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
 
   $$GenealogyPersonsTableOrderingComposer get mergedIntoId {
     final $$GenealogyPersonsTableOrderingComposer composer = $composerBuilder(
@@ -11448,6 +11071,9 @@ class $$GenealogyPersonsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get treeId =>
+      $composableBuilder(column: $table.treeId, builder: (column) => column);
+
   GeneratedColumn<String> get uuid =>
       $composableBuilder(column: $table.uuid, builder: (column) => column);
 
@@ -11459,29 +11085,6 @@ class $$GenealogyPersonsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
-
-  $$FamilyTreesTableAnnotationComposer get treeId {
-    final $$FamilyTreesTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.treeId,
-      referencedTable: $db.familyTrees,
-      getReferencedColumn: (t) => t.id,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$FamilyTreesTableAnnotationComposer(
-            $db: $db,
-            $table: $db.familyTrees,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return composer;
-  }
 
   $$GenealogyPersonsTableAnnotationComposer get mergedIntoId {
     final $$GenealogyPersonsTableAnnotationComposer composer = $composerBuilder(
@@ -11504,6 +11107,31 @@ class $$GenealogyPersonsTableAnnotationComposer
           ),
     );
     return composer;
+  }
+
+  Expression<T> rootOfTrees<T extends Object>(
+    Expression<T> Function($$FamilyTreesTableAnnotationComposer a) f,
+  ) {
+    final $$FamilyTreesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.familyTrees,
+      getReferencedColumn: (t) => t.rootPersonId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FamilyTreesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.familyTrees,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
   }
 
   Expression<T> eventsRefs<T extends Object>(
@@ -11746,8 +11374,8 @@ class $$GenealogyPersonsTableTableManager
           (GenealogyPerson, $$GenealogyPersonsTableReferences),
           GenealogyPerson,
           PrefetchHooks Function({
-            bool treeId,
             bool mergedIntoId,
+            bool rootOfTrees,
             bool eventsRefs,
             bool surnameEventsRefs,
             bool surnameEventsAbout,
@@ -11946,8 +11574,8 @@ class $$GenealogyPersonsTableTableManager
               .toList(),
           prefetchHooksCallback:
               ({
-                treeId = false,
                 mergedIntoId = false,
+                rootOfTrees = false,
                 eventsRefs = false,
                 surnameEventsRefs = false,
                 surnameEventsAbout = false,
@@ -11961,6 +11589,7 @@ class $$GenealogyPersonsTableTableManager
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
+                    if (rootOfTrees) db.familyTrees,
                     if (eventsRefs) db.events,
                     if (surnameEventsRefs) db.surnameEvents,
                     if (surnameEventsAbout) db.surnameEvents,
@@ -11987,21 +11616,6 @@ class $$GenealogyPersonsTableTableManager
                           dynamic
                         >
                       >(state) {
-                        if (treeId) {
-                          state =
-                              state.withJoin(
-                                    currentTable: table,
-                                    currentColumn: table.treeId,
-                                    referencedTable:
-                                        $$GenealogyPersonsTableReferences
-                                            ._treeIdTable(db),
-                                    referencedColumn:
-                                        $$GenealogyPersonsTableReferences
-                                            ._treeIdTable(db)
-                                            .id,
-                                  )
-                                  as T;
-                        }
                         if (mergedIntoId) {
                           state =
                               state.withJoin(
@@ -12022,6 +11636,27 @@ class $$GenealogyPersonsTableTableManager
                       },
                   getPrefetchedDataCallback: (items) async {
                     return [
+                      if (rootOfTrees)
+                        await $_getPrefetchedData<
+                          GenealogyPerson,
+                          $GenealogyPersonsTable,
+                          FamilyTree
+                        >(
+                          currentTable: table,
+                          referencedTable: $$GenealogyPersonsTableReferences
+                              ._rootOfTreesTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$GenealogyPersonsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).rootOfTrees,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.rootPersonId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                       if (eventsRefs)
                         await $_getPrefetchedData<
                           GenealogyPerson,
@@ -12232,8 +11867,8 @@ typedef $$GenealogyPersonsTableProcessedTableManager =
       (GenealogyPerson, $$GenealogyPersonsTableReferences),
       GenealogyPerson,
       PrefetchHooks Function({
-        bool treeId,
         bool mergedIntoId,
+        bool rootOfTrees,
         bool eventsRefs,
         bool surnameEventsRefs,
         bool surnameEventsAbout,
@@ -12244,6 +11879,442 @@ typedef $$GenealogyPersonsTableProcessedTableManager =
         bool researchNotesRefs,
         bool todosRefs,
       })
+    >;
+typedef $$FamilyTreesTableCreateCompanionBuilder =
+    FamilyTreesCompanion Function({
+      required String id,
+      required String treeName,
+      Value<String?> description,
+      Value<String?> rootPersonId,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<int> rowid,
+    });
+typedef $$FamilyTreesTableUpdateCompanionBuilder =
+    FamilyTreesCompanion Function({
+      Value<String> id,
+      Value<String> treeName,
+      Value<String?> description,
+      Value<String?> rootPersonId,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<int> rowid,
+    });
+
+final class $$FamilyTreesTableReferences
+    extends BaseReferences<_$AppDatabase, $FamilyTreesTable, FamilyTree> {
+  $$FamilyTreesTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $GenealogyPersonsTable _rootPersonIdTable(_$AppDatabase db) =>
+      db.genealogyPersons.createAlias(
+        $_aliasNameGenerator(
+          db.familyTrees.rootPersonId,
+          db.genealogyPersons.id,
+        ),
+      );
+
+  $$GenealogyPersonsTableProcessedTableManager? get rootPersonId {
+    final $_column = $_itemColumn<String>('root_person_id');
+    if ($_column == null) return null;
+    final manager = $$GenealogyPersonsTableTableManager(
+      $_db,
+      $_db.genealogyPersons,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_rootPersonIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<$FamiliesV2Table, List<FamiliesV2Data>>
+  _familiesInTreeTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.familiesV2,
+    aliasName: $_aliasNameGenerator(db.familyTrees.id, db.familiesV2.treeId),
+  );
+
+  $$FamiliesV2TableProcessedTableManager get familiesInTree {
+    final manager = $$FamiliesV2TableTableManager(
+      $_db,
+      $_db.familiesV2,
+    ).filter((f) => f.treeId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_familiesInTreeTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$FamilyTreesTableFilterComposer
+    extends Composer<_$AppDatabase, $FamilyTreesTable> {
+  $$FamilyTreesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get treeName => $composableBuilder(
+    column: $table.treeName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$GenealogyPersonsTableFilterComposer get rootPersonId {
+    final $$GenealogyPersonsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.rootPersonId,
+      referencedTable: $db.genealogyPersons,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GenealogyPersonsTableFilterComposer(
+            $db: $db,
+            $table: $db.genealogyPersons,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<bool> familiesInTree(
+    Expression<bool> Function($$FamiliesV2TableFilterComposer f) f,
+  ) {
+    final $$FamiliesV2TableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.familiesV2,
+      getReferencedColumn: (t) => t.treeId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FamiliesV2TableFilterComposer(
+            $db: $db,
+            $table: $db.familiesV2,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$FamilyTreesTableOrderingComposer
+    extends Composer<_$AppDatabase, $FamilyTreesTable> {
+  $$FamilyTreesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get treeName => $composableBuilder(
+    column: $table.treeName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$GenealogyPersonsTableOrderingComposer get rootPersonId {
+    final $$GenealogyPersonsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.rootPersonId,
+      referencedTable: $db.genealogyPersons,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GenealogyPersonsTableOrderingComposer(
+            $db: $db,
+            $table: $db.genealogyPersons,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$FamilyTreesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $FamilyTreesTable> {
+  $$FamilyTreesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get treeName =>
+      $composableBuilder(column: $table.treeName, builder: (column) => column);
+
+  GeneratedColumn<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$GenealogyPersonsTableAnnotationComposer get rootPersonId {
+    final $$GenealogyPersonsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.rootPersonId,
+      referencedTable: $db.genealogyPersons,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GenealogyPersonsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.genealogyPersons,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<T> familiesInTree<T extends Object>(
+    Expression<T> Function($$FamiliesV2TableAnnotationComposer a) f,
+  ) {
+    final $$FamiliesV2TableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.familiesV2,
+      getReferencedColumn: (t) => t.treeId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FamiliesV2TableAnnotationComposer(
+            $db: $db,
+            $table: $db.familiesV2,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$FamilyTreesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $FamilyTreesTable,
+          FamilyTree,
+          $$FamilyTreesTableFilterComposer,
+          $$FamilyTreesTableOrderingComposer,
+          $$FamilyTreesTableAnnotationComposer,
+          $$FamilyTreesTableCreateCompanionBuilder,
+          $$FamilyTreesTableUpdateCompanionBuilder,
+          (FamilyTree, $$FamilyTreesTableReferences),
+          FamilyTree,
+          PrefetchHooks Function({bool rootPersonId, bool familiesInTree})
+        > {
+  $$FamilyTreesTableTableManager(_$AppDatabase db, $FamilyTreesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$FamilyTreesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$FamilyTreesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$FamilyTreesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> treeName = const Value.absent(),
+                Value<String?> description = const Value.absent(),
+                Value<String?> rootPersonId = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => FamilyTreesCompanion(
+                id: id,
+                treeName: treeName,
+                description: description,
+                rootPersonId: rootPersonId,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String treeName,
+                Value<String?> description = const Value.absent(),
+                Value<String?> rootPersonId = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => FamilyTreesCompanion.insert(
+                id: id,
+                treeName: treeName,
+                description: description,
+                rootPersonId: rootPersonId,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$FamilyTreesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback:
+              ({rootPersonId = false, familiesInTree = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [if (familiesInTree) db.familiesV2],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (rootPersonId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.rootPersonId,
+                                    referencedTable:
+                                        $$FamilyTreesTableReferences
+                                            ._rootPersonIdTable(db),
+                                    referencedColumn:
+                                        $$FamilyTreesTableReferences
+                                            ._rootPersonIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (familiesInTree)
+                        await $_getPrefetchedData<
+                          FamilyTree,
+                          $FamilyTreesTable,
+                          FamiliesV2Data
+                        >(
+                          currentTable: table,
+                          referencedTable: $$FamilyTreesTableReferences
+                              ._familiesInTreeTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$FamilyTreesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).familiesInTree,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.treeId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
+              },
+        ),
+      );
+}
+
+typedef $$FamilyTreesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $FamilyTreesTable,
+      FamilyTree,
+      $$FamilyTreesTableFilterComposer,
+      $$FamilyTreesTableOrderingComposer,
+      $$FamilyTreesTableAnnotationComposer,
+      $$FamilyTreesTableCreateCompanionBuilder,
+      $$FamilyTreesTableUpdateCompanionBuilder,
+      (FamilyTree, $$FamilyTreesTableReferences),
+      FamilyTree,
+      PrefetchHooks Function({bool rootPersonId, bool familiesInTree})
     >;
 typedef $$EventsTableCreateCompanionBuilder =
     EventsCompanion Function({
@@ -17755,10 +17826,10 @@ typedef $$TodosTableProcessedTableManager =
 class $AppDatabaseManager {
   final _$AppDatabase _db;
   $AppDatabaseManager(this._db);
-  $$FamilyTreesTableTableManager get familyTrees =>
-      $$FamilyTreesTableTableManager(_db, _db.familyTrees);
   $$GenealogyPersonsTableTableManager get genealogyPersons =>
       $$GenealogyPersonsTableTableManager(_db, _db.genealogyPersons);
+  $$FamilyTreesTableTableManager get familyTrees =>
+      $$FamilyTreesTableTableManager(_db, _db.familyTrees);
   $$EventsTableTableManager get events =>
       $$EventsTableTableManager(_db, _db.events);
   $$SurnameEventsTableTableManager get surnameEvents =>

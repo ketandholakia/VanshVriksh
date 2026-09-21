@@ -161,20 +161,17 @@ void main() {
       );
     });
 
-    test('the tree root is an optional pointer, validated not enforced',
-        () async {
-      // It is intentionally not a foreign key: it would close a cycle with
-      // genealogy_persons.tree_id and drift would drop one of the constraints.
-      final columns = await db
-          .customSelect('PRAGMA table_info(family_trees)')
-          .get();
-      final root = columns
-          .map((c) => c.data)
-          .firstWhere((c) => c['name'] == 'root_person_id');
-      expect(root['notnull'], 0);
+    test('the tree root references a person and clears on delete', () async {
+      // Both directions of the trees <-> people relationship are enforced, even
+      // though they form a cycle: the ownership key is a raw table constraint
+      // precisely so drift cannot drop it, and this one stays a normal
+      // reference.
       expect(
         await foreignKeysOf('family_trees'),
-        isNot(contains('root_person_id')),
+        containsPair(
+          'root_person_id',
+          (table: 'genealogy_persons', onDelete: 'SET NULL'),
+        ),
       );
     });
   });

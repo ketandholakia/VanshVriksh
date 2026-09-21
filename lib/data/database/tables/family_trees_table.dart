@@ -1,5 +1,7 @@
 import 'package:drift/drift.dart';
 
+import 'genealogy_persons_table.dart';
+
 /// A family tree: the ownership root of the model.
 ///
 /// Everything genealogical belongs to exactly one tree. People and families
@@ -18,12 +20,20 @@ class FamilyTrees extends Table {
 
   /// The person the tree is conceptually rooted at.
   ///
-  /// Deliberately **not** a foreign key: `genealogy_persons.tree_id` already
-  /// references this table, and drift resolves that table-level cycle by
-  /// dropping one of the two constraints — which silently removed the mandatory
-  /// ownership key on people. Ownership is the constraint that matters, so this
-  /// optional pointer is validated in the repository/migration instead.
-  TextColumn get rootPersonId => text().nullable()();
+  /// Integrity checked and cleared on delete (`SET NULL`): if the person row is
+  /// ever hard-deleted the root is emptied rather than left dangling.
+  ///
+  /// This reference points back at `genealogy_persons` from `family_trees`, the
+  /// same pair of tables the mandatory ownership key on people points across. The
+  /// two together form a cycle, and drift drops one reference when it sees a
+  /// cycle — so the ownership key is declared as a raw table constraint instead
+  /// (see `genealogy_persons_table.dart`). Both are enforced; neither is dropped.
+  @ReferenceName('rootOfTrees')
+  TextColumn get rootPersonId => text().nullable().references(
+        GenealogyPersons,
+        #id,
+        onDelete: KeyAction.setNull,
+      )();
 
   DateTimeColumn get createdAt => dateTime()();
 

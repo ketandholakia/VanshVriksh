@@ -2,6 +2,12 @@ import 'package:drift/drift.dart';
 
 import 'media_items_table.dart';
 
+/// A source citation.
+///
+/// Note: this subsystem has no producer or consumer in the app yet; it is kept
+/// because the schema is sound and the feature is intended. Its relationships are
+/// nonetheless enforced like every other table's.
+@TableIndex(name: 'idx_citations_image_media_id', columns: {#imageMediaId})
 class Citations extends Table {
   TextColumn get id => text()();
 
@@ -15,7 +21,13 @@ class Citations extends Table {
 
   TextColumn get url => text().nullable()();
 
-  TextColumn get imageMediaId => text().nullable().references(MediaItems, #id)();
+  /// Auxiliary pointer to a scanned image: cleared rather than blocking the
+  /// media row's removal.
+  TextColumn get imageMediaId => text().nullable().references(
+        MediaItems,
+        #id,
+        onDelete: KeyAction.setNull,
+      )();
 
   TextColumn get accessedDate => text().nullable()();
 

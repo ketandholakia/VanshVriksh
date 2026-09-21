@@ -9,6 +9,14 @@ import 'genealogy_persons_table.dart';
 /// pointers: `SET NULL`, because losing the person an event relates to must not
 /// destroy the surname record itself.
 @TableIndex(name: 'idx_surname_events_person_id', columns: {#personId})
+@TableIndex(
+  name: 'idx_surname_events_related_person_id',
+  columns: {#relatedPersonId},
+)
+@TableIndex(
+  name: 'idx_surname_events_related_event_id',
+  columns: {#relatedEventId},
+)
 class SurnameEvents extends Table {
   TextColumn get id => text()();
 
