@@ -55,11 +55,7 @@ void main() {
     String gender = 'M',
     String tree = treeId,
   }) {
-    return people.addPerson(
-      treeId: tree,
-      firstName: firstName,
-      gender: gender,
-    );
+    return people.addPerson(treeId: tree, firstName: firstName, gender: gender);
   }
 
   final isRejected = throwsA(anything);
@@ -68,55 +64,61 @@ void main() {
   group('the integrity matrix', () {
     test('genealogy_persons', () async {
       final fks = await foreignKeysOf('genealogy_persons');
-      expect(
-        fks['tree_id'],
-        (table: 'family_trees', onDelete: 'RESTRICT', onUpdate: 'NO ACTION'),
-        reason: 'mandatory tree ownership',
-      );
-      expect(
-        fks['merged_into_id'],
-        (table: 'genealogy_persons', onDelete: 'SET NULL', onUpdate: 'NO ACTION'),
-        reason: 'merge pointer',
-      );
+      expect(fks['tree_id'], (
+        table: 'family_trees',
+        onDelete: 'RESTRICT',
+        onUpdate: 'NO ACTION',
+      ), reason: 'mandatory tree ownership');
+      expect(fks['merged_into_id'], (
+        table: 'genealogy_persons',
+        onDelete: 'SET NULL',
+        onUpdate: 'NO ACTION',
+      ), reason: 'merge pointer');
       expect(fks, hasLength(2));
     });
 
     test('family_trees', () async {
       final fks = await foreignKeysOf('family_trees');
-      expect(
-        fks['root_person_id'],
-        (table: 'genealogy_persons', onDelete: 'SET NULL', onUpdate: 'NO ACTION'),
-      );
+      expect(fks['root_person_id'], (
+        table: 'genealogy_persons',
+        onDelete: 'SET NULL',
+        onUpdate: 'NO ACTION',
+      ));
       expect(fks, hasLength(1));
     });
 
     test('families_v2', () async {
       final fks = await foreignKeysOf('families_v2');
-      expect(
-        fks['tree_id'],
-        (table: 'family_trees', onDelete: 'RESTRICT', onUpdate: 'NO ACTION'),
-      );
-      expect(
-        fks['husband_id'],
-        (table: 'genealogy_persons', onDelete: 'RESTRICT', onUpdate: 'NO ACTION'),
-      );
-      expect(
-        fks['wife_id'],
-        (table: 'genealogy_persons', onDelete: 'RESTRICT', onUpdate: 'NO ACTION'),
-      );
+      expect(fks['tree_id'], (
+        table: 'family_trees',
+        onDelete: 'RESTRICT',
+        onUpdate: 'NO ACTION',
+      ));
+      expect(fks['husband_id'], (
+        table: 'genealogy_persons',
+        onDelete: 'RESTRICT',
+        onUpdate: 'NO ACTION',
+      ));
+      expect(fks['wife_id'], (
+        table: 'genealogy_persons',
+        onDelete: 'RESTRICT',
+        onUpdate: 'NO ACTION',
+      ));
       expect(fks, hasLength(3));
     });
 
     test('family_children_v2', () async {
       final fks = await foreignKeysOf('family_children_v2');
-      expect(
-        fks['family_id'],
-        (table: 'families_v2', onDelete: 'RESTRICT', onUpdate: 'NO ACTION'),
-      );
-      expect(
-        fks['child_id'],
-        (table: 'genealogy_persons', onDelete: 'RESTRICT', onUpdate: 'NO ACTION'),
-      );
+      expect(fks['family_id'], (
+        table: 'families_v2',
+        onDelete: 'RESTRICT',
+        onUpdate: 'NO ACTION',
+      ));
+      expect(fks['child_id'], (
+        table: 'genealogy_persons',
+        onDelete: 'RESTRICT',
+        onUpdate: 'NO ACTION',
+      ));
       expect(fks, hasLength(2));
     });
 
@@ -127,35 +129,39 @@ void main() {
         'research_notes',
         'surname_events',
       ]) {
-        expect(
-          (await foreignKeysOf(table))['person_id'],
-          (table: 'genealogy_persons', onDelete: 'RESTRICT', onUpdate: 'NO ACTION'),
-          reason: table,
-        );
+        expect((await foreignKeysOf(table))['person_id'], (
+          table: 'genealogy_persons',
+          onDelete: 'RESTRICT',
+          onUpdate: 'NO ACTION',
+        ), reason: table);
       }
 
       final surname = await foreignKeysOf('surname_events');
-      expect(
-        surname['related_person_id'],
-        (table: 'genealogy_persons', onDelete: 'SET NULL', onUpdate: 'NO ACTION'),
-      );
-      expect(
-        surname['related_event_id'],
-        (table: 'events', onDelete: 'SET NULL', onUpdate: 'NO ACTION'),
-      );
+      expect(surname['related_person_id'], (
+        table: 'genealogy_persons',
+        onDelete: 'SET NULL',
+        onUpdate: 'NO ACTION',
+      ));
+      expect(surname['related_event_id'], (
+        table: 'events',
+        onDelete: 'SET NULL',
+        onUpdate: 'NO ACTION',
+      ));
       expect(surname, hasLength(3));
     });
 
     test('duplicate_markers', () async {
       final fks = await foreignKeysOf('duplicate_markers');
-      expect(
-        fks['person_a_id'],
-        (table: 'genealogy_persons', onDelete: 'CASCADE', onUpdate: 'NO ACTION'),
-      );
-      expect(
-        fks['person_b_id'],
-        (table: 'genealogy_persons', onDelete: 'CASCADE', onUpdate: 'NO ACTION'),
-      );
+      expect(fks['person_a_id'], (
+        table: 'genealogy_persons',
+        onDelete: 'CASCADE',
+        onUpdate: 'NO ACTION',
+      ));
+      expect(fks['person_b_id'], (
+        table: 'genealogy_persons',
+        onDelete: 'CASCADE',
+        onUpdate: 'NO ACTION',
+      ));
       expect(
         fks.containsKey('tree_id'),
         isFalse,
@@ -165,11 +171,10 @@ void main() {
 
     test('a family cannot be created in a tree that does not exist', () async {
       await expectLater(
-        db.into(db.familiesV2).insert(
-              FamiliesV2Companion.insert(
-                id: 'f1',
-                treeId: 'no-such-tree',
-              ),
+        db
+            .into(db.familiesV2)
+            .insert(
+              FamiliesV2Companion.insert(id: 'f1', treeId: 'no-such-tree'),
             ),
         isRejected,
       );
@@ -177,7 +182,9 @@ void main() {
 
     test('a family partner must exist', () async {
       await expectLater(
-        db.into(db.familiesV2).insert(
+        db
+            .into(db.familiesV2)
+            .insert(
               FamiliesV2Companion.insert(
                 id: 'f1',
                 treeId: treeId,
@@ -217,7 +224,9 @@ void main() {
       );
 
       await expectLater(
-        db.into(db.familyChildrenV2).insert(
+        db
+            .into(db.familyChildrenV2)
+            .insert(
               FamilyChildrenV2Companion.insert(
                 id: 'l1',
                 familyId: 'no-such-family',
@@ -227,7 +236,9 @@ void main() {
         isRejected,
       );
       await expectLater(
-        db.into(db.familyChildrenV2).insert(
+        db
+            .into(db.familyChildrenV2)
+            .insert(
               FamilyChildrenV2Companion.insert(
                 id: 'l2',
                 familyId: familyId,
@@ -241,7 +252,9 @@ void main() {
     test('person-scoped rows must reference an existing person', () async {
       final now = DateTime(2000);
       await expectLater(
-        db.into(db.events).insert(
+        db
+            .into(db.events)
+            .insert(
               EventsCompanion.insert(
                 id: 'e1',
                 personId: 'no-such-person',
@@ -253,7 +266,9 @@ void main() {
         isRejected,
       );
       await expectLater(
-        db.into(db.mediaItems).insert(
+        db
+            .into(db.mediaItems)
+            .insert(
               MediaItemsCompanion.insert(
                 id: 'm1',
                 personId: 'no-such-person',
@@ -265,7 +280,9 @@ void main() {
         isRejected,
       );
       await expectLater(
-        db.into(db.researchNotes).insert(
+        db
+            .into(db.researchNotes)
+            .insert(
               ResearchNotesCompanion.insert(
                 id: 'n1',
                 personId: const Value('no-such-person'),
@@ -276,7 +293,9 @@ void main() {
         isRejected,
       );
       await expectLater(
-        db.into(db.surnameEvents).insert(
+        db
+            .into(db.surnameEvents)
+            .insert(
               SurnameEventsCompanion.insert(
                 id: 's1',
                 personId: 'no-such-person',
@@ -292,7 +311,9 @@ void main() {
       final a = await addPerson(firstName: 'A');
 
       await expectLater(
-        db.into(db.duplicateMarkers).insert(
+        db
+            .into(db.duplicateMarkers)
+            .insert(
               DuplicateMarkersCompanion.insert(
                 id: 'd1',
                 personAId: a,
@@ -326,21 +347,23 @@ void main() {
       );
     });
 
-    test('RESTRICT: a person referenced by a family cannot be deleted',
-        () async {
-      final dad = await addPerson(firstName: 'Dad');
-      final mom = await addPerson(firstName: 'Mom', gender: 'F');
-      await relationships.addSpouseRelationship(
-        treeId: treeId,
-        personAId: dad,
-        personBId: mom,
-      );
+    test(
+      'RESTRICT: a person referenced by a family cannot be deleted',
+      () async {
+        final dad = await addPerson(firstName: 'Dad');
+        final mom = await addPerson(firstName: 'Mom', gender: 'F');
+        await relationships.addSpouseRelationship(
+          treeId: treeId,
+          personAId: dad,
+          personBId: mom,
+        );
 
-      await expectLater(
-        (db.delete(db.genealogyPersons)..where((t) => t.id.equals(dad))).go(),
-        isRejected,
-      );
-    });
+        await expectLater(
+          (db.delete(db.genealogyPersons)..where((t) => t.id.equals(dad))).go(),
+          isRejected,
+        );
+      },
+    );
 
     test('RESTRICT: a family with child links cannot be deleted', () async {
       final parent = await addPerson(firstName: 'Parent');
@@ -350,7 +373,9 @@ void main() {
         parentId: parent,
         childId: kid,
       );
-      final familyId = (await relationships.getFamiliesForPerson(parent)).single.id;
+      final familyId = (await relationships.getFamiliesForPerson(
+        parent,
+      )).single.id;
 
       await expectLater(
         (db.delete(db.familiesV2)..where((t) => t.id.equals(familyId))).go(),
@@ -363,77 +388,89 @@ void main() {
       await (db.update(db.familyTrees)..where((t) => t.id.equals(treeId)))
           .write(FamilyTreesCompanion(rootPersonId: Value(root)));
 
-      expect(
-        (await db.select(db.familyTrees).get()).single.rootPersonId,
-        root,
-      );
+      expect((await db.select(db.familyTrees).get()).single.rootPersonId, root);
 
       // The person has no other references, so the ROW can go.
-      await (db.delete(db.genealogyPersons)..where((t) => t.id.equals(root))).go();
-
-      expect((await db.select(db.familyTrees).get()).single.rootPersonId, isNull);
-    });
-
-    test('SET NULL: hard-deleting an event clears the surname event pointer',
-        () async {
-      final id = await addPerson(firstName: 'Ram');
-      await db.into(db.events).insert(
-            EventsCompanion.insert(
-              id: 'e1',
-              personId: id,
-              eventType: 'baptism',
-              createdAt: DateTime(2000),
-              updatedAt: DateTime(2000),
-            ),
-          );
-      await db.into(db.surnameEvents).insert(
-            SurnameEventsCompanion.insert(
-              id: 's1',
-              personId: id,
-              surname: 'Patel',
-              surnameType: 'birth',
-              relatedEventId: const Value('e1'),
-            ),
-          );
-
-      await (db.delete(db.events)..where((t) => t.id.equals('e1'))).go();
+      await (db.delete(
+        db.genealogyPersons,
+      )..where((t) => t.id.equals(root))).go();
 
       expect(
-        (await db.select(db.surnameEvents).get()).single.relatedEventId,
+        (await db.select(db.familyTrees).get()).single.rootPersonId,
         isNull,
       );
-      expect((await db.select(db.surnameEvents).get()).single.personId, id);
     });
 
-    test('CASCADE: hard-deleting a person removes their duplicate markers',
-        () async {
-      final a = await addPerson(firstName: 'A');
-      final b = await addPerson(firstName: 'B');
-      await people.markAsDuplicate(treeId: treeId, sourceId: a, targetId: b);
-      expect(await db.select(db.duplicateMarkers).get(), hasLength(1));
+    test(
+      'SET NULL: hard-deleting an event clears the surname event pointer',
+      () async {
+        final id = await addPerson(firstName: 'Ram');
+        await db
+            .into(db.events)
+            .insert(
+              EventsCompanion.insert(
+                id: 'e1',
+                personId: id,
+                eventType: 'baptism',
+                createdAt: DateTime(2000),
+                updatedAt: DateTime(2000),
+              ),
+            );
+        await db
+            .into(db.surnameEvents)
+            .insert(
+              SurnameEventsCompanion.insert(
+                id: 's1',
+                personId: id,
+                surname: 'Patel',
+                surnameType: 'birth',
+                relatedEventId: const Value('e1'),
+              ),
+            );
 
-      await (db.delete(db.genealogyPersons)..where((t) => t.id.equals(b))).go();
+        await (db.delete(db.events)..where((t) => t.id.equals('e1'))).go();
 
-      expect(await db.select(db.duplicateMarkers).get(), isEmpty);
-    });
+        expect(
+          (await db.select(db.surnameEvents).get()).single.relatedEventId,
+          isNull,
+        );
+        expect((await db.select(db.surnameEvents).get()).single.personId, id);
+      },
+    );
 
-    test('SET NULL: hard-deleting the survivor clears merged_into_id', () async {
-      final survivor = await addPerson(firstName: 'Ram');
-      final duplicate = await addPerson(firstName: 'Ram');
-      await people.mergePeople(survivorId: survivor, duplicateId: duplicate);
-      expect(
-        (await people.getPersonById(duplicate))!.mergedIntoId,
-        survivor,
-      );
+    test(
+      'CASCADE: hard-deleting a person removes their duplicate markers',
+      () async {
+        final a = await addPerson(firstName: 'A');
+        final b = await addPerson(firstName: 'B');
+        await people.markAsDuplicate(treeId: treeId, sourceId: a, targetId: b);
+        expect(await db.select(db.duplicateMarkers).get(), hasLength(1));
 
-      await (db.delete(db.genealogyPersons)
-            ..where((t) => t.id.equals(survivor)))
-          .go();
+        await (db.delete(
+          db.genealogyPersons,
+        )..where((t) => t.id.equals(b))).go();
 
-      final retired = (await people.getPersonById(duplicate))!;
-      expect(retired.mergedIntoId, isNull);
-      expect(retired.isDeleted, isTrue);
-    });
+        expect(await db.select(db.duplicateMarkers).get(), isEmpty);
+      },
+    );
+
+    test(
+      'SET NULL: hard-deleting the survivor clears merged_into_id',
+      () async {
+        final survivor = await addPerson(firstName: 'Ram');
+        final duplicate = await addPerson(firstName: 'Ram');
+        await people.mergePeople(survivorId: survivor, duplicateId: duplicate);
+        expect((await people.getPersonById(duplicate))!.mergedIntoId, survivor);
+
+        await (db.delete(
+          db.genealogyPersons,
+        )..where((t) => t.id.equals(survivor))).go();
+
+        final retired = (await people.getPersonById(duplicate))!;
+        expect(retired.mergedIntoId, isNull);
+        expect(retired.isDeleted, isTrue);
+      },
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -443,7 +480,9 @@ void main() {
       final existingUuid = (await people.getPersonById(first))!.uuid;
 
       await expectLater(
-        db.into(db.genealogyPersons).insert(
+        db
+            .into(db.genealogyPersons)
+            .insert(
               GenealogyPersonsCompanion.insert(
                 id: 'different-id',
                 firstName: 'A',
@@ -466,7 +505,9 @@ void main() {
       );
 
       await expectLater(
-        db.into(db.familiesV2).insert(
+        db
+            .into(db.familiesV2)
+            .insert(
               FamiliesV2Companion.insert(
                 id: 'second-family',
                 treeId: treeId,
@@ -486,10 +527,14 @@ void main() {
         parentId: parent,
         childId: kid,
       );
-      final familyId = (await relationships.getFamiliesForPerson(parent)).single.id;
+      final familyId = (await relationships.getFamiliesForPerson(
+        parent,
+      )).single.id;
 
       await expectLater(
-        db.into(db.familyChildrenV2).insert(
+        db
+            .into(db.familyChildrenV2)
+            .insert(
               FamilyChildrenV2Companion.insert(
                 id: 'second-link',
                 familyId: familyId,
@@ -500,33 +545,37 @@ void main() {
       );
     });
 
-    test('the same pair of people cannot be marked as duplicates twice',
-        () async {
-      final a = await addPerson(firstName: 'A');
-      final b = await addPerson(firstName: 'B');
-      await people.markAsDuplicate(treeId: treeId, sourceId: a, targetId: b);
+    test(
+      'the same pair of people cannot be marked as duplicates twice',
+      () async {
+        final a = await addPerson(firstName: 'A');
+        final b = await addPerson(firstName: 'B');
+        await people.markAsDuplicate(treeId: treeId, sourceId: a, targetId: b);
 
-      // The repository normalises the order, but the constraint holds even for a
-      // row inserted directly.
-      await expectLater(
-        db.into(db.duplicateMarkers).insert(
-              DuplicateMarkersCompanion.insert(
-                id: 'second-marker',
-                personAId: a.compareTo(b) <= 0 ? a : b,
-                personBId: a.compareTo(b) <= 0 ? b : a,
-                createdAt: DateTime(2000),
+        // The repository normalises the order, but the constraint holds even for a
+        // row inserted directly.
+        await expectLater(
+          db
+              .into(db.duplicateMarkers)
+              .insert(
+                DuplicateMarkersCompanion.insert(
+                  id: 'second-marker',
+                  personAId: a.compareTo(b) <= 0 ? a : b,
+                  personBId: a.compareTo(b) <= 0 ? b : a,
+                  createdAt: DateTime(2000),
+                ),
               ),
-            ),
-        isRejected,
-      );
-    });
+          isRejected,
+        );
+      },
+    );
 
     test('a family needs a tree and a uuid', () async {
       await expectLater(
-        db.customStatement(
-          'INSERT INTO families_v2 (id, uuid) VALUES (?, ?)',
-          ['f1', 'uf1'],
-        ),
+        db.customStatement('INSERT INTO families_v2 (id, uuid) VALUES (?, ?)', [
+          'f1',
+          'uf1',
+        ]),
         isRejected,
       );
     });

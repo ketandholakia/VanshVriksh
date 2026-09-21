@@ -16,31 +16,27 @@ class FamilyTreeDao {
   }
 
   Future<FamilyTree?> getFamilyTreeById(String treeId) {
-    return (_database.select(_database.familyTrees)
-          ..where((tbl) => tbl.id.equals(treeId)))
-        .getSingleOrNull();
+    return (_database.select(
+      _database.familyTrees,
+    )..where((tbl) => tbl.id.equals(treeId))).getSingleOrNull();
   }
 
   Stream<List<FamilyTree>> watchAllFamilyTrees() {
-    return (_database.select(_database.familyTrees)
-          ..orderBy([
-            (tbl) => OrderingTerm.asc(tbl.treeName),
-          ]))
-        .watch();
+    return (_database.select(
+      _database.familyTrees,
+    )..orderBy([(tbl) => OrderingTerm.asc(tbl.treeName)])).watch();
   }
 
   Future<List<FamilyTree>> getAllFamilyTrees() {
-    return (_database.select(_database.familyTrees)
-          ..orderBy([
-            (tbl) => OrderingTerm.asc(tbl.treeName),
-          ]))
-        .get();
+    return (_database.select(
+      _database.familyTrees,
+    )..orderBy([(tbl) => OrderingTerm.asc(tbl.treeName)])).get();
   }
 
   Future<int> deleteFamilyTree(String treeId) {
-    return (_database.delete(_database.familyTrees)
-          ..where((tbl) => tbl.id.equals(treeId)))
-        .go();
+    return (_database.delete(
+      _database.familyTrees,
+    )..where((tbl) => tbl.id.equals(treeId))).go();
   }
 
   Future<void> ensureDefaultFamilyTree({

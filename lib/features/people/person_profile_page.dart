@@ -620,11 +620,11 @@ class _OverviewTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-      return Container(
-        decoration: BoxDecoration(
-          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-          borderRadius: BorderRadius.circular(16),
-        ),
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(16),
+      ),
       padding: const EdgeInsets.all(12),
       child: Row(
         children: [
@@ -634,7 +634,11 @@ class _OverviewTile extends StatelessWidget {
               color: Theme.of(context).colorScheme.primaryContainer,
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
+            child: Icon(
+              icon,
+              size: 18,
+              color: Theme.of(context).colorScheme.primary,
+            ),
           ),
           const SizedBox(width: 8),
           Expanded(

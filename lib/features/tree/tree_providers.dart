@@ -24,7 +24,8 @@ class SelectedRootPersonIdNotifier extends Notifier<String?> {
     state = personId;
     if (personId == null || personId.trim().isEmpty) return;
 
-    final rememberEnabled = ref.read(rememberLastRootPersonProvider).value ??
+    final rememberEnabled =
+        ref.read(rememberLastRootPersonProvider).value ??
         rememberLastRootPersonDefault;
     if (!rememberEnabled) return;
 
@@ -60,7 +61,10 @@ final basicFamilyTreeProvider =
     });
 
 final multiGenFamilyTreeProvider =
-    FutureProvider.family<MultiGenFamilyTreeData?, String>((ref, personId) async {
+    FutureProvider.family<MultiGenFamilyTreeData?, String>((
+      ref,
+      personId,
+    ) async {
       ref.watch(personRelationshipsProvider(personId));
 
       final personRepository = ref.watch(genealogyRepositoryProvider);
@@ -92,7 +96,13 @@ final multiGenFamilyTreeProvider =
         for (final id in currentUpQueue) {
           for (final parent in graph.parentsOf(id)) {
             nodes[parent.id] = parent;
-            edges.add(TreeEdge(sourceId: parent.id, targetId: id, relationType: 'parent_child'));
+            edges.add(
+              TreeEdge(
+                sourceId: parent.id,
+                targetId: id,
+                relationType: 'parent_child',
+              ),
+            );
             if (!visitedNodes.contains(parent.id)) {
               visitedNodes.add(parent.id);
               nextQueue.add(parent.id);
@@ -110,7 +120,13 @@ final multiGenFamilyTreeProvider =
         for (final id in currentDownQueue) {
           for (final child in graph.childrenOf(id)) {
             nodes[child.id] = child;
-            edges.add(TreeEdge(sourceId: id, targetId: child.id, relationType: 'parent_child'));
+            edges.add(
+              TreeEdge(
+                sourceId: id,
+                targetId: child.id,
+                relationType: 'parent_child',
+              ),
+            );
             if (!visitedNodes.contains(child.id)) {
               visitedNodes.add(child.id);
               nextQueue.add(child.id);
@@ -124,7 +140,9 @@ final multiGenFamilyTreeProvider =
       for (final id in nodes.keys.toList()) {
         for (final spouse in graph.spousesOf(id)) {
           nodes[spouse.id] = spouse;
-          edges.add(TreeEdge(sourceId: id, targetId: spouse.id, relationType: 'spouse'));
+          edges.add(
+            TreeEdge(sourceId: id, targetId: spouse.id, relationType: 'spouse'),
+          );
         }
       }
 
@@ -153,10 +171,18 @@ final ancestryFanChartProvider =
         rootPerson.treeId,
       );
 
-      final maxGenerations =
-          await ref.watch(fanChartAncestorGenerationsProvider.future);
+      final maxGenerations = await ref.watch(
+        fanChartAncestorGenerationsProvider.future,
+      );
       final generations = <List<AncestrySlot>>[
-        [AncestrySlot(generation: 0, childId: null, relationToChild: null, person: rootPerson)],
+        [
+          AncestrySlot(
+            generation: 0,
+            childId: null,
+            relationToChild: null,
+            person: rootPerson,
+          ),
+        ],
       ];
 
       var currentGenerationPersons = <GenealogyPerson>[rootPerson];

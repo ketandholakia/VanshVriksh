@@ -124,9 +124,7 @@ void main() {
           insertPerson.execute([
             person.id,
             'default-tree',
-            [person.firstName, person.lastName]
-                .whereType<String>()
-                .join(' '),
+            [person.firstName, person.lastName].whereType<String>().join(' '),
             person.firstName,
             person.lastName,
             person.birthSurname,
@@ -210,8 +208,22 @@ void main() {
     test("'spouse' rows are migrated into a partnership", () async {
       await seedLegacyDatabase(
         people: [
-          (id: 'p1', gender: 'male', firstName: 'Ram', lastName: 'Patel', birthSurname: 'Patel', marriedSurname: null),
-          (id: 'p2', gender: 'female', firstName: 'Sita', lastName: 'Patel', birthSurname: 'Shah', marriedSurname: 'Patel'),
+          (
+            id: 'p1',
+            gender: 'male',
+            firstName: 'Ram',
+            lastName: 'Patel',
+            birthSurname: 'Patel',
+            marriedSurname: null,
+          ),
+          (
+            id: 'p2',
+            gender: 'female',
+            firstName: 'Sita',
+            lastName: 'Patel',
+            birthSurname: 'Shah',
+            marriedSurname: 'Patel',
+          ),
         ],
         relationships: [('p1', 'p2', 'spouse')],
       );
@@ -229,8 +241,22 @@ void main() {
     test("the historical 'marriage' literal is migrated as well", () async {
       await seedLegacyDatabase(
         people: [
-          (id: 'p1', gender: 'male', firstName: 'Ram', lastName: null, birthSurname: null, marriedSurname: null),
-          (id: 'p2', gender: 'female', firstName: 'Sita', lastName: null, birthSurname: null, marriedSurname: null),
+          (
+            id: 'p1',
+            gender: 'male',
+            firstName: 'Ram',
+            lastName: null,
+            birthSurname: null,
+            marriedSurname: null,
+          ),
+          (
+            id: 'p2',
+            gender: 'female',
+            firstName: 'Sita',
+            lastName: null,
+            birthSurname: null,
+            marriedSurname: null,
+          ),
         ],
         relationships: [('p1', 'p2', 'marriage')],
       );
@@ -243,33 +269,60 @@ void main() {
       expect(families.single.husbandId, 'p1');
     });
 
-    test('the partnership is stored once even when both directions exist',
-        () async {
-      await seedLegacyDatabase(
-        people: [
-          (id: 'p1', gender: 'male', firstName: 'Ram', lastName: null, birthSurname: null, marriedSurname: null),
-          (id: 'p2', gender: 'female', firstName: 'Sita', lastName: null, birthSurname: null, marriedSurname: null),
-        ],
-        relationships: [
-          ('p1', 'p2', 'spouse'),
-          ('p2', 'p1', 'marriage'),
-        ],
-      );
+    test(
+      'the partnership is stored once even when both directions exist',
+      () async {
+        await seedLegacyDatabase(
+          people: [
+            (
+              id: 'p1',
+              gender: 'male',
+              firstName: 'Ram',
+              lastName: null,
+              birthSurname: null,
+              marriedSurname: null,
+            ),
+            (
+              id: 'p2',
+              gender: 'female',
+              firstName: 'Sita',
+              lastName: null,
+              birthSurname: null,
+              marriedSurname: null,
+            ),
+          ],
+          relationships: [('p1', 'p2', 'spouse'), ('p2', 'p1', 'marriage')],
+        );
 
-      final db = await openUpgraded();
-      final families = await db.select(db.familiesV2).get();
-      await db.close();
+        final db = await openUpgraded();
+        final families = await db.select(db.familiesV2).get();
+        await db.close();
 
-      expect(families, hasLength(1));
-    });
+        expect(families, hasLength(1));
+      },
+    );
   });
 
   group('legacy parent-child rows', () {
     test('a single parent becomes a single-parent family', () async {
       await seedLegacyDatabase(
         people: [
-          (id: 'p1', gender: 'male', firstName: 'Dad', lastName: null, birthSurname: null, marriedSurname: null),
-          (id: 'c1', gender: 'male', firstName: 'Kid', lastName: null, birthSurname: null, marriedSurname: null),
+          (
+            id: 'p1',
+            gender: 'male',
+            firstName: 'Dad',
+            lastName: null,
+            birthSurname: null,
+            marriedSurname: null,
+          ),
+          (
+            id: 'c1',
+            gender: 'male',
+            firstName: 'Kid',
+            lastName: null,
+            birthSurname: null,
+            marriedSurname: null,
+          ),
         ],
         relationships: [('p1', 'c1', 'parent_child')],
       );
@@ -289,9 +342,30 @@ void main() {
     test('two parents become one couple family', () async {
       await seedLegacyDatabase(
         people: [
-          (id: 'p1', gender: 'male', firstName: 'Dad', lastName: null, birthSurname: null, marriedSurname: null),
-          (id: 'p2', gender: 'female', firstName: 'Mom', lastName: null, birthSurname: null, marriedSurname: null),
-          (id: 'c1', gender: 'male', firstName: 'Kid', lastName: null, birthSurname: null, marriedSurname: null),
+          (
+            id: 'p1',
+            gender: 'male',
+            firstName: 'Dad',
+            lastName: null,
+            birthSurname: null,
+            marriedSurname: null,
+          ),
+          (
+            id: 'p2',
+            gender: 'female',
+            firstName: 'Mom',
+            lastName: null,
+            birthSurname: null,
+            marriedSurname: null,
+          ),
+          (
+            id: 'c1',
+            gender: 'male',
+            firstName: 'Kid',
+            lastName: null,
+            birthSurname: null,
+            marriedSurname: null,
+          ),
         ],
         relationships: [
           ('p1', 'c1', 'parent_child'),
@@ -310,51 +384,90 @@ void main() {
       expect(links, hasLength(1));
     });
 
-    test(
-      'a parent with children from two partnerships no longer aborts the '
-      'upgrade',
-      () async {
-        // This is the shape that used to throw StateError (Too many elements)
-        // inside onUpgrade and leave the database at user_version 11.
-        await seedLegacyDatabase(
-          people: [
-            (id: 'p1', gender: 'male', firstName: 'Dad', lastName: null, birthSurname: null, marriedSurname: null),
-            (id: 'p2', gender: 'female', firstName: 'Mom', lastName: null, birthSurname: null, marriedSurname: null),
-            (id: 'c1', gender: 'male', firstName: 'A', lastName: null, birthSurname: null, marriedSurname: null),
-            (id: 'c2', gender: 'female', firstName: 'B', lastName: null, birthSurname: null, marriedSurname: null),
-            (id: 'c3', gender: 'male', firstName: 'C', lastName: null, birthSurname: null, marriedSurname: null),
-          ],
-          relationships: [
-            ('p1', 'c1', 'parent_child'),
-            ('p1', 'c2', 'parent_child'),
-            ('p2', 'c2', 'parent_child'),
-            ('p1', 'c3', 'parent_child'),
-          ],
-        );
+    test('a parent with children from two partnerships no longer aborts the '
+        'upgrade', () async {
+      // This is the shape that used to throw StateError (Too many elements)
+      // inside onUpgrade and leave the database at user_version 11.
+      await seedLegacyDatabase(
+        people: [
+          (
+            id: 'p1',
+            gender: 'male',
+            firstName: 'Dad',
+            lastName: null,
+            birthSurname: null,
+            marriedSurname: null,
+          ),
+          (
+            id: 'p2',
+            gender: 'female',
+            firstName: 'Mom',
+            lastName: null,
+            birthSurname: null,
+            marriedSurname: null,
+          ),
+          (
+            id: 'c1',
+            gender: 'male',
+            firstName: 'A',
+            lastName: null,
+            birthSurname: null,
+            marriedSurname: null,
+          ),
+          (
+            id: 'c2',
+            gender: 'female',
+            firstName: 'B',
+            lastName: null,
+            birthSurname: null,
+            marriedSurname: null,
+          ),
+          (
+            id: 'c3',
+            gender: 'male',
+            firstName: 'C',
+            lastName: null,
+            birthSurname: null,
+            marriedSurname: null,
+          ),
+        ],
+        relationships: [
+          ('p1', 'c1', 'parent_child'),
+          ('p1', 'c2', 'parent_child'),
+          ('p2', 'c2', 'parent_child'),
+          ('p1', 'c3', 'parent_child'),
+        ],
+      );
 
-        final db = await openUpgraded();
-        final people = await db.select(db.genealogyPersons).get();
-        final links = await db.select(db.familyChildrenV2).get();
-        final livingLinks =
-            links.where((link) => !link.isDeleted).toList();
-        await db.close();
+      final db = await openUpgraded();
+      final people = await db.select(db.genealogyPersons).get();
+      final links = await db.select(db.familyChildrenV2).get();
+      final livingLinks = links.where((link) => !link.isDeleted).toList();
+      await db.close();
 
-        // Every person survived and every child kept a parent link.
-        expect(people, hasLength(5));
-        expect(
-          livingLinks.map((link) => link.childId).toSet(),
-          {'c1', 'c2', 'c3'},
-        );
-        expect(storedUserVersion(), 14);
-      },
-    );
+      // Every person survived and every child kept a parent link.
+      expect(people, hasLength(5));
+      expect(livingLinks.map((link) => link.childId).toSet(), {
+        'c1',
+        'c2',
+        'c3',
+      });
+      expect(storedUserVersion(), 14);
+    });
   });
 
   group('legacy person rows', () {
     test('people are copied with their surname history', () async {
       await seedLegacyDatabase(
         people: [
-          (id: 'p1', gender: 'female', firstName: 'Sita', lastName: 'Patel', birthSurname: 'Shah', marriedSurname: 'Patel'),
+          (
+            id: 'p1',
+            gender: 'female',
+            firstName: 'Sita',
+            lastName: 'Patel',
+            birthSurname: 'Shah',
+            marriedSurname: 'Patel',
+          ),
         ],
         relationships: const [],
       );
@@ -370,10 +483,7 @@ void main() {
       expect(person.marriedSurname, 'Patel');
       expect(person.treeId, 'default-tree');
       expect(person.isDeleted, isFalse);
-      expect(
-        surnames.map((s) => s.surnameType).toSet(),
-        {'birth', 'marriage'},
-      );
+      expect(surnames.map((s) => s.surnameType).toSet(), {'birth', 'marriage'});
     });
   });
 
@@ -381,7 +491,14 @@ void main() {
     test('legacy tables are gone and the model tables remain', () async {
       await seedLegacyDatabase(
         people: [
-          (id: 'p1', gender: 'male', firstName: 'Ram', lastName: null, birthSurname: null, marriedSurname: null),
+          (
+            id: 'p1',
+            gender: 'male',
+            firstName: 'Ram',
+            lastName: null,
+            birthSurname: null,
+            marriedSurname: null,
+          ),
         ],
         relationships: const [],
       );
@@ -399,7 +516,14 @@ void main() {
     test('an upgraded database has the same indexes as a fresh one', () async {
       await seedLegacyDatabase(
         people: [
-          (id: 'p1', gender: 'male', firstName: 'Ram', lastName: null, birthSurname: null, marriedSurname: null),
+          (
+            id: 'p1',
+            gender: 'male',
+            firstName: 'Ram',
+            lastName: null,
+            birthSurname: null,
+            marriedSurname: null,
+          ),
         ],
         relationships: const [],
       );
@@ -422,7 +546,14 @@ void main() {
     test('people are anchored to a tree that exists', () async {
       await seedLegacyDatabase(
         people: [
-          (id: 'p1', gender: 'male', firstName: 'Ram', lastName: null, birthSurname: null, marriedSurname: null),
+          (
+            id: 'p1',
+            gender: 'male',
+            firstName: 'Ram',
+            lastName: null,
+            birthSurname: null,
+            marriedSurname: null,
+          ),
         ],
         relationships: const [],
       );

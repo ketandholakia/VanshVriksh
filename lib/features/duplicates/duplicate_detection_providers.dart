@@ -44,7 +44,9 @@ final duplicateCandidatesProvider = FutureProvider<List<DuplicateCandidate>>((
 ) async {
   final repository = ref.watch(genealogyRepositoryProvider);
   final people = await repository.getPeopleByTree(AppConstants.defaultTreeId);
-  final markers = await repository.getDuplicateMarkers(AppConstants.defaultTreeId);
+  final markers = await repository.getDuplicateMarkers(
+    AppConstants.defaultTreeId,
+  );
   final candidates = <DuplicateCandidate>[];
 
   for (var i = 0; i < people.length; i++) {
@@ -104,14 +106,18 @@ DuplicateCandidate? _scoreDuplicate(GenealogyPerson a, GenealogyPerson b) {
   final sameBirthYear =
       birthYearA != null && birthYearB != null && birthYearA == birthYearB;
   final closeBirthYear =
-      birthYearA != null && birthYearB != null && (birthYearA - birthYearB).abs() <= 1;
+      birthYearA != null &&
+      birthYearB != null &&
+      (birthYearA - birthYearB).abs() <= 1;
   final sameDeathYear =
       deathYearA != null && deathYearB != null && deathYearA == deathYearB;
   final closeDeathYear =
-      deathYearA != null && deathYearB != null && (deathYearA - deathYearB).abs() <= 1;
+      deathYearA != null &&
+      deathYearB != null &&
+      (deathYearA - deathYearB).abs() <= 1;
   final sameLastName =
       _normalizedText(a.lastName) == _normalizedText(b.lastName) &&
-          _normalizedText(a.lastName).isNotEmpty;
+      _normalizedText(a.lastName).isNotEmpty;
 
   final score = _duplicateScore(
     fullNameMatch: fullNameMatch,
@@ -301,7 +307,8 @@ String _displayName(GenealogyPerson person) {
   final parts = <String>[
     if (_normalizedText(person.prefix).isNotEmpty) person.prefix!.trim(),
     if (_normalizedText(person.firstName).isNotEmpty) person.firstName.trim(),
-    if (_normalizedText(person.middleName).isNotEmpty) person.middleName!.trim(),
+    if (_normalizedText(person.middleName).isNotEmpty)
+      person.middleName!.trim(),
     if (_normalizedText(person.lastName).isNotEmpty) person.lastName!.trim(),
     if (_normalizedText(person.suffix).isNotEmpty) person.suffix!.trim(),
   ];

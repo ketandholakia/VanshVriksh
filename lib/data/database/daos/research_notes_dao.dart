@@ -19,8 +19,7 @@ class ResearchNotesDao extends DatabaseAccessor<AppDatabase>
   }
 
   Future<int> deleteResearchNote(String noteId) {
-    return (delete(researchNotes)..where((tbl) => tbl.id.equals(noteId)))
-        .go();
+    return (delete(researchNotes)..where((tbl) => tbl.id.equals(noteId))).go();
   }
 
   Stream<List<ResearchNote>> watchNotesForPerson(String personId) {
@@ -34,7 +33,8 @@ class ResearchNotesDao extends DatabaseAccessor<AppDatabase>
   }
 
   Future<ResearchNote?> getResearchNoteById(String noteId) {
-    return (select(researchNotes)..where((tbl) => tbl.id.equals(noteId)))
-        .getSingleOrNull();
+    return (select(
+      researchNotes,
+    )..where((tbl) => tbl.id.equals(noteId))).getSingleOrNull();
   }
 }

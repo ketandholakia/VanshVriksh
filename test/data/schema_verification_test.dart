@@ -133,7 +133,10 @@ void main() {
       await expectCanonicalSchema(migrated, because: 'migrated with data');
 
       // The imported data is still there and still connected.
-      expect(await migrated.select(migrated.genealogyPersons).get(), hasLength(3));
+      expect(
+        await migrated.select(migrated.genealogyPersons).get(),
+        hasLength(3),
+      );
       final families = await migrated.select(migrated.familiesV2).get();
       final links = await migrated.select(migrated.familyChildrenV2).get();
       expect(families, hasLength(1), reason: 'the couple');
@@ -151,11 +154,7 @@ void main() {
       final freshFingerprint = await schemaFingerprint(fresh);
       await fresh.close();
 
-      for (final entry in {
-        'v12': 12,
-        'v11': 11,
-        'v7': 7,
-      }.entries) {
+      for (final entry in {'v12': 12, 'v11': 11, 'v7': 7}.entries) {
         final path = pathFor('fingerprint-${entry.key}');
         await seedLegacyDatabase(path, version: entry.value);
         final migrated = await openAndUpgrade(path);

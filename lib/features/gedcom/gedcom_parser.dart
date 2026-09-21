@@ -2,12 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 class GedcomNode {
-  GedcomNode({
-    required this.level,
-    this.id,
-    required this.tag,
-    this.value,
-  });
+  GedcomNode({required this.level, this.id, required this.tag, this.value});
 
   final int level;
   final String? id;
@@ -59,7 +54,7 @@ class GedcomParser {
             value = parts.sublist(3).join(' ');
           }
         } else {
-          continue; 
+          continue;
         }
       } else {
         tag = parts[1];

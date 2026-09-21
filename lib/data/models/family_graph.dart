@@ -15,11 +15,11 @@ class FamilyGraph {
     required Map<String, GenealogyPerson> people,
     required List<FamiliesV2Data> families,
     required List<FamilyChildrenV2Data> childLinks,
-  })  : people = Map.unmodifiable(people),
-        _familiesById = {for (final family in families) family.id: family},
-        _familiesByPartner = _indexFamiliesByPartner(families),
-        _linksByFamily = _indexLinksByFamily(childLinks),
-        _linksByChild = _indexLinksByChild(childLinks);
+  }) : people = Map.unmodifiable(people),
+       _familiesById = {for (final family in families) family.id: family},
+       _familiesByPartner = _indexFamiliesByPartner(families),
+       _linksByFamily = _indexLinksByFamily(childLinks),
+       _linksByChild = _indexLinksByChild(childLinks);
 
   /// Every person in the tree, by id.
   final Map<String, GenealogyPerson> people;

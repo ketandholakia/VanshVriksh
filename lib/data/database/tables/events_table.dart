@@ -11,7 +11,8 @@ import 'genealogy_persons_table.dart';
 class Events extends Table {
   TextColumn get id => text()();
 
-  TextColumn get personId => text().references(GenealogyPersons, #id, onDelete: KeyAction.restrict)();
+  TextColumn get personId =>
+      text().references(GenealogyPersons, #id, onDelete: KeyAction.restrict)();
 
   TextColumn get eventType => text()();
 

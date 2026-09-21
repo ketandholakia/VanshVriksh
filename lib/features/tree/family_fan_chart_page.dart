@@ -749,7 +749,11 @@ class _RadialFanChartPainter extends CustomPainter {
     );
   }
 
-  void _paintCenterLabel(Canvas canvas, Offset center, GenealogyPerson rootPerson) {
+  void _paintCenterLabel(
+    Canvas canvas,
+    Offset center,
+    GenealogyPerson rootPerson,
+  ) {
     final titlePainter = TextPainter(
       text: TextSpan(
         text: rootPerson.fullName,
@@ -767,10 +771,7 @@ class _RadialFanChartPainter extends CustomPainter {
     final subtitlePainter = TextPainter(
       text: TextSpan(
         text: rootPerson.isLiving ? 'Living root' : 'Root person',
-        style: TextStyle(
-          fontSize: 11,
-          color: colorScheme.onSurfaceVariant,
-        ),
+        style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
       ),
       textDirection: TextDirection.ltr,
       maxLines: 1,
@@ -791,7 +792,11 @@ class _RadialFanChartPainter extends CustomPainter {
     );
   }
 
-  void _paintSectorLabel(Canvas canvas, _FanSector sector, GenealogyPerson person) {
+  void _paintSectorLabel(
+    Canvas canvas,
+    _FanSector sector,
+    GenealogyPerson person,
+  ) {
     final mid = sector.startAngle + sector.sweepAngle / 2;
     final radius = (sector.innerRadius + sector.outerRadius) / 2;
     final pos = Offset(

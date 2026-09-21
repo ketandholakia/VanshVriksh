@@ -21,7 +21,8 @@ class GenealogyLinkFamilyPage extends ConsumerStatefulWidget {
       _GenealogyLinkFamilyPageState();
 }
 
-class _GenealogyLinkFamilyPageState extends ConsumerState<GenealogyLinkFamilyPage> {
+class _GenealogyLinkFamilyPageState
+    extends ConsumerState<GenealogyLinkFamilyPage> {
   final _searchController = TextEditingController();
   List<GenealogyPerson> _matches = const [];
   GenealogyPerson? _selected;
@@ -36,10 +37,15 @@ class _GenealogyLinkFamilyPageState extends ConsumerState<GenealogyLinkFamilyPag
 
   Future<void> _search(String query) async {
     final repo = ref.read(genealogyRepositoryProvider);
-    final people = await repo.searchPeople(treeId: AppConstants.defaultTreeId, query: query);
+    final people = await repo.searchPeople(
+      treeId: AppConstants.defaultTreeId,
+      query: query,
+    );
     if (!mounted) return;
     setState(() {
-      _matches = people.where((person) => person.id != widget.personId).toList();
+      _matches = people
+          .where((person) => person.id != widget.personId)
+          .toList();
       _status = _matches.isEmpty ? 'No matches found.' : '';
     });
   }
@@ -48,11 +54,12 @@ class _GenealogyLinkFamilyPageState extends ConsumerState<GenealogyLinkFamilyPag
     final surname = (person.marriedSurname?.trim().isNotEmpty ?? false)
         ? person.marriedSurname!.trim()
         : (person.birthSurname?.trim().isNotEmpty ?? false)
-            ? person.birthSurname!.trim()
-            : (person.lastName ?? '').trim();
+        ? person.birthSurname!.trim()
+        : (person.lastName ?? '').trim();
     return [
       person.firstName.trim(),
-      if ((person.middleName ?? '').trim().isNotEmpty) person.middleName!.trim(),
+      if ((person.middleName ?? '').trim().isNotEmpty)
+        person.middleName!.trim(),
       if (surname.isNotEmpty) surname,
     ].where((part) => part.trim().isNotEmpty).join(' ');
   }
@@ -77,8 +84,16 @@ class _GenealogyLinkFamilyPageState extends ConsumerState<GenealogyLinkFamilyPag
 
     if (widget.linkType == 'spouse') {
       final spouse = _selected!;
-      final husbandId = current.gender == 'M' ? current.id : spouse.gender == 'M' ? spouse.id : current.id;
-      final wifeId = current.gender == 'F' ? current.id : spouse.gender == 'F' ? spouse.id : spouse.id;
+      final husbandId = current.gender == 'M'
+          ? current.id
+          : spouse.gender == 'M'
+          ? spouse.id
+          : current.id;
+      final wifeId = current.gender == 'F'
+          ? current.id
+          : spouse.gender == 'F'
+          ? spouse.id
+          : spouse.id;
       await repo.createFamily(
         treeId: AppConstants.defaultTreeId,
         husbandId: husbandId,
@@ -105,42 +120,39 @@ class _GenealogyLinkFamilyPageState extends ConsumerState<GenealogyLinkFamilyPag
     final message = widget.linkType == 'spouse'
         ? 'Spouse linked successfully.'
         : 'Child linked successfully.';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
     context.pop();
   }
 
   Future<void> _createNewLinkedPerson() async {
-    final current = await ref.read(genealogyRepositoryProvider).getPersonById(widget.personId);
+    final current = await ref
+        .read(genealogyRepositoryProvider)
+        .getPersonById(widget.personId);
     if (current == null || !mounted) return;
 
     final initialGender = widget.linkType == 'spouse'
         ? (current.gender == 'M'
-            ? 'F'
-            : current.gender == 'F'
-                ? 'M'
-                : 'O')
+              ? 'F'
+              : current.gender == 'F'
+              ? 'M'
+              : 'O')
         : 'O';
 
     final relationKind = widget.linkType == 'spouse' ? 'spouse' : 'child';
 
     if (!mounted) return;
     context.push(
-      '/v2/people/add?${Uri(
-        queryParameters: {
-          'linkPersonId': widget.personId,
-          'relationKind': relationKind,
-          'returnTo': '/v2/people/${widget.personId}',
-          'initialGender': initialGender,
-        },
-      ).query}',
+      '/v2/people/add?${Uri(queryParameters: {'linkPersonId': widget.personId, 'relationKind': relationKind, 'returnTo': '/v2/people/${widget.personId}', 'initialGender': initialGender}).query}',
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final title = widget.linkType == 'spouse' ? 'Link Spouse (v2)' : 'Link Child (v2)';
+    final title = widget.linkType == 'spouse'
+        ? 'Link Spouse (v2)'
+        : 'Link Child (v2)';
     return Scaffold(
       appBar: AppBar(title: Text(title)),
       body: ListView(
@@ -156,7 +168,9 @@ class _GenealogyLinkFamilyPageState extends ConsumerState<GenealogyLinkFamilyPag
           ),
           const SizedBox(height: 12),
           FilledButton(
-            onPressed: _loading ? null : () => _search(_searchController.text.trim()),
+            onPressed: _loading
+                ? null
+                : () => _search(_searchController.text.trim()),
             child: const Text('Search'),
           ),
           const SizedBox(height: 12),
@@ -167,9 +181,11 @@ class _GenealogyLinkFamilyPageState extends ConsumerState<GenealogyLinkFamilyPag
               child: OutlinedButton.icon(
                 onPressed: _loading ? null : _createNewLinkedPerson,
                 icon: const Icon(Icons.person_add_alt_1_outlined),
-                label: Text(widget.linkType == 'spouse'
-                    ? 'Create New Spouse'
-                    : 'Create New Child'),
+                label: Text(
+                  widget.linkType == 'spouse'
+                      ? 'Create New Spouse'
+                      : 'Create New Child',
+                ),
               ),
             ),
           ..._matches.map(

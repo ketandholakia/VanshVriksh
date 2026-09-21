@@ -65,7 +65,8 @@ class DuplicateScoringExplanation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final totalMoves = preview.eventCount +
+    final totalMoves =
+        preview.eventCount +
         preview.noteCount +
         preview.mediaCount +
         preview.relationshipCount;

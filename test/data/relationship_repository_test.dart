@@ -38,10 +38,7 @@ void main() {
     await db.close();
   });
 
-  Future<String> addPerson({
-    required String firstName,
-    String gender = 'M',
-  }) {
+  Future<String> addPerson({required String firstName, String gender = 'M'}) {
     return people.addPerson(
       treeId: treeId,
       firstName: firstName,
@@ -116,8 +113,10 @@ void main() {
         isPrimary: true,
       );
 
-      expect((await relationships.getFamiliesForPerson(a)).single
-          .isPrimaryMarriage, isTrue);
+      expect(
+        (await relationships.getFamiliesForPerson(a)).single.isPrimaryMarriage,
+        isTrue,
+      );
     });
 
     test('a same-sex couple is supported and uses both slots', () async {
@@ -146,8 +145,10 @@ void main() {
         personBId: b,
       );
 
-      expect((await relationships.getPartnerships(treeId)).single.partnerIds.toSet(),
-          {a, b});
+      expect(
+        (await relationships.getPartnerships(treeId)).single.partnerIds.toSet(),
+        {a, b},
+      );
     });
 
     test('the canonical slot rule is order-independent', () {
@@ -206,7 +207,9 @@ void main() {
 
     test('a person from another tree cannot be given a partner', () async {
       final now = DateTime.now();
-      await db.into(db.familyTrees).insert(
+      await db
+          .into(db.familyTrees)
+          .insert(
             FamilyTreesCompanion.insert(
               id: 'other-tree',
               treeName: 'Other',
@@ -267,15 +270,16 @@ void main() {
         childId: kid,
       );
 
-      expect(
-        (await relationships.getParents(kid)).map((p) => p.id).toSet(),
-        {dad, mom},
-      );
+      expect((await relationships.getParents(kid)).map((p) => p.id).toSet(), {
+        dad,
+        mom,
+      });
       // One link row, two parent edges.
       expect(await db.select(db.familyChildrenV2).get(), hasLength(1));
       expect(
-        (await relationships.getParentChildRelationships(treeId))
-            .where((edge) => edge.childId == kid),
+        (await relationships.getParentChildRelationships(
+          treeId,
+        )).where((edge) => edge.childId == kid),
         hasLength(2),
       );
     });
@@ -311,44 +315,49 @@ void main() {
       );
     });
 
-    test('the same parent cannot be recorded twice through different families',
-        () async {
-      final dad = await addPerson(firstName: 'Dad');
-      final mom = await addPerson(firstName: 'Mom', gender: 'F');
-      final other = await addPerson(firstName: 'Other', gender: 'F');
-      final kid = await addPerson(firstName: 'Kid');
-      await relationships.addSpouseRelationship(
-        treeId: treeId,
-        personAId: dad,
-        personBId: mom,
-      );
-      // A second, unrelated partnership for the same father.
-      await relationships.addSpouseRelationship(
-        treeId: treeId,
-        personAId: dad,
-        personBId: other,
-      );
-      final firstFamily = (await relationships.getFamiliesForPerson(mom)).single;
-      final secondFamily =
-          (await relationships.getFamiliesForPerson(other)).single;
+    test(
+      'the same parent cannot be recorded twice through different families',
+      () async {
+        final dad = await addPerson(firstName: 'Dad');
+        final mom = await addPerson(firstName: 'Mom', gender: 'F');
+        final other = await addPerson(firstName: 'Other', gender: 'F');
+        final kid = await addPerson(firstName: 'Kid');
+        await relationships.addSpouseRelationship(
+          treeId: treeId,
+          personAId: dad,
+          personBId: mom,
+        );
+        // A second, unrelated partnership for the same father.
+        await relationships.addSpouseRelationship(
+          treeId: treeId,
+          personAId: dad,
+          personBId: other,
+        );
+        final firstFamily = (await relationships.getFamiliesForPerson(
+          mom,
+        )).single;
+        final secondFamily = (await relationships.getFamiliesForPerson(
+          other,
+        )).single;
 
-      await relationships.addParentChildRelationship(
-        treeId: treeId,
-        parentId: dad,
-        childId: kid,
-        familyId: firstFamily.id,
-      );
-
-      await expectLater(
-        relationships.addParentChildRelationship(
+        await relationships.addParentChildRelationship(
           treeId: treeId,
           parentId: dad,
           childId: kid,
-          familyId: secondFamily.id,
-        ),
-        throwsStateError,
-      );
-    });
+          familyId: firstFamily.id,
+        );
+
+        await expectLater(
+          relationships.addParentChildRelationship(
+            treeId: treeId,
+            parentId: dad,
+            childId: kid,
+            familyId: secondFamily.id,
+          ),
+          throwsStateError,
+        );
+      },
+    );
 
     test('an ambiguous parent must name the family', () async {
       final dad = await addPerson(firstName: 'Dad');
@@ -390,7 +399,9 @@ void main() {
 
     test('a family from another tree is rejected', () async {
       final now = DateTime.now();
-      await db.into(db.familyTrees).insert(
+      await db
+          .into(db.familyTrees)
+          .insert(
             FamilyTreesCompanion.insert(
               id: 'other-tree',
               treeName: 'Other',
@@ -427,8 +438,9 @@ void main() {
         relationshipType: 'adopted',
       );
 
-      final edge = (await relationships.getParentChildRelationships(treeId))
-          .firstWhere((e) => e.childId == kid);
+      final edge = (await relationships.getParentChildRelationships(
+        treeId,
+      )).firstWhere((e) => e.childId == kid);
       expect(edge.relationshipType, 'adopted');
     });
 
@@ -443,7 +455,10 @@ void main() {
       final dad = await addPerson(firstName: 'Dad');
       final mom = await addPerson(firstName: 'Mom', gender: 'F');
       final adoptiveDad = await addPerson(firstName: 'AdoptiveDad');
-      final adoptiveMom = await addPerson(firstName: 'AdoptiveMom', gender: 'F');
+      final adoptiveMom = await addPerson(
+        firstName: 'AdoptiveMom',
+        gender: 'F',
+      );
       final kid = await addPerson(firstName: 'Kid');
 
       await relationships.addSpouseRelationship(
@@ -456,9 +471,12 @@ void main() {
         personAId: adoptiveDad,
         personBId: adoptiveMom,
       );
-      final birthFamilyId = (await relationships.getFamiliesForPerson(mom)).single;
-      final adoptiveFamilyId =
-          (await relationships.getFamiliesForPerson(adoptiveMom)).single;
+      final birthFamilyId = (await relationships.getFamiliesForPerson(
+        mom,
+      )).single;
+      final adoptiveFamilyId = (await relationships.getFamiliesForPerson(
+        adoptiveMom,
+      )).single;
 
       await relationships.addParentChildRelationship(
         treeId: treeId,
@@ -478,62 +496,66 @@ void main() {
       expect(await db.select(db.familyChildrenV2).get(), hasLength(2));
     });
 
-    test('the only parent is not a co-parent, so removal needs no flag',
-        () async {
-      final dad = await addPerson(firstName: 'Dad');
-      final kid = await addPerson(firstName: 'Kid');
-      await relationships.addParentChildRelationship(
-        treeId: treeId,
-        parentId: dad,
-        childId: kid,
-      );
-
-      expect(
-        await relationships.removeParentChildRelationship(
+    test(
+      'the only parent is not a co-parent, so removal needs no flag',
+      () async {
+        final dad = await addPerson(firstName: 'Dad');
+        final kid = await addPerson(firstName: 'Kid');
+        await relationships.addParentChildRelationship(
           treeId: treeId,
           parentId: dad,
           childId: kid,
-        ),
-        1,
-      );
-    });
+        );
 
-    test('removing one parent of a couple is refused unless acknowledged',
-        () async {
-      final dad = await addPerson(firstName: 'Dad');
-      final mom = await addPerson(firstName: 'Mom', gender: 'F');
-      final kid = await addPerson(firstName: 'Kid');
-      await relationships.addSpouseRelationship(
-        treeId: treeId,
-        personAId: dad,
-        personBId: mom,
-      );
-      await relationships.addParentChildRelationship(
-        treeId: treeId,
-        parentId: dad,
-        childId: kid,
-      );
+        expect(
+          await relationships.removeParentChildRelationship(
+            treeId: treeId,
+            parentId: dad,
+            childId: kid,
+          ),
+          1,
+        );
+      },
+    );
 
-      await expectLater(
-        relationships.removeParentChildRelationship(
+    test(
+      'removing one parent of a couple is refused unless acknowledged',
+      () async {
+        final dad = await addPerson(firstName: 'Dad');
+        final mom = await addPerson(firstName: 'Mom', gender: 'F');
+        final kid = await addPerson(firstName: 'Kid');
+        await relationships.addSpouseRelationship(
+          treeId: treeId,
+          personAId: dad,
+          personBId: mom,
+        );
+        await relationships.addParentChildRelationship(
           treeId: treeId,
           parentId: dad,
           childId: kid,
-        ),
-        throwsStateError,
-      );
+        );
 
-      expect(
-        await relationships.removeParentChildRelationship(
-          treeId: treeId,
-          parentId: dad,
-          childId: kid,
-          removeCoParent: true,
-        ),
-        1,
-      );
-      expect(await relationships.getParents(kid), isEmpty);
-    });
+        await expectLater(
+          relationships.removeParentChildRelationship(
+            treeId: treeId,
+            parentId: dad,
+            childId: kid,
+          ),
+          throwsStateError,
+        );
+
+        expect(
+          await relationships.removeParentChildRelationship(
+            treeId: treeId,
+            parentId: dad,
+            childId: kid,
+            removeCoParent: true,
+          ),
+          1,
+        );
+        expect(await relationships.getParents(kid), isEmpty);
+      },
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -556,8 +578,9 @@ void main() {
         personAId: dad,
         personBId: mom,
       );
-      final grandParentFamilyId =
-          (await relationships.getFamiliesForPerson(grandma)).single;
+      final grandParentFamilyId = (await relationships.getFamiliesForPerson(
+        grandma,
+      )).single;
       await relationships.addParentChildRelationship(
         treeId: treeId,
         parentId: grandpa,
@@ -575,18 +598,21 @@ void main() {
         childId: sibling,
       );
 
-      expect((await relationships.getParents(dad)).map((p) => p.id).toSet(),
-          {grandpa, grandma});
-      expect((await relationships.getChildren(dad)).map((p) => p.id).toSet(),
-          {kid, sibling});
+      expect((await relationships.getParents(dad)).map((p) => p.id).toSet(), {
+        grandpa,
+        grandma,
+      });
+      expect((await relationships.getChildren(dad)).map((p) => p.id).toSet(), {
+        kid,
+        sibling,
+      });
       expect((await relationships.getSiblings(kid)).single.id, sibling);
-      expect(await relationships.getSpouses(grandpa).then((s) => s.single.id),
-          grandma);
-      expect(await relationships.getFamiliesForPerson(dad), hasLength(1));
       expect(
-        (await relationships.getPartnerships(treeId)),
-        hasLength(2),
+        await relationships.getSpouses(grandpa).then((s) => s.single.id),
+        grandma,
       );
+      expect(await relationships.getFamiliesForPerson(dad), hasLength(1));
+      expect((await relationships.getPartnerships(treeId)), hasLength(2));
       expect(
         (await relationships.getParentChildRelationships(treeId)),
         hasLength(6),
@@ -617,10 +643,9 @@ void main() {
       expect(await relationships.getSiblings(dad), isEmpty);
       expect(await relationships.getFamiliesForPerson(dad), isEmpty);
       expect(await relationships.getPartnerships(treeId), hasLength(1));
-      expect(
-        (await relationships.getPartnerships(treeId)).single.partnerIds,
-        [mom],
-      );
+      expect((await relationships.getPartnerships(treeId)).single.partnerIds, [
+        mom,
+      ]);
     });
   });
 }

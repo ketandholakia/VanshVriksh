@@ -56,7 +56,8 @@ class RelationshipRepository {
         throw ArgumentError('Child person not found: $childId');
       }
 
-      final targetFamilyId = familyId ?? await _familyForNewChild(treeId, parent);
+      final targetFamilyId =
+          familyId ?? await _familyForNewChild(treeId, parent);
       final targetFamily = await _personDao.getFamilyById(targetFamilyId);
       if (targetFamily == null || targetFamily.isDeleted) {
         throw ArgumentError('Family not found: $targetFamilyId');
@@ -68,8 +69,10 @@ class RelationshipRepository {
         );
       }
 
-      final existing =
-          await _personDao.getFamilyChildLink(targetFamilyId, childId);
+      final existing = await _personDao.getFamilyChildLink(
+        targetFamilyId,
+        childId,
+      );
       if (existing != null) {
         if (existing.isDeleted) {
           await _personDao.restoreFamilyChild(existing.id, DateTime.now());
@@ -89,7 +92,7 @@ class RelationshipRepository {
           familyId: targetFamilyId,
           childId: childId,
           relationshipType: Value(relationshipType),
-            createdAt: Value(now),
+          createdAt: Value(now),
           updatedAt: Value(now),
         ),
       );
@@ -108,11 +111,11 @@ class RelationshipRepository {
     ];
     if (targetPartnerIds.isEmpty) return;
 
-    final links = await (_database.select(_database.familyChildrenV2)
-          ..where(
-            (t) => t.childId.equals(childId) & t.isDeleted.equals(false),
-          ))
-        .get();
+    final links =
+        await (_database.select(_database.familyChildrenV2)..where(
+              (t) => t.childId.equals(childId) & t.isDeleted.equals(false),
+            ))
+            .get();
 
     for (final link in links) {
       if (link.familyId == targetFamily.id) continue;
@@ -184,9 +187,7 @@ class RelationshipRepository {
         );
       }
       if (a.treeId != treeId || b.treeId != treeId) {
-        throw ArgumentError(
-          'Both people must belong to tree $treeId.',
-        );
+        throw ArgumentError('Both people must belong to tree $treeId.');
       }
 
       if (await _familyForPair(personAId, personBId) != null) {
@@ -208,7 +209,7 @@ class RelationshipRepository {
           husbandId: Value(slots.husbandId),
           wifeId: Value(slots.wifeId),
           isPrimaryMarriage: Value(isPrimary),
-            createdAt: Value(now),
+          createdAt: Value(now),
           updatedAt: Value(now),
         ),
       );
@@ -237,7 +238,9 @@ class RelationshipRepository {
     bool removeChildRelationships = false,
   }) async {
     if (personAId == personBId) {
-      throw ArgumentError('A person has no spouse relationship with themselves.');
+      throw ArgumentError(
+        'A person has no spouse relationship with themselves.',
+      );
     }
 
     return _database.transaction(() async {
@@ -274,7 +277,9 @@ class RelationshipRepository {
     bool removeCoParent = false,
   }) async {
     if (parentId == childId) {
-      throw ArgumentError('A person has no parent relationship with themselves.');
+      throw ArgumentError(
+        'A person has no parent relationship with themselves.',
+      );
     }
 
     return _database.transaction(() async {
@@ -384,27 +389,20 @@ class RelationshipRepository {
   /// the database for parents/spouses/children once per node turns a single
   /// rebuild into hundreds of queries. This returns the graph those views walk.
   Future<FamilyGraph> loadFamilyGraph(String treeId) async {
-    final people = await (_database.select(_database.genealogyPersons)
-          ..where(
-            (t) => t.treeId.equals(treeId) & t.isDeleted.equals(false),
-          ))
-        .get();
-    final families = await (_database.select(_database.familiesV2)
-          ..where(
-            (t) => t.treeId.equals(treeId) & t.isDeleted.equals(false),
-          ))
-        .get();
+    final people = await (_database.select(
+      _database.genealogyPersons,
+    )..where((t) => t.treeId.equals(treeId) & t.isDeleted.equals(false))).get();
+    final families = await (_database.select(
+      _database.familiesV2,
+    )..where((t) => t.treeId.equals(treeId) & t.isDeleted.equals(false))).get();
 
     final familyIds = families.map((family) => family.id).toList();
     final childLinks = familyIds.isEmpty
         ? const <FamilyChildrenV2Data>[]
-        : await (_database.select(_database.familyChildrenV2)
-              ..where(
-                (t) =>
-                    t.familyId.isIn(familyIds) &
-                    t.isDeleted.equals(false),
+        : await (_database.select(_database.familyChildrenV2)..where(
+                (t) => t.familyId.isIn(familyIds) & t.isDeleted.equals(false),
               ))
-            .get();
+              .get();
 
     return FamilyGraph(
       people: {for (final person in people) person.id: person},
@@ -425,18 +423,15 @@ class RelationshipRepository {
   /// all deleted belongs to nobody left in the tree.
   Stream<List<Partnership>> watchPartnerships(String treeId) {
     final familiesQuery = (_database.select(_database.familiesV2)
-          ..where(
-            (t) => t.treeId.equals(treeId) & t.isDeleted.equals(false),
-          ));
+      ..where((t) => t.treeId.equals(treeId) & t.isDeleted.equals(false)));
     final peopleQuery = (_database.select(_database.genealogyPersons)
-          ..where(
-            (t) => t.treeId.equals(treeId) & t.isDeleted.equals(false),
-          ));
+      ..where((t) => t.treeId.equals(treeId) & t.isDeleted.equals(false)));
 
     return Rx.combineLatest2<
-        List<FamiliesV2Data>,
-        List<GenealogyPerson>,
-        List<Partnership>>(
+      List<FamiliesV2Data>,
+      List<GenealogyPerson>,
+      List<Partnership>
+    >(
       familiesQuery.watch(),
       peopleQuery.watch(),
       (families, people) =>
@@ -453,33 +448,32 @@ class RelationshipRepository {
     String treeId,
   ) {
     final familiesQuery = (_database.select(_database.familiesV2)
-          ..where(
-            (t) => t.treeId.equals(treeId) & t.isDeleted.equals(false),
-          ));
+      ..where((t) => t.treeId.equals(treeId) & t.isDeleted.equals(false)));
     // Only this tree's links are read: the previous version watched the whole
     // child-link table and filtered in Dart, so any change anywhere rebuilt the
     // tree from a full table scan.
-    final linksQuery = (_database.select(_database.familyChildrenV2).join([
-      innerJoin(
-        _database.familiesV2,
-        _database.familiesV2.id.equalsExp(_database.familyChildrenV2.familyId),
-      ),
-    ])
-          ..where(
-            _database.familiesV2.treeId.equals(treeId) &
-                _database.familyChildrenV2.isDeleted.equals(false),
-          ))
-        .map((row) => row.readTable(_database.familyChildrenV2));
+    final linksQuery =
+        (_database.select(_database.familyChildrenV2).join([
+              innerJoin(
+                _database.familiesV2,
+                _database.familiesV2.id.equalsExp(
+                  _database.familyChildrenV2.familyId,
+                ),
+              ),
+            ])..where(
+              _database.familiesV2.treeId.equals(treeId) &
+                  _database.familyChildrenV2.isDeleted.equals(false),
+            ))
+            .map((row) => row.readTable(_database.familyChildrenV2));
     final peopleQuery = (_database.select(_database.genealogyPersons)
-          ..where(
-            (t) => t.treeId.equals(treeId) & t.isDeleted.equals(false),
-          ));
+      ..where((t) => t.treeId.equals(treeId) & t.isDeleted.equals(false)));
 
     return Rx.combineLatest3<
-        List<FamiliesV2Data>,
-        List<FamilyChildrenV2Data>,
-        List<GenealogyPerson>,
-        List<ParentChildRelationship>>(
+      List<FamiliesV2Data>,
+      List<FamilyChildrenV2Data>,
+      List<GenealogyPerson>,
+      List<ParentChildRelationship>
+    >(
       familiesQuery.watch(),
       linksQuery.watch(),
       peopleQuery.watch(),
@@ -491,11 +485,9 @@ class RelationshipRepository {
   }
 
   Future<List<Partnership>> getPartnerships(String treeId) async {
-    final families = await (_database.select(_database.familiesV2)
-          ..where(
-            (t) => t.treeId.equals(treeId) & t.isDeleted.equals(false),
-          ))
-        .get();
+    final families = await (_database.select(
+      _database.familiesV2,
+    )..where((t) => t.treeId.equals(treeId) & t.isDeleted.equals(false))).get();
     if (families.isEmpty) return const [];
     return _toPartnerships(families, await _livePersonIdsInTree(treeId));
   }
@@ -503,32 +495,28 @@ class RelationshipRepository {
   Future<List<ParentChildRelationship>> getParentChildRelationships(
     String treeId,
   ) async {
-    final families = await (_database.select(_database.familiesV2)
-          ..where(
-            (t) => t.treeId.equals(treeId) & t.isDeleted.equals(false),
-          ))
-        .get();
+    final families = await (_database.select(
+      _database.familiesV2,
+    )..where((t) => t.treeId.equals(treeId) & t.isDeleted.equals(false))).get();
     if (families.isEmpty) return const [];
 
-    final links = await (_database.select(_database.familyChildrenV2)
-          ..where(
-            (t) =>
-                t.familyId.isIn(families.map((f) => f.id).toList()) &
-                t.isDeleted.equals(false),
-          ))
-        .get();
-    return _toParentChildRelationships(
-      (families: families, links: links),
-      await _livePersonIdsInTree(treeId),
-    );
+    final links =
+        await (_database.select(_database.familyChildrenV2)..where(
+              (t) =>
+                  t.familyId.isIn(families.map((f) => f.id).toList()) &
+                  t.isDeleted.equals(false),
+            ))
+            .get();
+    return _toParentChildRelationships((
+      families: families,
+      links: links,
+    ), await _livePersonIdsInTree(treeId));
   }
 
   Future<Set<String>> _livePersonIdsInTree(String treeId) async {
-    final people = await (_database.select(_database.genealogyPersons)
-          ..where(
-            (t) => t.treeId.equals(treeId) & t.isDeleted.equals(false),
-          ))
-        .get();
+    final people = await (_database.select(
+      _database.genealogyPersons,
+    )..where((t) => t.treeId.equals(treeId) & t.isDeleted.equals(false))).get();
     return {for (final person in people) person.id};
   }
 
@@ -540,12 +528,12 @@ class RelationshipRepository {
     for (final family in families) {
       final husbandId = family.husbandId;
       final wifeId = family.wifeId;
-      final liveHusband =
-          husbandId != null && livePersonIds.contains(husbandId)
-              ? husbandId
-              : null;
-      final liveWife =
-          wifeId != null && livePersonIds.contains(wifeId) ? wifeId : null;
+      final liveHusband = husbandId != null && livePersonIds.contains(husbandId)
+          ? husbandId
+          : null;
+      final liveWife = wifeId != null && livePersonIds.contains(wifeId)
+          ? wifeId
+          : null;
       // A family with no live partner belongs to nobody left in the tree.
       if (liveHusband == null && liveWife == null) continue;
 
@@ -567,7 +555,7 @@ class RelationshipRepository {
   /// is no longer in the tree.
   static List<ParentChildRelationship> _toParentChildRelationships(
     ({List<FamiliesV2Data> families, List<FamilyChildrenV2Data> links})
-        snapshot,
+    snapshot,
     Set<String> livePersonIds,
   ) {
     final parentIdsByFamily = <String, List<String>>{};

@@ -77,9 +77,7 @@ class BackupService {
 
   Future<File> uploadBackupToGoogleDrive({String? password}) async {
     final backupFile = await createBackup(password: password);
-    final googleSignIn = GoogleSignIn(
-      scopes: [drive.DriveApi.driveFileScope],
-    );
+    final googleSignIn = GoogleSignIn(scopes: [drive.DriveApi.driveFileScope]);
 
     final account = await _signInToGoogle(googleSignIn);
     if (account == null) {
@@ -116,9 +114,7 @@ class BackupService {
   }
 
   Future<File> restoreLatestFromGoogleDrive({String? password}) async {
-    final googleSignIn = GoogleSignIn(
-      scopes: [drive.DriveApi.driveFileScope],
-    );
+    final googleSignIn = GoogleSignIn(scopes: [drive.DriveApi.driveFileScope]);
 
     final account = await _signInToGoogle(googleSignIn);
     if (account == null) {
@@ -142,10 +138,12 @@ class BackupService {
       throw Exception('No cloud backup found in Google Drive.');
     }
 
-    final media = await api.files.get(
-      latest.id!,
-      downloadOptions: drive.DownloadOptions.fullMedia,
-    ) as drive.Media;
+    final media =
+        await api.files.get(
+              latest.id!,
+              downloadOptions: drive.DownloadOptions.fullMedia,
+            )
+            as drive.Media;
 
     final appDir = await getApplicationDocumentsDirectory();
     final restorePath = p.join(appDir.path, latest.name ?? 'cloud_backup.zip');
@@ -218,29 +216,40 @@ class BackupService {
   }
 
   Future<File> _encryptBackupFile(File backupFile, String password) async {
-    final encryptedBytes = _encryptBytes(await backupFile.readAsBytes(), password);
+    final encryptedBytes = _encryptBytes(
+      await backupFile.readAsBytes(),
+      password,
+    );
     final encryptedPath = backupFile.path.replaceAll('.zip', '.enc');
     final encryptedFile = File(encryptedPath);
     await encryptedFile.writeAsBytes(encryptedBytes, flush: true);
     return encryptedFile;
   }
 
-  Future<List<int>> _resolveBackupBytes(File backupFile, String? password) async {
+  Future<List<int>> _resolveBackupBytes(
+    File backupFile,
+    String? password,
+  ) async {
     final encrypted = _isEncryptedFile(backupFile);
     if (!encrypted) {
       return backupFile.readAsBytes();
     }
 
     if (password == null || password.isEmpty) {
-      throw Exception('This backup is encrypted. Please enter the backup password.');
+      throw Exception(
+        'This backup is encrypted. Please enter the backup password.',
+      );
     }
 
     return _decryptBytes(await backupFile.readAsBytes(), password);
   }
 
-  bool _isEncryptedFile(File file) => p.extension(file.path).toLowerCase() == '.enc';
+  bool _isEncryptedFile(File file) =>
+      p.extension(file.path).toLowerCase() == '.enc';
 
-  Future<GoogleSignInAccount?> _signInToGoogle(GoogleSignIn googleSignIn) async {
+  Future<GoogleSignInAccount?> _signInToGoogle(
+    GoogleSignIn googleSignIn,
+  ) async {
     try {
       final silentAccount = await googleSignIn.signInSilently();
       if (silentAccount != null) {
@@ -267,7 +276,9 @@ class BackupService {
   List<int> _encryptBytes(List<int> input, String password) {
     final key = encrypt.Key(_deriveKey(password));
     final iv = encrypt.IV.fromSecureRandom(16);
-    final encrypter = encrypt.Encrypter(encrypt.AES(key, mode: encrypt.AESMode.cbc));
+    final encrypter = encrypt.Encrypter(
+      encrypt.AES(key, mode: encrypt.AESMode.cbc),
+    );
     final encrypted = encrypter.encryptBytes(Uint8List.fromList(input), iv: iv);
     return [...iv.bytes, ...encrypted.bytes];
   }
@@ -279,11 +290,13 @@ class BackupService {
 
     final iv = encrypt.IV(Uint8List.fromList(input.sublist(0, 16)));
     final cipherBytes = input.sublist(16);
-    
+
     // First try with the new PBKDF2 key
     try {
       final key = encrypt.Key(_deriveKey(password));
-      final encrypter = encrypt.Encrypter(encrypt.AES(key, mode: encrypt.AESMode.cbc));
+      final encrypter = encrypt.Encrypter(
+        encrypt.AES(key, mode: encrypt.AESMode.cbc),
+      );
       return encrypter.decryptBytes(
         encrypt.Encrypted(Uint8List.fromList(cipherBytes)),
         iv: iv,
@@ -291,7 +304,9 @@ class BackupService {
     } catch (e) {
       // If decryption fails (padding or MAC error), fallback to legacy SHA-256 key
       final legacyKey = encrypt.Key(_deriveLegacyKey(password));
-      final encrypter = encrypt.Encrypter(encrypt.AES(legacyKey, mode: encrypt.AESMode.cbc));
+      final encrypter = encrypt.Encrypter(
+        encrypt.AES(legacyKey, mode: encrypt.AESMode.cbc),
+      );
       return encrypter.decryptBytes(
         encrypt.Encrypted(Uint8List.fromList(cipherBytes)),
         iv: iv,
@@ -360,13 +375,13 @@ class BackupRecord {
   final bool encrypted;
 
   String encode() => jsonEncode({
-        'location': location,
-        'fileName': fileName,
-        'filePath': filePath,
-        'timestamp': timestamp.toIso8601String(),
-        'status': status,
-        'encrypted': encrypted,
-      });
+    'location': location,
+    'fileName': fileName,
+    'filePath': filePath,
+    'timestamp': timestamp.toIso8601String(),
+    'status': status,
+    'encrypted': encrypted,
+  });
 
   factory BackupRecord.fromEncoded(String encoded) {
     final data = jsonDecode(encoded) as Map<String, dynamic>;
@@ -374,7 +389,8 @@ class BackupRecord {
       location: data['location'] as String? ?? 'local',
       fileName: data['fileName'] as String? ?? 'backup.zip',
       filePath: data['filePath'] as String? ?? '',
-      timestamp: DateTime.tryParse(data['timestamp'] as String? ?? '') ??
+      timestamp:
+          DateTime.tryParse(data['timestamp'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
       status: data['status'] as String? ?? 'success',
       encrypted: data['encrypted'] as bool? ?? false,

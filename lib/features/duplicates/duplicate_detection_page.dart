@@ -18,7 +18,8 @@ class DuplicateDetectionPage extends ConsumerStatefulWidget {
       _DuplicateDetectionPageState();
 }
 
-class _DuplicateDetectionPageState extends ConsumerState<DuplicateDetectionPage> {
+class _DuplicateDetectionPageState
+    extends ConsumerState<DuplicateDetectionPage> {
   String _searchText = '';
   bool _highConfidenceOnly = false;
 
@@ -27,9 +28,7 @@ class _DuplicateDetectionPageState extends ConsumerState<DuplicateDetectionPage>
     final candidatesAsync = ref.watch(duplicateCandidatesProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Duplicate Detection'),
-      ),
+      appBar: AppBar(title: const Text('Duplicate Detection')),
       body: candidatesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stackTrace) => Center(
@@ -39,16 +38,23 @@ class _DuplicateDetectionPageState extends ConsumerState<DuplicateDetectionPage>
           ),
         ),
         data: (candidates) {
-          final filtered = candidates.where((candidate) {
-            if (_searchText.trim().isEmpty) return true;
-            final query = _searchText.trim().toLowerCase();
-            return displayPersonName(candidate.primary).toLowerCase().contains(query) ||
-                displayPersonName(candidate.duplicate).toLowerCase().contains(query) ||
-                candidate.reason.toLowerCase().contains(query);
-          }).where((candidate) {
-            if (!_highConfidenceOnly) return true;
-            return candidate.score >= 80;
-          }).toList();
+          final filtered = candidates
+              .where((candidate) {
+                if (_searchText.trim().isEmpty) return true;
+                final query = _searchText.trim().toLowerCase();
+                return displayPersonName(
+                      candidate.primary,
+                    ).toLowerCase().contains(query) ||
+                    displayPersonName(
+                      candidate.duplicate,
+                    ).toLowerCase().contains(query) ||
+                    candidate.reason.toLowerCase().contains(query);
+              })
+              .where((candidate) {
+                if (!_highConfidenceOnly) return true;
+                return candidate.score >= 80;
+              })
+              .toList();
 
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -75,7 +81,9 @@ class _DuplicateDetectionPageState extends ConsumerState<DuplicateDetectionPage>
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('High-confidence only'),
-                subtitle: const Text('Show only stronger matches with score 80 or above.'),
+                subtitle: const Text(
+                  'Show only stronger matches with score 80 or above.',
+                ),
                 value: _highConfidenceOnly,
                 onChanged: (value) {
                   setState(() {
@@ -89,12 +97,13 @@ class _DuplicateDetectionPageState extends ConsumerState<DuplicateDetectionPage>
               if (filtered.isEmpty)
                 const _EmptyDuplicatesView()
               else
-              ...filtered.map(
-                (candidate) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
+                ...filtered.map(
+                  (candidate) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
                     child: _DuplicateCandidateCard(
                       candidate: candidate,
-                      onMerge: () => _showMergePreviewDialog(context, candidate),
+                      onMerge: () =>
+                          _showMergePreviewDialog(context, candidate),
                       onMark: () => _markCandidate(context, candidate),
                       onOpenPrimary: () =>
                           context.push('/people/${candidate.primary.id}'),
@@ -123,8 +132,12 @@ class _DuplicateDetectionPageState extends ConsumerState<DuplicateDetectionPage>
     if (selection == null) return;
 
     final repository = ref.read(genealogyRepositoryProvider);
-    final survivorId = selection.keepPrimary ? candidate.primary.id : candidate.duplicate.id;
-    final duplicateId = selection.keepPrimary ? candidate.duplicate.id : candidate.primary.id;
+    final survivorId = selection.keepPrimary
+        ? candidate.primary.id
+        : candidate.duplicate.id;
+    final duplicateId = selection.keepPrimary
+        ? candidate.duplicate.id
+        : candidate.primary.id;
 
     try {
       await repository.mergePeople(
@@ -147,9 +160,9 @@ class _DuplicateDetectionPageState extends ConsumerState<DuplicateDetectionPage>
     } catch (e) {
       if (!context.mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to merge people: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to merge people: $e')));
     }
   }
 
@@ -158,7 +171,9 @@ class _DuplicateDetectionPageState extends ConsumerState<DuplicateDetectionPage>
     DuplicateCandidate candidate,
   ) async {
     try {
-      await ref.read(genealogyRepositoryProvider).markAsDuplicate(
+      await ref
+          .read(genealogyRepositoryProvider)
+          .markAsDuplicate(
             treeId: AppConstants.defaultTreeId,
             sourceId: candidate.primary.id,
             targetId: candidate.duplicate.id,
@@ -174,9 +189,9 @@ class _DuplicateDetectionPageState extends ConsumerState<DuplicateDetectionPage>
     } catch (e) {
       if (!context.mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to mark duplicate: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to mark duplicate: $e')));
     }
   }
 }
@@ -225,17 +240,17 @@ class _DuplicateCandidateCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        candidate.reason,
-                        style: const TextStyle(fontWeight: FontWeight.w800),
-                      ),
-                    ),
-                    Chip(label: Text('${candidate.score}%')),
-                  ],
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    candidate.reason,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
                 ),
+                Chip(label: Text('${candidate.score}%')),
+              ],
+            ),
             const SizedBox(height: 8),
             Text(
               'Will move: ${candidate.preview.eventCount} events, '
@@ -326,18 +341,13 @@ class _PersonRow extends StatelessWidget {
         ),
         child: Row(
           children: [
-            CircleAvatar(
-              child: Text(label[0]),
-            ),
+            CircleAvatar(child: Text(label[0])),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    label,
-                    style: const TextStyle(fontSize: 12),
-                  ),
+                  Text(label, style: const TextStyle(fontSize: 12)),
                   Text(
                     displayPersonName(person),
                     style: const TextStyle(fontWeight: FontWeight.w700),
@@ -351,7 +361,6 @@ class _PersonRow extends StatelessWidget {
       ),
     );
   }
-
 }
 
 class _EmptyDuplicatesView extends StatelessWidget {

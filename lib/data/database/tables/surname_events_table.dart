@@ -20,7 +20,8 @@ import 'genealogy_persons_table.dart';
 class SurnameEvents extends Table {
   TextColumn get id => text()();
 
-  TextColumn get personId => text().references(GenealogyPersons, #id, onDelete: KeyAction.restrict)();
+  TextColumn get personId =>
+      text().references(GenealogyPersons, #id, onDelete: KeyAction.restrict)();
 
   TextColumn get surname => text()();
 
@@ -33,17 +34,14 @@ class SurnameEvents extends Table {
 
   @ReferenceName('surnameEventsAbout')
   TextColumn get relatedPersonId => text().nullable().references(
-        GenealogyPersons,
-        #id,
-        onDelete: KeyAction.setNull,
-      )();
+    GenealogyPersons,
+    #id,
+    onDelete: KeyAction.setNull,
+  )();
 
   @ReferenceName('surnameEventsFrom')
-  TextColumn get relatedEventId => text().nullable().references(
-        Events,
-        #id,
-        onDelete: KeyAction.setNull,
-      )();
+  TextColumn get relatedEventId =>
+      text().nullable().references(Events, #id, onDelete: KeyAction.setNull)();
 
   TextColumn get location => text().nullable()();
   TextColumn get legalDocument => text().nullable()();
@@ -51,7 +49,6 @@ class SurnameEvents extends Table {
 
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   BoolColumn get isPrimary => boolean().withDefault(const Constant(false))();
-
 
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();

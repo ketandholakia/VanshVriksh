@@ -125,7 +125,7 @@ class _AddRelationshipPageState extends ConsumerState<AddRelationshipPage> {
   String _relationHelpText() {
     final labelStyle =
         ref.read(relationshipLabelStyleProvider).value ??
-            relationshipLabelStyleDefault;
+        relationshipLabelStyleDefault;
     switch (_selectedRelation) {
       case 'father':
         return labelStyle == RelationshipLabelStyle.neutral
@@ -159,7 +159,7 @@ class _AddRelationshipPageState extends ConsumerState<AddRelationshipPage> {
   String _createPersonLabel() {
     final labelStyle =
         ref.read(relationshipLabelStyleProvider).value ??
-            relationshipLabelStyleDefault;
+        relationshipLabelStyleDefault;
     switch (_selectedRelation) {
       case 'father':
         return labelStyle == RelationshipLabelStyle.neutral
@@ -208,9 +208,7 @@ class _AddRelationshipPageState extends ConsumerState<AddRelationshipPage> {
       'initialGender': _initialGenderForNewPerson(currentPerson.gender),
     };
 
-    context.go(
-      '/people/add?${Uri(queryParameters: queryParameters).query}',
-    );
+    context.go('/people/add?${Uri(queryParameters: queryParameters).query}');
   }
 
   @override
@@ -391,9 +389,7 @@ class _AddRelationshipPageState extends ConsumerState<AddRelationshipPage> {
                     ),
                   const SizedBox(height: 12),
                   OutlinedButton(
-                    onPressed: _isSaving
-                        ? null
-                        : () => context.pop(),
+                    onPressed: _isSaving ? null : () => context.pop(),
                     child: const Text('Cancel'),
                   ),
                 ],

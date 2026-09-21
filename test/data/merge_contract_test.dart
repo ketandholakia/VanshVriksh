@@ -59,53 +59,57 @@ void main() {
 
   // ---------------------------------------------------------------------------
   group('survivor identity and UUID behaviour', () {
-    test('a simple merge keeps the survivor intact and retires the duplicate',
-        () async {
-      final survivor = await addPerson(firstName: 'Ram', notes: 'kept');
-      final duplicate = await addPerson(firstName: 'Ram');
-      final survivorBefore = (await people.getPersonById(survivor))!;
-      final duplicateBefore = (await people.getPersonById(duplicate))!;
+    test(
+      'a simple merge keeps the survivor intact and retires the duplicate',
+      () async {
+        final survivor = await addPerson(firstName: 'Ram', notes: 'kept');
+        final duplicate = await addPerson(firstName: 'Ram');
+        final survivorBefore = (await people.getPersonById(survivor))!;
+        final duplicateBefore = (await people.getPersonById(duplicate))!;
 
-      final result = await people.mergePeople(
-        survivorId: survivor,
-        duplicateId: duplicate,
-      );
+        final result = await people.mergePeople(
+          survivorId: survivor,
+          duplicateId: duplicate,
+        );
 
-      final after = (await people.getPersonById(survivor))!;
-      expect(after.id, survivor, reason: 'id is unchanged');
-      expect(after.uuid, survivorBefore.uuid, reason: 'uuid is unchanged');
-      expect(after.treeId, survivorBefore.treeId);
-      expect(after.createdAt, survivorBefore.createdAt);
-      expect(after.isDeleted, isFalse);
-      expect(after.mergedIntoId, isNull);
-      expect(after.notes, 'kept');
+        final after = (await people.getPersonById(survivor))!;
+        expect(after.id, survivor, reason: 'id is unchanged');
+        expect(after.uuid, survivorBefore.uuid, reason: 'uuid is unchanged');
+        expect(after.treeId, survivorBefore.treeId);
+        expect(after.createdAt, survivorBefore.createdAt);
+        expect(after.isDeleted, isFalse);
+        expect(after.mergedIntoId, isNull);
+        expect(after.notes, 'kept');
 
-      final retired = (await people.getPersonById(duplicate))!;
-      expect(retired.isDeleted, isTrue);
-      expect(retired.mergedIntoId, survivor);
-      expect(
-        retired.uuid,
-        duplicateBefore.uuid,
-        reason: 'the retired identity is still resolvable',
-      );
+        final retired = (await people.getPersonById(duplicate))!;
+        expect(retired.isDeleted, isTrue);
+        expect(retired.mergedIntoId, survivor);
+        expect(
+          retired.uuid,
+          duplicateBefore.uuid,
+          reason: 'the retired identity is still resolvable',
+        );
 
-      expect(result.partnershipsMoved, 0);
-      expect(result.partnershipsCollapsed, 0);
-      expect(result.childLinksMoved, 0);
-      expect(await people.getPeopleByTree(treeId), hasLength(1));
-    });
+        expect(result.partnershipsMoved, 0);
+        expect(result.partnershipsCollapsed, 0);
+        expect(result.childLinksMoved, 0);
+        expect(await people.getPeopleByTree(treeId), hasLength(1));
+      },
+    );
 
-    test('nothing is hard-deleted and every row still points somewhere valid',
-        () async {
-      final survivor = await addPerson(firstName: 'Ram');
-      final duplicate = await addPerson(firstName: 'Ram');
-      await people.mergePeople(survivorId: survivor, duplicateId: duplicate);
+    test(
+      'nothing is hard-deleted and every row still points somewhere valid',
+      () async {
+        final survivor = await addPerson(firstName: 'Ram');
+        final duplicate = await addPerson(firstName: 'Ram');
+        await people.mergePeople(survivorId: survivor, duplicateId: duplicate);
 
-      // The retired row is still there; the only references to it are its own.
-      final persons = await db.select(db.genealogyPersons).get();
-      expect(persons, hasLength(2));
-      expect(persons.where((p) => p.mergedIntoId == duplicate), isEmpty);
-    });
+        // The retired row is still there; the only references to it are its own.
+        final persons = await db.select(db.genealogyPersons).get();
+        expect(persons, hasLength(2));
+        expect(persons.where((p) => p.mergedIntoId == duplicate), isEmpty);
+      },
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -239,9 +243,9 @@ void main() {
       expect(result.partnershipsMoved, 1);
       expect(result.partnershipsCollapsed, 0);
       expect((await relationships.getSpouses(survivor)), hasLength(2));
-      final partners = (await relationships.getSpouses(survivor))
-          .map((p) => p.id)
-          .toSet();
+      final partners = (await relationships.getSpouses(
+        survivor,
+      )).map((p) => p.id).toSet();
       expect(partners, {firstWife, secondWife});
     });
 
@@ -317,46 +321,51 @@ void main() {
         duplicateId: duplicate,
       );
 
-      expect(result.childLinksMoved, 0, reason: 'the child followed the family');
+      expect(
+        result.childLinksMoved,
+        0,
+        reason: 'the child followed the family',
+      );
       expect(result.partnershipsMoved, 1);
       expect((await relationships.getChildren(survivor)).single.id, kid);
       expect(await relationships.getChildren(duplicate), isEmpty);
     });
 
-    test('a child link that already exists for the pair is collapsed', () async {
-      final survivor = await addPerson(firstName: 'Ram');
-      final wife = await addPerson(firstName: 'Sita', gender: 'F');
-      final duplicate = await addPerson(firstName: 'Ram');
-      final kid = await addPerson(firstName: 'Kid');
-      await relationships.addSpouseRelationship(
-        treeId: treeId,
-        personAId: survivor,
-        personBId: wife,
-      );
-      final survivorFamily =
-          (await relationships.getFamiliesForPerson(survivor)).single.id;
-      await people.addChildToFamily(familyId: survivorFamily, childId: kid);
-      // The duplicate claims the same child in a family of their own.
-      final duplicateFamily = await people.createFamily(
-        treeId: treeId,
-        husbandId: duplicate,
-      );
-      await people.addChildToFamily(
-        familyId: duplicateFamily,
-        childId: kid,
-      );
+    test(
+      'a child link that already exists for the pair is collapsed',
+      () async {
+        final survivor = await addPerson(firstName: 'Ram');
+        final wife = await addPerson(firstName: 'Sita', gender: 'F');
+        final duplicate = await addPerson(firstName: 'Ram');
+        final kid = await addPerson(firstName: 'Kid');
+        await relationships.addSpouseRelationship(
+          treeId: treeId,
+          personAId: survivor,
+          personBId: wife,
+        );
+        final survivorFamily = (await relationships.getFamiliesForPerson(
+          survivor,
+        )).single.id;
+        await people.addChildToFamily(familyId: survivorFamily, childId: kid);
+        // The duplicate claims the same child in a family of their own.
+        final duplicateFamily = await people.createFamily(
+          treeId: treeId,
+          husbandId: duplicate,
+        );
+        await people.addChildToFamily(familyId: duplicateFamily, childId: kid);
 
-      final result = await people.mergePeople(
-        survivorId: survivor,
-        duplicateId: duplicate,
-      );
+        final result = await people.mergePeople(
+          survivorId: survivor,
+          duplicateId: duplicate,
+        );
 
-      expect(result.childLinksCollapsed + result.childLinksMoved, 1);
-      final liveLinks = (await db.select(db.familyChildrenV2).get())
-          .where((l) => !l.isDeleted && l.childId == kid)
-          .toList();
-      expect(liveLinks, hasLength(1), reason: 'no duplicate parentage');
-    });
+        expect(result.childLinksCollapsed + result.childLinksMoved, 1);
+        final liveLinks = (await db.select(db.familyChildrenV2).get())
+            .where((l) => !l.isDeleted && l.childId == kid)
+            .toList();
+        expect(liveLinks, hasLength(1), reason: 'no duplicate parentage');
+      },
+    );
 
     test('children of the couple survive the family being retired', () async {
       final first = await addPerson(firstName: 'Ram');
@@ -367,7 +376,9 @@ void main() {
         personAId: first,
         personBId: second,
       );
-      final ownFamily = (await relationships.getFamiliesForPerson(first)).single;
+      final ownFamily = (await relationships.getFamiliesForPerson(
+        first,
+      )).single;
       await people.addChildToFamily(familyId: ownFamily.id, childId: kid);
 
       await people.mergePeople(survivorId: first, duplicateId: second);
@@ -383,45 +394,48 @@ void main() {
 
   // ---------------------------------------------------------------------------
   group('duplicate markers', () {
-    test('the pair\'s marker is resolved and a third-party marker is kept', () async {
-      final survivor = await addPerson(firstName: 'Ram');
-      final duplicate = await addPerson(firstName: 'Ram');
-      final third = await addPerson(firstName: 'Ram');
-      await people.markAsDuplicate(
-        treeId: treeId,
-        sourceId: survivor,
-        targetId: duplicate,
-      );
-      await people.markAsDuplicate(
-        treeId: treeId,
-        sourceId: duplicate,
-        targetId: third,
-      );
-      await people.markAsDuplicate(
-        treeId: treeId,
-        sourceId: survivor,
-        targetId: third,
-      );
+    test(
+      'the pair\'s marker is resolved and a third-party marker is kept',
+      () async {
+        final survivor = await addPerson(firstName: 'Ram');
+        final duplicate = await addPerson(firstName: 'Ram');
+        final third = await addPerson(firstName: 'Ram');
+        await people.markAsDuplicate(
+          treeId: treeId,
+          sourceId: survivor,
+          targetId: duplicate,
+        );
+        await people.markAsDuplicate(
+          treeId: treeId,
+          sourceId: duplicate,
+          targetId: third,
+        );
+        await people.markAsDuplicate(
+          treeId: treeId,
+          sourceId: survivor,
+          targetId: third,
+        );
 
-      final result = await people.mergePeople(
-        survivorId: survivor,
-        duplicateId: duplicate,
-      );
+        final result = await people.mergePeople(
+          survivorId: survivor,
+          duplicateId: duplicate,
+        );
 
-      expect(result.duplicateMarkersRemoved, 1);
-      expect(result.duplicateMarkersRewritten, 1);
+        expect(result.duplicateMarkersRemoved, 1);
+        expect(result.duplicateMarkersRewritten, 1);
 
-      final markers = await db.select(db.duplicateMarkers).get();
-      // (survivor, third) existed already, so the rewritten marker collapses
-      // onto it: exactly one marker remains and it names no retired person.
-      expect(markers, hasLength(1));
-      expect(markers.single.personAId, isNot(duplicate));
-      expect(markers.single.personBId, isNot(duplicate));
-      expect(
-        {markers.single.personAId, markers.single.personBId},
-        {survivor, third},
-      );
-    });
+        final markers = await db.select(db.duplicateMarkers).get();
+        // (survivor, third) existed already, so the rewritten marker collapses
+        // onto it: exactly one marker remains and it names no retired person.
+        expect(markers, hasLength(1));
+        expect(markers.single.personAId, isNot(duplicate));
+        expect(markers.single.personBId, isNot(duplicate));
+        expect(
+          {markers.single.personAId, markers.single.personBId},
+          {survivor, third},
+        );
+      },
+    );
 
     test('a marker that never mentioned the duplicate is untouched', () async {
       final survivor = await addPerson(firstName: 'Ram');
@@ -438,8 +452,10 @@ void main() {
 
       final markers = await db.select(db.duplicateMarkers).get();
       expect(markers, hasLength(1));
-      expect({markers.single.personAId, markers.single.personBId},
-          {third, fourth});
+      expect(
+        {markers.single.personAId, markers.single.personBId},
+        {third, fourth},
+      );
     });
   });
 
@@ -449,7 +465,9 @@ void main() {
       final survivor = await addPerson(firstName: 'Ram');
       final duplicate = await addPerson(firstName: 'Ram');
       final now = DateTime(2000);
-      await db.into(db.events).insert(
+      await db
+          .into(db.events)
+          .insert(
             EventsCompanion.insert(
               id: 'e1',
               personId: duplicate,
@@ -458,7 +476,9 @@ void main() {
               updatedAt: now,
             ),
           );
-      await db.into(db.mediaItems).insert(
+      await db
+          .into(db.mediaItems)
+          .insert(
             MediaItemsCompanion.insert(
               id: 'm1',
               personId: duplicate,
@@ -467,7 +487,9 @@ void main() {
               createdAt: now,
             ),
           );
-      await db.into(db.researchNotes).insert(
+      await db
+          .into(db.researchNotes)
+          .insert(
             ResearchNotesCompanion.insert(
               id: 'n1',
               personId: Value(duplicate),
@@ -475,7 +497,9 @@ void main() {
               createdAt: now,
             ),
           );
-      await db.into(db.surnameEvents).insert(
+      await db
+          .into(db.surnameEvents)
+          .insert(
             SurnameEventsCompanion.insert(
               id: 's1',
               personId: duplicate,
@@ -492,7 +516,10 @@ void main() {
         (await db.select(db.researchNotes).get()).single.personId,
         survivor,
       );
-      expect((await db.select(db.surnameEvents).get()).single.personId, survivor);
+      expect(
+        (await db.select(db.surnameEvents).get()).single.personId,
+        survivor,
+      );
     });
 
     test('a tree rooted at the duplicate now roots at the survivor', () async {
@@ -518,58 +545,65 @@ void main() {
 
   // ---------------------------------------------------------------------------
   group('failure midway leaves no partial merge', () {
-    test('an error inside the transaction rolls the whole merge back', () async {
-      final survivor = await addPerson(firstName: 'Ram', notes: 'survivor');
-      final wife = await addPerson(firstName: 'Sita', gender: 'F');
-      final duplicate = await addPerson(firstName: 'Ram', notes: 'duplicate');
-      final kid = await addPerson(firstName: 'Kid');
-      await relationships.addSpouseRelationship(
-        treeId: treeId,
-        personAId: duplicate,
-        personBId: wife,
-      );
-      final familyId = (await relationships.getFamiliesForPerson(duplicate)).single.id;
-      await people.addChildToFamily(familyId: familyId, childId: kid);
-      await db.into(db.events).insert(
-            EventsCompanion.insert(
-              id: 'e1',
-              personId: duplicate,
-              eventType: 'baptism',
-              createdAt: DateTime(2000),
-              updatedAt: DateTime(2000),
-            ),
-          );
+    test(
+      'an error inside the transaction rolls the whole merge back',
+      () async {
+        final survivor = await addPerson(firstName: 'Ram', notes: 'survivor');
+        final wife = await addPerson(firstName: 'Sita', gender: 'F');
+        final duplicate = await addPerson(firstName: 'Ram', notes: 'duplicate');
+        final kid = await addPerson(firstName: 'Kid');
+        await relationships.addSpouseRelationship(
+          treeId: treeId,
+          personAId: duplicate,
+          personBId: wife,
+        );
+        final familyId = (await relationships.getFamiliesForPerson(
+          duplicate,
+        )).single.id;
+        await people.addChildToFamily(familyId: familyId, childId: kid);
+        await db
+            .into(db.events)
+            .insert(
+              EventsCompanion.insert(
+                id: 'e1',
+                personId: duplicate,
+                eventType: 'baptism',
+                createdAt: DateTime(2000),
+                updatedAt: DateTime(2000),
+              ),
+            );
 
-      // Fail the *third* step of the merge (repointing events), after the
-      // partnership and child-link steps have already written.
-      await db.customStatement(
-        'CREATE TRIGGER fail_merge BEFORE UPDATE ON events '
-        "BEGIN SELECT RAISE(ABORT, 'injected failure'); END",
-      );
+        // Fail the *third* step of the merge (repointing events), after the
+        // partnership and child-link steps have already written.
+        await db.customStatement(
+          'CREATE TRIGGER fail_merge BEFORE UPDATE ON events '
+          "BEGIN SELECT RAISE(ABORT, 'injected failure'); END",
+        );
 
-      await expectLater(
-        people.mergePeople(survivorId: survivor, duplicateId: duplicate),
-        throwsA(anything),
-      );
+        await expectLater(
+          people.mergePeople(survivorId: survivor, duplicateId: duplicate),
+          throwsA(anything),
+        );
 
-      // Step 1 (partnerships) and step 2 (child links) must have been undone.
-      final family = (await db.select(db.familiesV2).get()).single;
-      expect(family.husbandId, duplicate, reason: 'partnership rolled back');
-      expect(family.wifeId, wife);
-      expect(
-        (await db.select(db.familyChildrenV2).get()).single.childId,
-        kid,
-      );
-      expect((await people.getPersonById(duplicate))!.isDeleted, isFalse);
-      expect((await people.getPersonById(duplicate))!.mergedIntoId, isNull);
-      expect((await people.getPersonById(survivor))!.notes, 'survivor');
-      expect((await db.select(db.events).get()).single.personId, duplicate);
+        // Step 1 (partnerships) and step 2 (child links) must have been undone.
+        final family = (await db.select(db.familiesV2).get()).single;
+        expect(family.husbandId, duplicate, reason: 'partnership rolled back');
+        expect(family.wifeId, wife);
+        expect(
+          (await db.select(db.familyChildrenV2).get()).single.childId,
+          kid,
+        );
+        expect((await people.getPersonById(duplicate))!.isDeleted, isFalse);
+        expect((await people.getPersonById(duplicate))!.mergedIntoId, isNull);
+        expect((await people.getPersonById(survivor))!.notes, 'survivor');
+        expect((await db.select(db.events).get()).single.personId, duplicate);
 
-      // With the injected failure removed the same merge succeeds.
-      await db.customStatement('DROP TRIGGER fail_merge');
-      await people.mergePeople(survivorId: survivor, duplicateId: duplicate);
-      expect((await people.getPersonById(duplicate))!.mergedIntoId, survivor);
-    });
+        // With the injected failure removed the same merge succeeds.
+        await db.customStatement('DROP TRIGGER fail_merge');
+        await people.mergePeople(survivorId: survivor, duplicateId: duplicate);
+        expect((await people.getPersonById(duplicate))!.mergedIntoId, survivor);
+      },
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -621,7 +655,9 @@ void main() {
 
     test('a cross-tree merge is refused and changes nothing', () async {
       final now = DateTime.now();
-      await db.into(db.familyTrees).insert(
+      await db
+          .into(db.familyTrees)
+          .insert(
             FamilyTreesCompanion.insert(
               id: 'other-tree',
               treeName: 'Other',

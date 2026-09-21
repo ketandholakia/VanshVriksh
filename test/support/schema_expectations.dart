@@ -179,9 +179,7 @@ const Map<String, List<String>> expectedForeignKeys = {
     'person_a_id|genealogy_persons|CASCADE',
     'person_b_id|genealogy_persons|CASCADE',
   ],
-  'events': [
-    'person_id|genealogy_persons|RESTRICT',
-  ],
+  'events': ['person_id|genealogy_persons|RESTRICT'],
   'families_v2': [
     'husband_id|genealogy_persons|RESTRICT',
     'wife_id|genealogy_persons|RESTRICT',
@@ -191,19 +189,13 @@ const Map<String, List<String>> expectedForeignKeys = {
     'family_id|families_v2|RESTRICT',
     'child_id|genealogy_persons|RESTRICT',
   ],
-  'family_trees': [
-    'root_person_id|genealogy_persons|SET NULL',
-  ],
+  'family_trees': ['root_person_id|genealogy_persons|SET NULL'],
   'genealogy_persons': [
     'tree_id|family_trees|RESTRICT',
     'merged_into_id|genealogy_persons|SET NULL',
   ],
-  'media_items': [
-    'person_id|genealogy_persons|RESTRICT',
-  ],
-  'research_notes': [
-    'person_id|genealogy_persons|RESTRICT',
-  ],
+  'media_items': ['person_id|genealogy_persons|RESTRICT'],
+  'research_notes': ['person_id|genealogy_persons|RESTRICT'],
   'surname_events': [
     'person_id|genealogy_persons|RESTRICT',
     'related_person_id|genealogy_persons|SET NULL',

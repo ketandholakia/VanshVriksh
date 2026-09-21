@@ -16,10 +16,7 @@ import 'package:drift/drift.dart';
 /// columns: no sync engine exists, so they would be write-only fields that
 /// invite the false impression that sync works.
 @TableIndex(name: 'idx_genealogy_persons_tree_id', columns: {#treeId})
-@TableIndex(
-  name: 'idx_genealogy_persons_merged_into',
-  columns: {#mergedIntoId},
-)
+@TableIndex(name: 'idx_genealogy_persons_merged_into', columns: {#mergedIntoId})
 class GenealogyPersons extends Table {
   TextColumn get id => text()();
 
@@ -32,7 +29,8 @@ class GenealogyPersons extends Table {
   TextColumn get prefix => text().nullable()();
   TextColumn get nickname => text().nullable()();
 
-  TextColumn get displayNameFormat => text().withDefault(const Constant('birth_married'))();
+  TextColumn get displayNameFormat =>
+      text().withDefault(const Constant('birth_married'))();
   TextColumn get customDisplayName => text().nullable()();
 
   TextColumn get gender => text()();
@@ -82,16 +80,16 @@ class GenealogyPersons extends Table {
   /// Set when this person was merged into another person.
   @ReferenceName('mergedDuplicates')
   TextColumn get mergedIntoId => text().nullable().references(
-        GenealogyPersons,
-        #id,
-        onDelete: KeyAction.setNull,
-      )();
+    GenealogyPersons,
+    #id,
+    onDelete: KeyAction.setNull,
+  )();
 
   @override
   Set<Column> get primaryKey => {id};
 
   @override
   List<String> get customConstraints => [
-        'FOREIGN KEY (tree_id) REFERENCES family_trees (id) ON DELETE RESTRICT',
-      ];
+    'FOREIGN KEY (tree_id) REFERENCES family_trees (id) ON DELETE RESTRICT',
+  ];
 }

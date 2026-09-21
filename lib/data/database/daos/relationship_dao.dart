@@ -20,15 +20,17 @@ class RelationshipDao {
   Future<List<GenealogyPerson>> getParentPersonsOfChild(String childId) async {
     if (!await _personIsLive(childId)) return const [];
 
-    final familyLinks = await (_database.select(_database.familyChildrenV2)
-          ..where((t) => t.childId.equals(childId) & t.isDeleted.equals(false)))
-        .get();
+    final familyLinks =
+        await (_database.select(_database.familyChildrenV2)..where(
+              (t) => t.childId.equals(childId) & t.isDeleted.equals(false),
+            ))
+            .get();
     final familyIds = familyLinks.map((e) => e.familyId).toList();
     if (familyIds.isEmpty) return const [];
 
-    final families = await (_database.select(_database.familiesV2)
-          ..where((t) => t.id.isIn(familyIds) & t.isDeleted.equals(false)))
-        .get();
+    final families = await (_database.select(
+      _database.familiesV2,
+    )..where((t) => t.id.isIn(familyIds) & t.isDeleted.equals(false))).get();
 
     return _livePeople(_partnerIdsOf(families));
   }
@@ -41,11 +43,11 @@ class RelationshipDao {
     final familyIds = families.map((e) => e.id).toList();
     if (familyIds.isEmpty) return const [];
 
-    final childLinks = await (_database.select(_database.familyChildrenV2)
-          ..where(
-            (t) => t.familyId.isIn(familyIds) & t.isDeleted.equals(false),
-          ))
-        .get();
+    final childLinks =
+        await (_database.select(_database.familyChildrenV2)..where(
+              (t) => t.familyId.isIn(familyIds) & t.isDeleted.equals(false),
+            ))
+            .get();
 
     return _livePeople(childLinks.map((e) => e.childId).toSet());
   }
@@ -73,40 +75,42 @@ class RelationshipDao {
   Future<List<GenealogyPerson>> getSiblingPersonsOf(String personId) async {
     if (!await _personIsLive(personId)) return const [];
 
-    final myFamilyLinks = await (_database.select(_database.familyChildrenV2)
-          ..where(
-            (t) => t.childId.equals(personId) & t.isDeleted.equals(false),
-          ))
-        .get();
+    final myFamilyLinks =
+        await (_database.select(_database.familyChildrenV2)..where(
+              (t) => t.childId.equals(personId) & t.isDeleted.equals(false),
+            ))
+            .get();
     final familyIds = myFamilyLinks.map((e) => e.familyId).toList();
     if (familyIds.isEmpty) return const [];
 
-    final siblingLinks = await (_database.select(_database.familyChildrenV2)
-          ..where(
-            (t) =>
-                t.familyId.isIn(familyIds) &
-                t.childId.isNotValue(personId) &
-                t.isDeleted.equals(false),
-          ))
-        .get();
+    final siblingLinks =
+        await (_database.select(_database.familyChildrenV2)..where(
+              (t) =>
+                  t.familyId.isIn(familyIds) &
+                  t.childId.isNotValue(personId) &
+                  t.isDeleted.equals(false),
+            ))
+            .get();
 
     return _livePeople(siblingLinks.map((e) => e.childId).toSet());
   }
 
   /// Live parents of [childId], each paired with the link that connects them.
   Future<List<({GenealogyPerson person, String relationshipId})>>
-      getParentPersonItemsOfChild(String childId) async {
+  getParentPersonItemsOfChild(String childId) async {
     if (!await _personIsLive(childId)) return const [];
 
-    final familyLinks = await (_database.select(_database.familyChildrenV2)
-          ..where((t) => t.childId.equals(childId) & t.isDeleted.equals(false)))
-        .get();
+    final familyLinks =
+        await (_database.select(_database.familyChildrenV2)..where(
+              (t) => t.childId.equals(childId) & t.isDeleted.equals(false),
+            ))
+            .get();
     final familyIds = familyLinks.map((e) => e.familyId).toList();
     if (familyIds.isEmpty) return const [];
 
-    final families = await (_database.select(_database.familiesV2)
-          ..where((t) => t.id.isIn(familyIds) & t.isDeleted.equals(false)))
-        .get();
+    final families = await (_database.select(
+      _database.familiesV2,
+    )..where((t) => t.id.isIn(familyIds) & t.isDeleted.equals(false))).get();
 
     final persons = await _livePeople(_partnerIdsOf(families));
     if (persons.isEmpty) return const [];
@@ -128,18 +132,18 @@ class RelationshipDao {
 
   /// Live children of [parentId], each paired with their link.
   Future<List<({GenealogyPerson person, String relationshipId})>>
-      getChildPersonItemsOfParent(String parentId) async {
+  getChildPersonItemsOfParent(String parentId) async {
     if (!await _personIsLive(parentId)) return const [];
 
     final families = await _liveFamiliesOf(parentId);
     final familyIds = families.map((e) => e.id).toList();
     if (familyIds.isEmpty) return const [];
 
-    final childLinks = await (_database.select(_database.familyChildrenV2)
-          ..where(
-            (t) => t.familyId.isIn(familyIds) & t.isDeleted.equals(false),
-          ))
-        .get();
+    final childLinks =
+        await (_database.select(_database.familyChildrenV2)..where(
+              (t) => t.familyId.isIn(familyIds) & t.isDeleted.equals(false),
+            ))
+            .get();
     if (childLinks.isEmpty) return const [];
 
     final persons = await _livePeople(childLinks.map((l) => l.childId).toSet());
@@ -149,8 +153,9 @@ class RelationshipDao {
     // child link never targets a link from another family.
     final familyById = {for (final f in families) f.id: f};
     return persons.map((person) {
-      final candidates =
-          childLinks.where((l) => l.childId == person.id).toList();
+      final candidates = childLinks
+          .where((l) => l.childId == person.id)
+          .toList();
       final link = candidates.firstWhere(
         (l) =>
             familyById[l.familyId]?.husbandId == parentId ||
@@ -163,14 +168,15 @@ class RelationshipDao {
 
   /// Live spouses of [personId], each paired with the family that links them.
   Future<List<({GenealogyPerson person, String relationshipId})>>
-      getSpousePersonItemsOf(String personId) async {
+  getSpousePersonItemsOf(String personId) async {
     if (!await _personIsLive(personId)) return const [];
 
     final families = await _liveFamiliesOf(personId);
     final spouseIds = <String>{};
     for (final family in families) {
-      final spouseId =
-          family.husbandId == personId ? family.wifeId : family.husbandId;
+      final spouseId = family.husbandId == personId
+          ? family.wifeId
+          : family.husbandId;
       if (spouseId != null) spouseIds.add(spouseId);
     }
     if (spouseIds.isEmpty) return const [];
@@ -181,8 +187,9 @@ class RelationshipDao {
 
     final result = <({GenealogyPerson person, String relationshipId})>[];
     for (final family in families) {
-      final spouseId =
-          family.husbandId == personId ? family.wifeId : family.husbandId;
+      final spouseId = family.husbandId == personId
+          ? family.wifeId
+          : family.husbandId;
       final spouse = spouseId == null ? null : spouses[spouseId];
       if (spouse != null) {
         result.add((person: spouse, relationshipId: family.id));
@@ -193,12 +200,11 @@ class RelationshipDao {
 
   /// Live families in which [personId] is a partner.
   Future<List<FamiliesV2Data>> _liveFamiliesOf(String personId) {
-    return (_database.select(_database.familiesV2)
-          ..where(
-            (t) =>
-                t.isDeleted.equals(false) &
-                (t.husbandId.equals(personId) | t.wifeId.equals(personId)),
-          ))
+    return (_database.select(_database.familiesV2)..where(
+          (t) =>
+              t.isDeleted.equals(false) &
+              (t.husbandId.equals(personId) | t.wifeId.equals(personId)),
+        ))
         .get();
   }
 
@@ -213,17 +219,17 @@ class RelationshipDao {
 
   /// True when the person exists and is not soft-deleted.
   Future<bool> _personIsLive(String personId) async {
-    final person = await (_database.select(_database.genealogyPersons)
-          ..where((t) => t.id.equals(personId)))
-        .getSingleOrNull();
+    final person = await (_database.select(
+      _database.genealogyPersons,
+    )..where((t) => t.id.equals(personId))).getSingleOrNull();
     return person != null && !person.isDeleted;
   }
 
   /// Fetches the people in [ids] that are not soft-deleted.
   Future<List<GenealogyPerson>> _livePeople(Set<String> ids) {
     if (ids.isEmpty) return Future.value(const []);
-    return (_database.select(_database.genealogyPersons)
-          ..where((t) => t.id.isIn(ids.toList()) & t.isDeleted.equals(false)))
-        .get();
+    return (_database.select(
+      _database.genealogyPersons,
+    )..where((t) => t.id.isIn(ids.toList()) & t.isDeleted.equals(false))).get();
   }
 }

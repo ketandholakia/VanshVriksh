@@ -35,12 +35,12 @@ void main() {
 
       final nodes = GedcomParser.parseLines(lines);
       final importer = GedcomImporter(db);
-      
+
       await importer.importGedcom(nodes, AppConstants.defaultTreeId);
 
       final persons = await db.select(db.genealogyPersons).get();
       expect(persons.length, 2);
-      
+
       final john = persons.firstWhere((p) => p.firstName == 'John');
       expect(john.lastName, 'Doe');
       expect(john.gender, 'male');

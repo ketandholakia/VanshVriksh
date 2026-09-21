@@ -15,9 +15,11 @@ final partnershipsByTreeProvider = StreamProvider<List<Partnership>>((ref) {
 
 final parentChildRelationshipsByTreeProvider =
     StreamProvider<List<ParentChildRelationship>>((ref) {
-  final repository = ref.watch(relationshipRepositoryProvider);
-  return repository.watchParentChildRelationships(AppConstants.defaultTreeId);
-});
+      final repository = ref.watch(relationshipRepositoryProvider);
+      return repository.watchParentChildRelationships(
+        AppConstants.defaultTreeId,
+      );
+    });
 
 final dashboardStatsProvider = Provider<AsyncValue<DashboardStats>>((ref) {
   final peopleAsync = ref.watch(peopleListProvider);
@@ -84,7 +86,11 @@ final upcomingBirthdaysProvider = Provider<List<UpcomingBirthday>>((ref) {
         if (birthDate == null) continue;
         if (!person.isLiving) continue;
 
-        var nextBirthday = _safeBirthday(today.year, birthDate.month, birthDate.day);
+        var nextBirthday = _safeBirthday(
+          today.year,
+          birthDate.month,
+          birthDate.day,
+        );
         if (nextBirthday.isBefore(todayDate)) {
           nextBirthday = _safeBirthday(
             today.year + 1,
@@ -126,10 +132,18 @@ int _countUpcomingBirthdays(List<GenealogyPerson> people) {
     if (birthDate == null) continue;
     if (!person.isLiving) continue;
 
-    var nextBirthday = _safeBirthday(today.year, birthDate.month, birthDate.day);
+    var nextBirthday = _safeBirthday(
+      today.year,
+      birthDate.month,
+      birthDate.day,
+    );
 
     if (nextBirthday.isBefore(todayDate)) {
-      nextBirthday = _safeBirthday(today.year + 1, birthDate.month, birthDate.day);
+      nextBirthday = _safeBirthday(
+        today.year + 1,
+        birthDate.month,
+        birthDate.day,
+      );
     }
 
     final daysLeft = nextBirthday.difference(todayDate).inDays;

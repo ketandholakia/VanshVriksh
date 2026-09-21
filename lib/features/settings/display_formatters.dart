@@ -36,18 +36,10 @@ String formatLifespanForDisplay(
   final today = DateTime.now();
   final birth = birthDate == null
       ? null
-      : formatDateForDisplay(
-          birthDate,
-          format,
-          hideYear: hideYear,
-        );
+      : formatDateForDisplay(birthDate, format, hideYear: hideYear);
   final death = deathDate == null
       ? null
-      : formatDateForDisplay(
-          deathDate,
-          format,
-          hideYear: false,
-        );
+      : formatDateForDisplay(deathDate, format, hideYear: false);
 
   if (birth == null && death == null) {
     return isLiving && hideYearsForLiving ? 'Living' : 'Not available';

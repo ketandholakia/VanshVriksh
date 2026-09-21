@@ -26,21 +26,22 @@ class FamiliesV2 extends Table {
   TextColumn get id => text()();
 
   @ReferenceName('familiesInTree')
-  TextColumn get treeId => text().references(FamilyTrees, #id, onDelete: KeyAction.restrict)();
+  TextColumn get treeId =>
+      text().references(FamilyTrees, #id, onDelete: KeyAction.restrict)();
 
   @ReferenceName('husbandFamilies')
   TextColumn get husbandId => text().nullable().references(
-        GenealogyPersons,
-        #id,
-        onDelete: KeyAction.restrict,
-      )();
+    GenealogyPersons,
+    #id,
+    onDelete: KeyAction.restrict,
+  )();
 
   @ReferenceName('wifeFamilies')
   TextColumn get wifeId => text().nullable().references(
-        GenealogyPersons,
-        #id,
-        onDelete: KeyAction.restrict,
-      )();
+    GenealogyPersons,
+    #id,
+    onDelete: KeyAction.restrict,
+  )();
 
   DateTimeColumn get marriageDate => dateTime().nullable()();
   TextColumn get marriageDateQualifier => text().nullable()();
@@ -48,9 +49,12 @@ class FamiliesV2 extends Table {
   RealColumn get marriagePlaceLat => real().nullable()();
   RealColumn get marriagePlaceLng => real().nullable()();
 
-  BoolColumn get wifeTookHusbandName => boolean().withDefault(const Constant(false))();
-  BoolColumn get husbandTookWifeName => boolean().withDefault(const Constant(false))();
-  BoolColumn get hyphenatedSurname => boolean().withDefault(const Constant(false))();
+  BoolColumn get wifeTookHusbandName =>
+      boolean().withDefault(const Constant(false))();
+  BoolColumn get husbandTookWifeName =>
+      boolean().withDefault(const Constant(false))();
+  BoolColumn get hyphenatedSurname =>
+      boolean().withDefault(const Constant(false))();
   BoolColumn get noNameChange => boolean().withDefault(const Constant(false))();
   TextColumn get customSurnameChange => text().nullable()();
   TextColumn get wifeMarriedSurname => text().nullable()();
@@ -61,18 +65,21 @@ class FamiliesV2 extends Table {
   DateTimeColumn get divorceDate => dateTime().nullable()();
   TextColumn get divorceDateQualifier => text().nullable()();
   TextColumn get divorcePlace => text().nullable()();
-  BoolColumn get wifeRevertedToMaiden => boolean().withDefault(const Constant(false))();
-  BoolColumn get husbandRevertedName => boolean().withDefault(const Constant(false))();
+  BoolColumn get wifeRevertedToMaiden =>
+      boolean().withDefault(const Constant(false))();
+  BoolColumn get husbandRevertedName =>
+      boolean().withDefault(const Constant(false))();
 
   /// Partnership kind. Reserved for distinguishing marriage / partnership /
   /// cohabitation; currently always the default.
-  TextColumn get relationshipType => text().withDefault(const Constant('marriage'))();
+  TextColumn get relationshipType =>
+      text().withDefault(const Constant('marriage'))();
 
-  BoolColumn get isPrimaryMarriage => boolean().withDefault(const Constant(false))();
+  BoolColumn get isPrimaryMarriage =>
+      boolean().withDefault(const Constant(false))();
 
   TextColumn get notes => text().nullable()();
   TextColumn get privateNotes => text().nullable()();
-
 
   BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
 
@@ -84,11 +91,11 @@ class FamiliesV2 extends Table {
 
   @override
   List<String> get customConstraints => [
-        // The same couple must not be recorded twice. SQLite treats NULLs as
-        // distinct in a UNIQUE constraint, so this covers couples only; that at
-        // most one single-parent family exists per partner is enforced by
-        // `RelationshipRepository` (drift 2.33 `@TableIndex` cannot declare a
-        // partial index).
-        'UNIQUE(husband_id, wife_id)',
-      ];
+    // The same couple must not be recorded twice. SQLite treats NULLs as
+    // distinct in a UNIQUE constraint, so this covers couples only; that at
+    // most one single-parent family exists per partner is enforced by
+    // `RelationshipRepository` (drift 2.33 `@TableIndex` cannot declare a
+    // partial index).
+    'UNIQUE(husband_id, wife_id)',
+  ];
 }

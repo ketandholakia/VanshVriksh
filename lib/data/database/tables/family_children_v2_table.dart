@@ -18,26 +18,24 @@ import 'genealogy_persons_table.dart';
 class FamilyChildrenV2 extends Table {
   TextColumn get id => text()();
 
-  TextColumn get familyId => text().references(FamiliesV2, #id, onDelete: KeyAction.restrict)();
+  TextColumn get familyId =>
+      text().references(FamiliesV2, #id, onDelete: KeyAction.restrict)();
 
   @ReferenceName('childFamilyLinks')
-  TextColumn get childId => text().references(
-        GenealogyPersons,
-        #id,
-        onDelete: KeyAction.restrict,
-      )();
+  TextColumn get childId =>
+      text().references(GenealogyPersons, #id, onDelete: KeyAction.restrict)();
 
   IntColumn get birthOrder => integer().nullable()();
 
   /// biological / adopted / foster / step / unknown
-  TextColumn get relationshipType => text().withDefault(const Constant('biological'))();
+  TextColumn get relationshipType =>
+      text().withDefault(const Constant('biological'))();
 
   TextColumn get childSurnameAtBirth => text().nullable()();
   TextColumn get paternalRelationship => text().nullable()();
   TextColumn get maternalRelationship => text().nullable()();
 
   TextColumn get notes => text().nullable()();
-
 
   BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
 
@@ -49,7 +47,7 @@ class FamilyChildrenV2 extends Table {
 
   @override
   List<String> get customConstraints => [
-        // A child can appear at most once in the same family.
-        'UNIQUE(family_id, child_id)',
-      ];
+    // A child can appear at most once in the same family.
+    'UNIQUE(family_id, child_id)',
+  ];
 }

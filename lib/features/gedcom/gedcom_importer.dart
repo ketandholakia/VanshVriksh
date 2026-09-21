@@ -71,7 +71,7 @@ class GedcomImporter {
       final deatNode = node.getChild('DEAT');
       final deatDate = _parseDate(deatNode?.getChild('DATE')?.value);
       final deatPlace = deatNode?.getChild('PLAC')?.value;
-      
+
       final noteNode = node.getChild('NOTE');
 
       personsToInsert.add(
@@ -103,7 +103,7 @@ class GedcomImporter {
 
       final husbId = node.getChild('HUSB')?.value;
       final wifeId = node.getChild('WIFE')?.value;
-      
+
       final marrNode = node.getChild('MARR');
       final marrDate = _parseDate(marrNode?.getChild('DATE')?.value);
       final marrPlace = marrNode?.getChild('PLAC')?.value;
@@ -146,26 +146,40 @@ class GedcomImporter {
     // Insert everything in a transaction
     await _db.transaction(() async {
       await _db.batch((batch) {
-        batch.insertAll(_db.genealogyPersons, personsToInsert, mode: InsertMode.insertOrIgnore);
-        batch.insertAll(_db.familiesV2, familiesToInsert, mode: InsertMode.insertOrIgnore);
-        batch.insertAll(_db.familyChildrenV2, childrenToInsert, mode: InsertMode.insertOrIgnore);
+        batch.insertAll(
+          _db.genealogyPersons,
+          personsToInsert,
+          mode: InsertMode.insertOrIgnore,
+        );
+        batch.insertAll(
+          _db.familiesV2,
+          familiesToInsert,
+          mode: InsertMode.insertOrIgnore,
+        );
+        batch.insertAll(
+          _db.familyChildrenV2,
+          childrenToInsert,
+          mode: InsertMode.insertOrIgnore,
+        );
       });
     });
   }
 
   GedcomDateResult _parseDate(String? rawDate) {
     if (rawDate == null || rawDate.trim().isEmpty) return GedcomDateResult();
-    
+
     final parts = rawDate.trim().toUpperCase().split(' ');
     String? qualifier;
-    
+
     final qualifiers = ['ABT', 'CAL', 'EST', 'BEF', 'AFT', 'BET', 'AND'];
     if (qualifiers.contains(parts[0])) {
       qualifier = parts[0];
       parts.removeAt(0);
     }
-    
-    if (parts.isEmpty) return GedcomDateResult(raw: rawDate, qualifier: qualifier);
+
+    if (parts.isEmpty) {
+      return GedcomDateResult(raw: rawDate, qualifier: qualifier);
+    }
 
     // Try parsing basic "DD MMM YYYY" or "MMM YYYY" or "YYYY"
     int? year;
@@ -173,8 +187,18 @@ class GedcomImporter {
     int? day;
 
     final months = {
-      'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6,
-      'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12,
+      'JAN': 1,
+      'FEB': 2,
+      'MAR': 3,
+      'APR': 4,
+      'MAY': 5,
+      'JUN': 6,
+      'JUL': 7,
+      'AUG': 8,
+      'SEP': 9,
+      'OCT': 10,
+      'NOV': 11,
+      'DEC': 12,
     };
 
     for (final p in parts) {

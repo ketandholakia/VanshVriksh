@@ -65,7 +65,7 @@ void main() {
 
   /// dad + mom (partners) with one child, in the default tree.
   Future<({String dad, String mom, String kid, String familyId, String linkId})>
-      coupleWithChild() async {
+  coupleWithChild() async {
     final dad = await addPerson(firstName: 'Dad');
     final mom = await addPerson(firstName: 'Mom', gender: 'F');
     final kid = await addPerson(firstName: 'Kid');
@@ -82,7 +82,9 @@ void main() {
 
   Future<void> addOtherTree() async {
     final now = DateTime.now();
-    await db.into(db.familyTrees).insert(
+    await db
+        .into(db.familyTrees)
+        .insert(
           FamilyTreesCompanion.insert(
             id: otherTreeId,
             treeName: 'Another tree',
@@ -128,29 +130,33 @@ void main() {
       expect((await db.select(db.familyChildrenV2).get()).length, before.links);
     });
 
-    test('a partner is detached and the family survives for the spouse',
-        () async {
-      final family = await coupleWithChild();
+    test(
+      'a partner is detached and the family survives for the spouse',
+      () async {
+        final family = await coupleWithChild();
 
-      await people.deletePerson(family.dad);
+        await people.deletePerson(family.dad);
 
-      // The family stays live, now with a single recorded partner.
-      final familyRow = (await db.select(db.familiesV2).get()).single;
-      expect(familyRow.isDeleted, isFalse);
-      expect(familyRow.husbandId, isNull);
-      expect(familyRow.wifeId, family.mom);
+        // The family stays live, now with a single recorded partner.
+        final familyRow = (await db.select(db.familiesV2).get()).single;
+        expect(familyRow.isDeleted, isFalse);
+        expect(familyRow.husbandId, isNull);
+        expect(familyRow.wifeId, family.mom);
 
-      final partnerships = await relationships.getPartnerships(treeId);
-      expect(partnerships, hasLength(1));
-      expect(partnerships.single.partnerIds, [family.mom]);
+        final partnerships = await relationships.getPartnerships(treeId);
+        expect(partnerships, hasLength(1));
+        expect(partnerships.single.partnerIds, [family.mom]);
 
-      // The child keeps the living parent and loses the removed one.
-      expect(
-        (await relationships.getParents(family.kid)).map((p) => p.id),
-        [family.mom],
-      );
-      expect((await relationships.getChildren(family.mom)).single.id, family.kid);
-    });
+        // The child keeps the living parent and loses the removed one.
+        expect((await relationships.getParents(family.kid)).map((p) => p.id), [
+          family.mom,
+        ]);
+        expect(
+          (await relationships.getChildren(family.mom)).single.id,
+          family.kid,
+        );
+      },
+    );
 
     test('a person who is a child is hidden from every lookup, and the link '
         'row is left intact so the delete is reversible', () async {
@@ -169,30 +175,34 @@ void main() {
       expect(await relationships.getSiblings(family.kid), isEmpty);
     });
 
-    test('the only parent of a family retires that family and its links',
-        () async {
-      final dad = await addPerson(firstName: 'Dad');
-      final kid = await addPerson(firstName: 'Kid');
-      await relationships.addParentChildRelationship(
-        treeId: treeId,
-        parentId: dad,
-        childId: kid,
-      );
+    test(
+      'the only parent of a family retires that family and its links',
+      () async {
+        final dad = await addPerson(firstName: 'Dad');
+        final kid = await addPerson(firstName: 'Kid');
+        await relationships.addParentChildRelationship(
+          treeId: treeId,
+          parentId: dad,
+          childId: kid,
+        );
 
-      await people.deletePerson(dad);
+        await people.deletePerson(dad);
 
-      expect((await db.select(db.familiesV2).get()).single.isDeleted, isTrue);
-      expect(
-        (await db.select(db.familyChildrenV2).get()).single.isDeleted,
-        isTrue,
-      );
-      expect((await people.getPersonById(kid))!.isDeleted, isFalse);
-    });
+        expect((await db.select(db.familiesV2).get()).single.isDeleted, isTrue);
+        expect(
+          (await db.select(db.familyChildrenV2).get()).single.isDeleted,
+          isTrue,
+        );
+        expect((await people.getPersonById(kid))!.isDeleted, isFalse);
+      },
+    );
 
     test('person-scoped records are kept and become unreachable', () async {
       final id = await addPerson(firstName: 'HasEverything');
       final now = DateTime(2000);
-      await db.into(db.events).insert(
+      await db
+          .into(db.events)
+          .insert(
             EventsCompanion.insert(
               id: 'event-1',
               personId: id,
@@ -201,7 +211,9 @@ void main() {
               updatedAt: now,
             ),
           );
-      await db.into(db.mediaItems).insert(
+      await db
+          .into(db.mediaItems)
+          .insert(
             MediaItemsCompanion.insert(
               id: 'media-1',
               personId: id,
@@ -210,7 +222,9 @@ void main() {
               createdAt: now,
             ),
           );
-      await db.into(db.researchNotes).insert(
+      await db
+          .into(db.researchNotes)
+          .insert(
             ResearchNotesCompanion.insert(
               id: 'note-1',
               personId: Value(id),
@@ -231,22 +245,25 @@ void main() {
       );
     });
 
-    test('restore brings the person back and the tree stays coherent',
-        () async {
-      final family = await coupleWithChild();
-      await people.deletePerson(family.dad);
+    test(
+      'restore brings the person back and the tree stays coherent',
+      () async {
+        final family = await coupleWithChild();
+        await people.deletePerson(family.dad);
 
-      await people.restorePerson(family.dad);
+        await people.restorePerson(family.dad);
 
-      expect((await people.getPersonById(family.dad))!.isDeleted, isFalse);
-      expect((await people.getPeopleByTree(treeId)), hasLength(3));
-      // The partner slot was cleared by the delete and is not rebuilt, so the
-      // person is back in the tree without inventing a relationship.
-      final partnerships = await relationships.getPartnerships(treeId);
-      expect(partnerships.single.partnerIds, [family.mom]);
-      expect((await relationships.getParents(family.kid)).map((p) => p.id),
-          [family.mom]);
-    });
+        expect((await people.getPersonById(family.dad))!.isDeleted, isFalse);
+        expect((await people.getPeopleByTree(treeId)), hasLength(3));
+        // The partner slot was cleared by the delete and is not rebuilt, so the
+        // person is back in the tree without inventing a relationship.
+        final partnerships = await relationships.getPartnerships(treeId);
+        expect(partnerships.single.partnerIds, [family.mom]);
+        expect((await relationships.getParents(family.kid)).map((p) => p.id), [
+          family.mom,
+        ]);
+      },
+    );
 
     test('a merged person cannot be deleted or restored', () async {
       final survivor = await addPerson(firstName: 'Ram');
@@ -338,26 +355,31 @@ void main() {
       );
     });
 
-    test('a partnership with children is refused, and nothing changes',
-        () async {
-      final family = await coupleWithChild();
+    test(
+      'a partnership with children is refused, and nothing changes',
+      () async {
+        final family = await coupleWithChild();
 
-      await expectLater(
-        relationships.removeSpouseRelationship(
-          treeId: treeId,
-          personAId: family.dad,
-          personBId: family.mom,
-        ),
-        throwsStateError,
-      );
+        await expectLater(
+          relationships.removeSpouseRelationship(
+            treeId: treeId,
+            personAId: family.dad,
+            personBId: family.mom,
+          ),
+          throwsStateError,
+        );
 
-      expect((await db.select(db.familiesV2).get()).single.isDeleted, isFalse);
-      expect(
-        (await db.select(db.familyChildrenV2).get()).single.isDeleted,
-        isFalse,
-      );
-      expect(await relationships.getChildren(family.dad), hasLength(1));
-    });
+        expect(
+          (await db.select(db.familiesV2).get()).single.isDeleted,
+          isFalse,
+        );
+        expect(
+          (await db.select(db.familyChildrenV2).get()).single.isDeleted,
+          isFalse,
+        );
+        expect(await relationships.getChildren(family.dad), hasLength(1));
+      },
+    );
 
     test('a partnership with children ends only with an explicit instruction, '
         'and still never deletes a person', () async {
@@ -384,29 +406,34 @@ void main() {
       expect((await people.getPersonById(family.mom))!.isDeleted, isFalse);
     });
 
-    test('removing the only parent leaves the partnership family live',
-        () async {
-      final dad = await addPerson(firstName: 'Dad');
-      final kid = await addPerson(firstName: 'Kid');
-      await relationships.addParentChildRelationship(
-        treeId: treeId,
-        parentId: dad,
-        childId: kid,
-      );
-
-      // No co-parent, so this needs no acknowledgement.
-      expect(
-        await relationships.removeParentChildRelationship(
+    test(
+      'removing the only parent leaves the partnership family live',
+      () async {
+        final dad = await addPerson(firstName: 'Dad');
+        final kid = await addPerson(firstName: 'Kid');
+        await relationships.addParentChildRelationship(
           treeId: treeId,
           parentId: dad,
           childId: kid,
-        ),
-        1,
-      );
-      expect((await relationships.getChildren(dad)), isEmpty);
-      expect((await db.select(db.familiesV2).get()).single.isDeleted, isFalse);
-      expect((await people.getPersonById(kid))!.isDeleted, isFalse);
-    });
+        );
+
+        // No co-parent, so this needs no acknowledgement.
+        expect(
+          await relationships.removeParentChildRelationship(
+            treeId: treeId,
+            parentId: dad,
+            childId: kid,
+          ),
+          1,
+        );
+        expect((await relationships.getChildren(dad)), isEmpty);
+        expect(
+          (await db.select(db.familiesV2).get()).single.isDeleted,
+          isFalse,
+        );
+        expect((await people.getPersonById(kid))!.isDeleted, isFalse);
+      },
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -432,29 +459,31 @@ void main() {
       expect(await relationships.getChildren(family.dad), isEmpty);
     });
 
-    test('removing the same relationship twice reports nothing removed',
-        () async {
-      final family = await coupleWithChild();
+    test(
+      'removing the same relationship twice reports nothing removed',
+      () async {
+        final family = await coupleWithChild();
 
-      expect(
-        await relationships.removeParentChildRelationship(
-          treeId: treeId,
-          parentId: family.dad,
-          childId: family.kid,
-          removeCoParent: true,
-        ),
-        1,
-      );
-      expect(
-        await relationships.removeParentChildRelationship(
-          treeId: treeId,
-          parentId: family.dad,
-          childId: family.kid,
-          removeCoParent: true,
-        ),
-        0,
-      );
-    });
+        expect(
+          await relationships.removeParentChildRelationship(
+            treeId: treeId,
+            parentId: family.dad,
+            childId: family.kid,
+            removeCoParent: true,
+          ),
+          1,
+        );
+        expect(
+          await relationships.removeParentChildRelationship(
+            treeId: treeId,
+            parentId: family.dad,
+            childId: family.kid,
+            removeCoParent: true,
+          ),
+          0,
+        );
+      },
+    );
 
     test('an unrelated pair reports 0', () async {
       final dad = await addPerson(firstName: 'Dad');
@@ -496,7 +525,9 @@ void main() {
   group('tree deletion', () {
     test('an empty tree is deleted', () async {
       final now = DateTime.now();
-      await db.into(db.familyTrees).insert(
+      await db
+          .into(db.familyTrees)
+          .insert(
             FamilyTreesCompanion.insert(
               id: 'empty-tree',
               treeName: 'Empty',
@@ -528,7 +559,9 @@ void main() {
     test('the purge preview counts every owned record', () async {
       final family = await coupleWithChild();
       final now = DateTime(2000);
-      await db.into(db.events).insert(
+      await db
+          .into(db.events)
+          .insert(
             EventsCompanion.insert(
               id: 'event-1',
               personId: family.kid,
@@ -537,7 +570,9 @@ void main() {
               updatedAt: now,
             ),
           );
-      await db.into(db.mediaItems).insert(
+      await db
+          .into(db.mediaItems)
+          .insert(
             MediaItemsCompanion.insert(
               id: 'media-1',
               personId: family.kid,
@@ -546,7 +581,9 @@ void main() {
               createdAt: now,
             ),
           );
-      await db.into(db.researchNotes).insert(
+      await db
+          .into(db.researchNotes)
+          .insert(
             ResearchNotesCompanion.insert(
               id: 'note-1',
               personId: Value(family.kid),
@@ -572,40 +609,47 @@ void main() {
       expect(preview.duplicateMarkers, 1);
     });
 
-    test('a purge removes every owned record and reports orphaned files',
-        () async {
-      final family = await coupleWithChild();
-      final now = DateTime(2000);
-      await people.updatePerson(
-        GenealogyPersonsCompanion(
-          id: Value(family.dad),
-          profilePhotoPath: const Value('/tmp/dad.jpg'),
-        ),
-      );
-      await db.into(db.mediaItems).insert(
-            MediaItemsCompanion.insert(
-              id: 'media-1',
-              personId: family.kid,
-              filePath: '/tmp/kid.jpg',
-              mediaType: 'photo',
-              createdAt: now,
-            ),
-          );
-      // A soft-deleted person is purged too.
-      final extra = await addPerson(firstName: 'Removed');
-      await people.deletePerson(extra);
+    test(
+      'a purge removes every owned record and reports orphaned files',
+      () async {
+        final family = await coupleWithChild();
+        final now = DateTime(2000);
+        await people.updatePerson(
+          GenealogyPersonsCompanion(
+            id: Value(family.dad),
+            profilePhotoPath: const Value('/tmp/dad.jpg'),
+          ),
+        );
+        await db
+            .into(db.mediaItems)
+            .insert(
+              MediaItemsCompanion.insert(
+                id: 'media-1',
+                personId: family.kid,
+                filePath: '/tmp/kid.jpg',
+                mediaType: 'photo',
+                createdAt: now,
+              ),
+            );
+        // A soft-deleted person is purged too.
+        final extra = await addPerson(firstName: 'Removed');
+        await people.deletePerson(extra);
 
-      final result = await trees.purgeTree(treeId);
+        final result = await trees.purgeTree(treeId);
 
-      expect(result.people, 4, reason: 'including the soft-deleted person');
-      expect(result.orphanedFilePaths, containsAll(['/tmp/dad.jpg', '/tmp/kid.jpg']));
-      expect(await trees.getFamilyTreeById(treeId), isNull);
-      expect(await db.select(db.genealogyPersons).get(), isEmpty);
-      expect(await db.select(db.familiesV2).get(), isEmpty);
-      expect(await db.select(db.familyChildrenV2).get(), isEmpty);
-      expect(await db.select(db.mediaItems).get(), isEmpty);
-      expect(await db.select(db.familyTrees).get(), isEmpty);
-    });
+        expect(result.people, 4, reason: 'including the soft-deleted person');
+        expect(
+          result.orphanedFilePaths,
+          containsAll(['/tmp/dad.jpg', '/tmp/kid.jpg']),
+        );
+        expect(await trees.getFamilyTreeById(treeId), isNull);
+        expect(await db.select(db.genealogyPersons).get(), isEmpty);
+        expect(await db.select(db.familiesV2).get(), isEmpty);
+        expect(await db.select(db.familyChildrenV2).get(), isEmpty);
+        expect(await db.select(db.mediaItems).get(), isEmpty);
+        expect(await db.select(db.familyTrees).get(), isEmpty);
+      },
+    );
 
     test('a purge leaves another tree completely untouched', () async {
       await addOtherTree();
@@ -627,10 +671,7 @@ void main() {
         otherPerson,
       );
       expect(await people.getFamiliesForPerson(otherPerson), hasLength(1));
-      expect(
-        (await db.select(db.familiesV2).get()).single.id,
-        otherFamilyId,
-      );
+      expect((await db.select(db.familiesV2).get()).single.id, otherFamilyId);
     });
 
     test('purging an unknown tree is reported', () async {
@@ -642,7 +683,9 @@ void main() {
       await trees.purgeTree(treeId);
 
       final now = DateTime.now();
-      await db.into(db.familyTrees).insert(
+      await db
+          .into(db.familyTrees)
+          .insert(
             FamilyTreesCompanion.insert(
               id: treeId,
               treeName: 'Rebuilt',
@@ -660,7 +703,9 @@ void main() {
     test('a person who still has events cannot be hard-deleted', () async {
       final id = await addPerson(firstName: 'HasEvents');
       final now = DateTime(2000);
-      await db.into(db.events).insert(
+      await db
+          .into(db.events)
+          .insert(
             EventsCompanion.insert(
               id: 'event-1',
               personId: id,
@@ -689,9 +734,9 @@ void main() {
       final family = await coupleWithChild();
 
       await expectLater(
-        (db.delete(db.familiesV2)
-              ..where((t) => t.id.equals(family.familyId)))
-            .go(),
+        (db.delete(
+          db.familiesV2,
+        )..where((t) => t.id.equals(family.familyId))).go(),
         throwsA(anything),
       );
     });
@@ -700,9 +745,9 @@ void main() {
       final family = await coupleWithChild();
 
       await expectLater(
-        (db.delete(db.genealogyPersons)
-              ..where((t) => t.id.equals(family.dad)))
-            .go(),
+        (db.delete(
+          db.genealogyPersons,
+        )..where((t) => t.id.equals(family.dad))).go(),
         throwsA(anything),
       );
     });

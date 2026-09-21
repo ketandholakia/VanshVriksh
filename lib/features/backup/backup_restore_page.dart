@@ -94,9 +94,9 @@ class _BackupRestorePageState extends ConsumerState<BackupRestorePage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Backup failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Backup failed: $e')));
     } finally {
       if (mounted) {
         setState(() {
@@ -132,9 +132,9 @@ class _BackupRestorePageState extends ConsumerState<BackupRestorePage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Cloud backup failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Cloud backup failed: $e')));
     } finally {
       if (mounted) {
         setState(() {
@@ -219,9 +219,9 @@ class _BackupRestorePageState extends ConsumerState<BackupRestorePage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Restore failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Restore failed: $e')));
     } finally {
       if (mounted) {
         setState(() {
@@ -270,9 +270,9 @@ class _BackupRestorePageState extends ConsumerState<BackupRestorePage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Cloud restore failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Cloud restore failed: $e')));
     } finally {
       if (mounted) {
         setState(() {
@@ -291,8 +291,7 @@ class _BackupRestorePageState extends ConsumerState<BackupRestorePage> {
     final backupFrequencyAsync = ref.watch(backupFrequencyProvider);
     final backupWifiOnlyAsync = ref.watch(backupWifiOnlyProvider);
     final backupEncryptAsync = ref.watch(backupEncryptProvider);
-    final backupAutoEnabled =
-        backupAutoAsync.value ?? backupAutoEnabledDefault;
+    final backupAutoEnabled = backupAutoAsync.value ?? backupAutoEnabledDefault;
     final selectedBackupFrequency =
         backupFrequencyAsync.value ?? backupFrequencyDefault;
     final backupWifiOnly = backupWifiOnlyAsync.value ?? backupWifiOnlyDefault;
@@ -344,8 +343,8 @@ class _BackupRestorePageState extends ConsumerState<BackupRestorePage> {
                     onChanged: backupAutoAsync.isLoading
                         ? null
                         : (value) => ref
-                            .read(backupAutoEnabledProvider.notifier)
-                            .setEnabled(value),
+                              .read(backupAutoEnabledProvider.notifier)
+                              .setEnabled(value),
                   ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<BackupFrequency>(
@@ -382,26 +381,30 @@ class _BackupRestorePageState extends ConsumerState<BackupRestorePage> {
                     contentPadding: EdgeInsets.zero,
                     secondary: const Icon(Icons.wifi_outlined),
                     title: const Text('Wi-Fi Only'),
-                    subtitle: const Text('Use Wi-Fi when auto backup is added.'),
+                    subtitle: const Text(
+                      'Use Wi-Fi when auto backup is added.',
+                    ),
                     value: backupWifiOnly,
                     onChanged: backupWifiOnlyAsync.isLoading
                         ? null
                         : (value) => ref
-                            .read(backupWifiOnlyProvider.notifier)
-                            .setEnabled(value),
+                              .read(backupWifiOnlyProvider.notifier)
+                              .setEnabled(value),
                   ),
                   const SizedBox(height: 8),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     secondary: const Icon(Icons.lock_outline),
                     title: const Text('Encrypt Backup'),
-                    subtitle: const Text('Protect backup files with a password.'),
+                    subtitle: const Text(
+                      'Protect backup files with a password.',
+                    ),
                     value: backupEncryptEnabled,
                     onChanged: backupEncryptAsync.isLoading
                         ? null
                         : (value) => ref
-                            .read(backupEncryptProvider.notifier)
-                            .setEnabled(value),
+                              .read(backupEncryptProvider.notifier)
+                              .setEnabled(value),
                   ),
                 ],
               ),
@@ -470,24 +473,29 @@ class _BackupRestorePageState extends ConsumerState<BackupRestorePage> {
                     children: [
                       const Text(
                         'Backup History',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(height: 8),
-                      ...history.take(5).map(
-                        (record) => ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Icon(
-                            record.location == 'google_drive'
-                                ? Icons.cloud_outlined
-                                : Icons.devices_outlined,
-                          ),
-                          title: Text(record.fileName),
-                          subtitle: Text(
-                            '${record.location} • ${record.timestamp}${record.encrypted ? ' • encrypted' : ''}',
-                          ),
-                          trailing: Text(record.status),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
+                      const SizedBox(height: 8),
+                      ...history
+                          .take(5)
+                          .map(
+                            (record) => ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(
+                                record.location == 'google_drive'
+                                    ? Icons.cloud_outlined
+                                    : Icons.devices_outlined,
+                              ),
+                              title: Text(record.fileName),
+                              subtitle: Text(
+                                '${record.location} • ${record.timestamp}${record.encrypted ? ' • encrypted' : ''}',
+                              ),
+                              trailing: Text(record.status),
+                            ),
+                          ),
                     ],
                   ),
                 ),

@@ -8,9 +8,7 @@ void main() {
   testWidgets('renders the VanshVriksh dashboard shell', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(
-      const ProviderScope(child: VanshVrikshApp()),
-    );
+    await tester.pumpWidget(const ProviderScope(child: VanshVrikshApp()));
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 }

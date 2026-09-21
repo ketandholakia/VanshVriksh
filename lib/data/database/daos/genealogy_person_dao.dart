@@ -35,12 +35,10 @@ class GenealogyPersonDao extends DatabaseAccessor<AppDatabase>
 
   /// Applies [changes] to the person with [id]. Absent companion fields are
   /// left untouched; explicitly `Value(null)` fields are cleared.
-  Future<int> updatePersonFields(
-    String id,
-    GenealogyPersonsCompanion changes,
-  ) {
-    return (update(genealogyPersons)..where((tbl) => tbl.id.equals(id)))
-        .write(changes);
+  Future<int> updatePersonFields(String id, GenealogyPersonsCompanion changes) {
+    return (update(
+      genealogyPersons,
+    )..where((tbl) => tbl.id.equals(id))).write(changes);
   }
 
   Future<int> markPersonDeleted(String id, DateTime at) {
@@ -64,13 +62,15 @@ class GenealogyPersonDao extends DatabaseAccessor<AppDatabase>
 
   /// Reads a person regardless of soft-delete state.
   Future<GenealogyPerson?> getPersonById(String id) {
-    return (select(genealogyPersons)..where((tbl) => tbl.id.equals(id)))
-        .getSingleOrNull();
+    return (select(
+      genealogyPersons,
+    )..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
   }
 
   Stream<GenealogyPerson?> watchPersonById(String id) {
-    return (select(genealogyPersons)..where((tbl) => tbl.id.equals(id)))
-        .watchSingleOrNull();
+    return (select(
+      genealogyPersons,
+    )..where((tbl) => tbl.id.equals(id))).watchSingleOrNull();
   }
 
   /// People in [treeId] that are not soft-deleted.
@@ -97,9 +97,9 @@ class GenealogyPersonDao extends DatabaseAccessor<AppDatabase>
   Future<List<GenealogyPerson>> getLivePeopleByIds(Iterable<String> ids) {
     final unique = ids.toSet().toList();
     if (unique.isEmpty) return Future.value(const []);
-    return (select(genealogyPersons)
-          ..where((tbl) => tbl.id.isIn(unique) & tbl.isDeleted.equals(false)))
-        .get();
+    return (select(
+      genealogyPersons,
+    )..where((tbl) => tbl.id.isIn(unique) & tbl.isDeleted.equals(false))).get();
   }
 
   Future<List<GenealogyPerson>> searchPeople({
@@ -107,21 +107,20 @@ class GenealogyPersonDao extends DatabaseAccessor<AppDatabase>
     required String query,
   }) {
     final searchText = '%${query.trim()}%';
-    return (select(genealogyPersons)
-          ..where(
-            (tbl) =>
-                tbl.treeId.equals(treeId) &
-                tbl.isDeleted.equals(false) &
-                (tbl.firstName.like(searchText) |
-                    tbl.middleName.like(searchText) |
-                    tbl.lastName.like(searchText) |
-                    tbl.birthSurname.like(searchText) |
-                    tbl.marriedSurname.like(searchText) |
-                    tbl.nickname.like(searchText) |
-                    tbl.birthPlace.like(searchText) |
-                    tbl.currentPlace.like(searchText) |
-                    tbl.customDisplayName.like(searchText)),
-          ))
+    return (select(genealogyPersons)..where(
+          (tbl) =>
+              tbl.treeId.equals(treeId) &
+              tbl.isDeleted.equals(false) &
+              (tbl.firstName.like(searchText) |
+                  tbl.middleName.like(searchText) |
+                  tbl.lastName.like(searchText) |
+                  tbl.birthSurname.like(searchText) |
+                  tbl.marriedSurname.like(searchText) |
+                  tbl.nickname.like(searchText) |
+                  tbl.birthPlace.like(searchText) |
+                  tbl.currentPlace.like(searchText) |
+                  tbl.customDisplayName.like(searchText)),
+        ))
         .get();
   }
 
@@ -145,24 +144,20 @@ class GenealogyPersonDao extends DatabaseAccessor<AppDatabase>
 
   /// Applies [changes] to the family with [id]. Keyed partial update.
   Future<int> updateFamilyFields(String id, FamiliesV2Companion changes) {
-    return (update(familiesV2)..where((tbl) => tbl.id.equals(id))).write(changes);
+    return (update(
+      familiesV2,
+    )..where((tbl) => tbl.id.equals(id))).write(changes);
   }
 
   Future<int> markFamilyDeleted(String id, DateTime at) {
     return (update(familiesV2)..where((tbl) => tbl.id.equals(id))).write(
-      FamiliesV2Companion(
-        isDeleted: const Value(true),
-        updatedAt: Value(at),
-      ),
+      FamiliesV2Companion(isDeleted: const Value(true), updatedAt: Value(at)),
     );
   }
 
   Future<int> restoreFamily(String id, DateTime at) {
     return (update(familiesV2)..where((tbl) => tbl.id.equals(id))).write(
-      FamiliesV2Companion(
-        isDeleted: const Value(false),
-        updatedAt: Value(at),
-      ),
+      FamiliesV2Companion(isDeleted: const Value(false), updatedAt: Value(at)),
     );
   }
 
@@ -199,8 +194,9 @@ class GenealogyPersonDao extends DatabaseAccessor<AppDatabase>
   }
 
   Future<FamiliesV2Data?> getFamilyById(String familyId) {
-    return (select(familiesV2)..where((tbl) => tbl.id.equals(familyId)))
-        .getSingleOrNull();
+    return (select(
+      familiesV2,
+    )..where((tbl) => tbl.id.equals(familyId))).getSingleOrNull();
   }
 
   // ---------------------------------------------------------------------------
@@ -216,8 +212,9 @@ class GenealogyPersonDao extends DatabaseAccessor<AppDatabase>
     String id,
     FamilyChildrenV2Companion changes,
   ) {
-    return (update(familyChildrenV2)..where((tbl) => tbl.id.equals(id)))
-        .write(changes);
+    return (update(
+      familyChildrenV2,
+    )..where((tbl) => tbl.id.equals(id))).write(changes);
   }
 
   Future<int> markFamilyChildDeleted(String id, DateTime at) {
@@ -267,12 +264,10 @@ class GenealogyPersonDao extends DatabaseAccessor<AppDatabase>
   }
 
   /// Child links of [familyId], including soft-deleted ones.
-  Future<List<FamilyChildrenV2Data>> getAnyChildrenForFamily(
-    String familyId,
-  ) {
-    return (select(familyChildrenV2)
-          ..where((tbl) => tbl.familyId.equals(familyId)))
-        .get();
+  Future<List<FamilyChildrenV2Data>> getAnyChildrenForFamily(String familyId) {
+    return (select(
+      familyChildrenV2,
+    )..where((tbl) => tbl.familyId.equals(familyId))).get();
   }
 
   /// The link row for ([familyId], [childId]) regardless of soft-delete state.
@@ -283,11 +278,9 @@ class GenealogyPersonDao extends DatabaseAccessor<AppDatabase>
     String familyId,
     String childId,
   ) {
-    return (select(familyChildrenV2)
-          ..where(
-            (tbl) =>
-                tbl.familyId.equals(familyId) & tbl.childId.equals(childId),
-          ))
+    return (select(familyChildrenV2)..where(
+          (tbl) => tbl.familyId.equals(familyId) & tbl.childId.equals(childId),
+        ))
         .getSingleOrNull();
   }
 

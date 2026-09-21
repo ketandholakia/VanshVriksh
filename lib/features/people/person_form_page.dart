@@ -235,7 +235,10 @@ class _PersonFormPageState extends ConsumerState<PersonFormPage> {
     return cleaned.isEmpty ? value : cleaned.join(', ');
   }
 
-  List<String> _buildPlaceSuggestions(List<GenealogyPerson> people, String query) {
+  List<String> _buildPlaceSuggestions(
+    List<GenealogyPerson> people,
+    String query,
+  ) {
     final normalizedQuery = query.trim().toLowerCase();
     final places = <String>{};
 
@@ -667,7 +670,9 @@ class _PersonFormPageState extends ConsumerState<PersonFormPage> {
       } else {
         final personId = await repository.addPerson(
           treeId: AppConstants.defaultTreeId,
-          firstName: _firstNameController.text.trim().isEmpty ? 'Unknown' : _firstNameController.text.trim(),
+          firstName: _firstNameController.text.trim().isEmpty
+              ? 'Unknown'
+              : _firstNameController.text.trim(),
           middleName: _emptyToNull(_middleNameController.text),
           lastName: _emptyToNull(_birthSurnameController.text),
           birthSurname: _emptyToNull(_birthSurnameController.text),

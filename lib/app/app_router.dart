@@ -46,21 +46,21 @@ final GoRouter appRouter = GoRouter(
           name: 'people',
           builder: (context, state) => const PeopleListPage(),
         ),
-    GoRoute(
-      path: '/people/duplicates',
-      name: 'people-duplicates',
-      builder: (context, state) => const DuplicateDetectionPage(),
-    ),
-    GoRoute(
-      path: '/integrity',
-      name: 'integrity',
-      builder: (context, state) => const IntegrityCheckPage(),
-    ),
-    GoRoute(
-      path: '/duplicates/marked',
-      name: 'marked-duplicates',
-      builder: (context, state) => const MarkedDuplicatesPage(),
-    ),
+        GoRoute(
+          path: '/people/duplicates',
+          name: 'people-duplicates',
+          builder: (context, state) => const DuplicateDetectionPage(),
+        ),
+        GoRoute(
+          path: '/integrity',
+          name: 'integrity',
+          builder: (context, state) => const IntegrityCheckPage(),
+        ),
+        GoRoute(
+          path: '/duplicates/marked',
+          name: 'marked-duplicates',
+          builder: (context, state) => const MarkedDuplicatesPage(),
+        ),
         GoRoute(
           path: '/tree',
           name: 'tree',
@@ -93,7 +93,8 @@ final GoRouter appRouter = GoRouter(
       name: 'person-add',
       builder: (context, state) {
         final linkPersonId = state.uri.queryParameters['linkPersonId'];
-        final siblingOfPersonId = state.uri.queryParameters['siblingOfPersonId'];
+        final siblingOfPersonId =
+            state.uri.queryParameters['siblingOfPersonId'];
         final relationKind = state.uri.queryParameters['relationKind'];
         final initialGender = state.uri.queryParameters['initialGender'];
         final returnTo = state.uri.queryParameters['returnTo'];
@@ -247,4 +248,3 @@ final GoRouter appRouter = GoRouter(
     ),
   ],
 );
-

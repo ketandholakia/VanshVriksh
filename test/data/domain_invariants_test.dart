@@ -157,10 +157,7 @@ void main() {
     await db.close();
   });
 
-  Future<String> addPerson({
-    required String firstName,
-    String gender = 'M',
-  }) {
+  Future<String> addPerson({required String firstName, String gender = 'M'}) {
     return people.addPerson(
       treeId: treeId,
       firstName: firstName,
@@ -170,7 +167,7 @@ void main() {
 
   /// dad + mom + two children, all linked.
   Future<({String dad, String mom, String kidA, String kidB, String familyId})>
-      familyOfFour() async {
+  familyOfFour() async {
     final dad = await addPerson(firstName: 'Dad');
     final mom = await addPerson(firstName: 'Mom', gender: 'F');
     final kidA = await addPerson(firstName: 'KidA');
@@ -295,7 +292,9 @@ void main() {
 
     test('a family with no partner at all', () async {
       final now = DateTime(2000);
-      await db.into(db.familiesV2).insert(
+      await db
+          .into(db.familiesV2)
+          .insert(
             FamiliesV2Companion.insert(
               id: 'empty-family',
               treeId: treeId,
@@ -347,7 +346,11 @@ void main() {
       final family = await familyOfFour();
 
       await people.deletePerson(family.dad);
-      expect(await violatedInvariants(db), isEmpty, reason: 'after deleting dad');
+      expect(
+        await violatedInvariants(db),
+        isEmpty,
+        reason: 'after deleting dad',
+      );
 
       await people.deletePerson(family.kidA);
       expect(
@@ -408,8 +411,9 @@ void main() {
         personAId: duplicate,
         personBId: wife,
       );
-      final familyId =
-          (await relationships.getFamiliesForPerson(duplicate)).single.id;
+      final familyId = (await relationships.getFamiliesForPerson(
+        duplicate,
+      )).single.id;
       await people.addChildToFamily(familyId: familyId, childId: kid);
       await people.markAsDuplicate(
         treeId: treeId,
@@ -440,7 +444,9 @@ void main() {
         personAId: duplicate,
         personBId: wife,
       );
-      await db.into(db.events).insert(
+      await db
+          .into(db.events)
+          .insert(
             EventsCompanion.insert(
               id: 'e1',
               personId: duplicate,
@@ -471,7 +477,9 @@ void main() {
     test('after a purge every tree-owned table is empty', () async {
       final now = DateTime(2000);
       final family = await familyOfFour();
-      await db.into(db.events).insert(
+      await db
+          .into(db.events)
+          .insert(
             EventsCompanion.insert(
               id: 'e1',
               personId: family.kidA,
@@ -480,7 +488,9 @@ void main() {
               updatedAt: now,
             ),
           );
-      await db.into(db.mediaItems).insert(
+      await db
+          .into(db.mediaItems)
+          .insert(
             MediaItemsCompanion.insert(
               id: 'm1',
               personId: family.kidA,
@@ -489,7 +499,9 @@ void main() {
               createdAt: now,
             ),
           );
-      await db.into(db.researchNotes).insert(
+      await db
+          .into(db.researchNotes)
+          .insert(
             ResearchNotesCompanion.insert(
               id: 'n1',
               personId: Value(family.kidA),
@@ -531,5 +543,4 @@ Future<Map<String, int>> dataFingerprint(AppDatabase db) async {
   };
 }
 
-Future<Map<String, int>> dataStateOf(AppDatabase db) =>
-    dataFingerprint(db);
+Future<Map<String, int>> dataStateOf(AppDatabase db) => dataFingerprint(db);

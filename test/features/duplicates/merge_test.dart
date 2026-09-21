@@ -58,7 +58,10 @@ void main() {
       biography: 'born in Springfield',
     );
 
-    await repository.mergePeople(survivorId: survivorId, duplicateId: duplicateId);
+    await repository.mergePeople(
+      survivorId: survivorId,
+      duplicateId: duplicateId,
+    );
 
     final survivor = (await repository.getPersonById(survivorId))!;
     final duplicate = (await repository.getPersonById(duplicateId))!;
@@ -120,8 +123,8 @@ void main() {
     expect(links.length, 1);
     expect(links.single.childId, child2Id);
 
-    final parentChild =
-        await relationshipRepository.getParentChildRelationships(treeId);
+    final parentChild = await relationshipRepository
+        .getParentChildRelationships(treeId);
     expect(parentChild.length, 1);
     expect(parentChild.single.parentId, parentId);
     expect(parentChild.single.childId, child2Id);
@@ -144,7 +147,10 @@ void main() {
     );
     expect(preview.relationshipCount, 1);
 
-    await repository.mergePeople(survivorId: replacementId, duplicateId: wifeId);
+    await repository.mergePeople(
+      survivorId: replacementId,
+      duplicateId: wifeId,
+    );
 
     final family = (await db.select(db.familiesV2).get()).single;
     expect(family.husbandId, husbandId);

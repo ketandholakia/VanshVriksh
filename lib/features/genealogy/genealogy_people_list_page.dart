@@ -10,9 +10,9 @@ import '../settings/app_settings_provider.dart';
 
 final genealogyPeopleByTreeProvider =
     StreamProvider.family<List<GenealogyPerson>, String>((ref, treeId) {
-  final repo = ref.watch(genealogyRepositoryProvider);
-  return repo.watchPeopleByTree(treeId);
-});
+      final repo = ref.watch(genealogyRepositoryProvider);
+      return repo.watchPeopleByTree(treeId);
+    });
 
 class GenealogyPeopleListPage extends ConsumerStatefulWidget {
   const GenealogyPeopleListPage({super.key});
@@ -22,20 +22,22 @@ class GenealogyPeopleListPage extends ConsumerStatefulWidget {
       _GenealogyPeopleListPageState();
 }
 
-class _GenealogyPeopleListPageState extends ConsumerState<GenealogyPeopleListPage> {
+class _GenealogyPeopleListPageState
+    extends ConsumerState<GenealogyPeopleListPage> {
   String _searchText = '';
 
   String _displayName(GenealogyPerson person) {
     final surname = (person.marriedSurname?.trim().isNotEmpty ?? false)
         ? person.marriedSurname!.trim()
         : (person.birthSurname?.trim().isNotEmpty ?? false)
-            ? person.birthSurname!.trim()
-            : (person.lastName ?? '').trim();
+        ? person.birthSurname!.trim()
+        : (person.lastName ?? '').trim();
 
     final parts = <String>[
       if ((person.prefix ?? '').trim().isNotEmpty) person.prefix!.trim(),
       person.firstName.trim(),
-      if ((person.middleName ?? '').trim().isNotEmpty) person.middleName!.trim(),
+      if ((person.middleName ?? '').trim().isNotEmpty)
+        person.middleName!.trim(),
       if (surname.isNotEmpty) surname,
       if ((person.suffix ?? '').trim().isNotEmpty) person.suffix!.trim(),
     ];
@@ -45,9 +47,12 @@ class _GenealogyPeopleListPageState extends ConsumerState<GenealogyPeopleListPag
 
   @override
   Widget build(BuildContext context) {
-    final peopleAsync = ref.watch(genealogyPeopleByTreeProvider(AppConstants.defaultTreeId));
+    final peopleAsync = ref.watch(
+      genealogyPeopleByTreeProvider(AppConstants.defaultTreeId),
+    );
     final photoFitMode =
-        ref.watch(personPhotoFitModeProvider).value ?? personPhotoFitModeDefault;
+        ref.watch(personPhotoFitModeProvider).value ??
+        personPhotoFitModeDefault;
 
     return Scaffold(
       appBar: AppBar(
@@ -69,28 +74,38 @@ class _GenealogyPeopleListPageState extends ConsumerState<GenealogyPeopleListPag
                 hintText: 'Search people',
                 prefixIcon: Icon(Icons.search),
               ),
-              onChanged: (value) => setState(() => _searchText = value.trim().toLowerCase()),
+              onChanged: (value) =>
+                  setState(() => _searchText = value.trim().toLowerCase()),
             ),
           ),
           Expanded(
             child: peopleAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, stackTrace) => Center(child: Text('Failed to load people:\n$error')),
+              error: (error, stackTrace) =>
+                  Center(child: Text('Failed to load people:\n$error')),
               data: (people) {
                 final filtered = people.where((person) {
                   if (_searchText.isEmpty) return true;
                   final name = _displayName(person).toLowerCase();
                   return name.contains(_searchText) ||
-                      (person.birthSurname ?? '').toLowerCase().contains(_searchText) ||
-                      (person.marriedSurname ?? '').toLowerCase().contains(_searchText) ||
+                      (person.birthSurname ?? '').toLowerCase().contains(
+                        _searchText,
+                      ) ||
+                      (person.marriedSurname ?? '').toLowerCase().contains(
+                        _searchText,
+                      ) ||
                       person.firstName.toLowerCase().contains(_searchText) ||
-                      (person.nickname ?? '').toLowerCase().contains(_searchText);
+                      (person.nickname ?? '').toLowerCase().contains(
+                        _searchText,
+                      );
                 }).toList();
 
                 if (filtered.isEmpty) {
                   return Center(
                     child: Text(
-                      _searchText.isEmpty ? 'No genealogy people yet.' : 'No matching people found.',
+                      _searchText.isEmpty
+                          ? 'No genealogy people yet.'
+                          : 'No matching people found.',
                     ),
                   );
                 }
@@ -109,12 +124,14 @@ class _GenealogyPeopleListPageState extends ConsumerState<GenealogyPeopleListPag
                           fitMode: photoFitMode,
                         ),
                         title: Text(_displayName(person)),
-                        subtitle: Text([
-                          if ((person.birthSurname ?? '').trim().isNotEmpty)
-                            'Birth: ${person.birthSurname}',
-                          if ((person.marriedSurname ?? '').trim().isNotEmpty)
-                            'Married: ${person.marriedSurname}',
-                        ].join(' • ')),
+                        subtitle: Text(
+                          [
+                            if ((person.birthSurname ?? '').trim().isNotEmpty)
+                              'Birth: ${person.birthSurname}',
+                            if ((person.marriedSurname ?? '').trim().isNotEmpty)
+                              'Married: ${person.marriedSurname}',
+                          ].join(' • '),
+                        ),
                         onTap: () => context.push('/v2/people/${person.id}'),
                       ),
                     );

@@ -19,7 +19,11 @@ typedef LegacyPerson = ({
 });
 
 /// A `relationships` row: (person, related person, type).
-typedef LegacyRelationship = (String personId, String relatedPersonId, String type);
+typedef LegacyRelationship = (
+  String personId,
+  String relatedPersonId,
+  String type,
+);
 
 /// The two legacy tables, exactly as an old database would have them. They are
 /// not part of the model any more — the upgrade reads them once, then drops them.

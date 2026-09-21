@@ -214,9 +214,7 @@ class _PersonFactFormPageState extends ConsumerState<PersonFactFormPage> {
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done && !_hasLoaded) {
           return Scaffold(
-            appBar: AppBar(
-              title: Text(_isEdit ? 'Edit Fact' : 'Add Fact'),
-            ),
+            appBar: AppBar(title: Text(_isEdit ? 'Edit Fact' : 'Add Fact')),
             body: const Center(child: CircularProgressIndicator()),
           );
         }
@@ -241,8 +239,9 @@ class _PersonFactFormPageState extends ConsumerState<PersonFactFormPage> {
                       labelText: 'Event Type *',
                       prefixIcon: Icon(Icons.event_outlined),
                     ),
-                    validator: (value) =>
-                        value == null || value.trim().isEmpty ? 'Enter event type' : null,
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? 'Enter event type'
+                        : null,
                   ),
                   const SizedBox(height: 16),
                   InkWell(
@@ -346,15 +345,18 @@ class _PersonFactFormPageState extends ConsumerState<PersonFactFormPage> {
                       alignLabelWithHint: true,
                       prefixIcon: Icon(Icons.sticky_note_2_outlined),
                     ),
-                    validator: (value) =>
-                        value == null || value.trim().isEmpty ? 'Enter note text' : null,
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? 'Enter note text'
+                        : null,
                   ),
                   const SizedBox(height: 16),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     secondary: const Icon(Icons.task_alt_outlined),
                     title: const Text('Resolved'),
-                    subtitle: const Text('Mark this research note as completed.'),
+                    subtitle: const Text(
+                      'Mark this research note as completed.',
+                    ),
                     value: _noteResolved,
                     onChanged: (value) {
                       setState(() {

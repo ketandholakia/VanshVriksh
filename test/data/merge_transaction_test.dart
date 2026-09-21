@@ -130,18 +130,12 @@ void main() {
         personBId: wife,
       );
 
-      await repository.mergePeople(
-        survivorId: replacement,
-        duplicateId: wife,
-      );
+      await repository.mergePeople(survivorId: replacement, duplicateId: wife);
 
       final family = (await db.select(db.familiesV2).get()).single;
       expect(family.husbandId, husband);
       expect(family.wifeId, replacement);
-      expect(
-        (await relationships.getSpouses(husband)).single.id,
-        replacement,
-      );
+      expect((await relationships.getSpouses(husband)).single.id, replacement);
     });
 
     test(
@@ -190,7 +184,9 @@ void main() {
       final duplicate = await addPerson(firstName: 'Ram');
       final now = DateTime(2000);
 
-      await db.into(db.events).insert(
+      await db
+          .into(db.events)
+          .insert(
             EventsCompanion.insert(
               id: 'e1',
               personId: duplicate,
@@ -199,7 +195,9 @@ void main() {
               updatedAt: now,
             ),
           );
-      await db.into(db.mediaItems).insert(
+      await db
+          .into(db.mediaItems)
+          .insert(
             MediaItemsCompanion.insert(
               id: 'm1',
               personId: duplicate,
@@ -208,7 +206,9 @@ void main() {
               createdAt: now,
             ),
           );
-      await db.into(db.researchNotes).insert(
+      await db
+          .into(db.researchNotes)
+          .insert(
             ResearchNotesCompanion.insert(
               id: 'n1',
               personId: Value(duplicate),
@@ -241,30 +241,38 @@ void main() {
       );
     });
 
-    test('a merge that fails validation leaves the database untouched',
-        () async {
-      final survivor = await addPerson(firstName: 'Ram');
-      final duplicate = await addPerson(firstName: 'Ram');
-      await repository.deletePerson(duplicate);
-      final before = {
-        'persons': (await db.select(db.genealogyPersons).get()).length,
-        'families': (await db.select(db.familiesV2).get()).length,
-        'links': (await db.select(db.familyChildrenV2).get()).length,
-      };
+    test(
+      'a merge that fails validation leaves the database untouched',
+      () async {
+        final survivor = await addPerson(firstName: 'Ram');
+        final duplicate = await addPerson(firstName: 'Ram');
+        await repository.deletePerson(duplicate);
+        final before = {
+          'persons': (await db.select(db.genealogyPersons).get()).length,
+          'families': (await db.select(db.familiesV2).get()).length,
+          'links': (await db.select(db.familyChildrenV2).get()).length,
+        };
 
-      await expectLater(
-        repository.mergePeople(survivorId: survivor, duplicateId: duplicate),
-        throwsArgumentError,
-      );
+        await expectLater(
+          repository.mergePeople(survivorId: survivor, duplicateId: duplicate),
+          throwsArgumentError,
+        );
 
-      expect((await db.select(db.genealogyPersons).get()).length, before['persons']);
-      expect((await db.select(db.familiesV2).get()).length, before['families']);
-      expect(
-        (await db.select(db.familyChildrenV2).get()).length,
-        before['links'],
-      );
-      expect((await repository.getPersonById(survivor))!.isDeleted, isFalse);
-    });
+        expect(
+          (await db.select(db.genealogyPersons).get()).length,
+          before['persons'],
+        );
+        expect(
+          (await db.select(db.familiesV2).get()).length,
+          before['families'],
+        );
+        expect(
+          (await db.select(db.familyChildrenV2).get()).length,
+          before['links'],
+        );
+        expect((await repository.getPersonById(survivor))!.isDeleted, isFalse);
+      },
+    );
 
     test('an unknown person cannot be merged', () async {
       final id = await addPerson(firstName: 'Ram');

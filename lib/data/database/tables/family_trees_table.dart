@@ -30,10 +30,10 @@ class FamilyTrees extends Table {
   /// (see `genealogy_persons_table.dart`). Both are enforced; neither is dropped.
   @ReferenceName('rootOfTrees')
   TextColumn get rootPersonId => text().nullable().references(
-        GenealogyPersons,
-        #id,
-        onDelete: KeyAction.setNull,
-      )();
+    GenealogyPersons,
+    #id,
+    onDelete: KeyAction.setNull,
+  )();
 
   DateTimeColumn get createdAt => dateTime()();
 

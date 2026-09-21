@@ -172,16 +172,56 @@ class _MergeChoicePanel extends StatelessWidget {
               style: TextStyle(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
-            _FieldPreviewRow(label: 'Name', survivor: survivor.fullName, source: source.fullName),
-            _FieldPreviewRow(label: 'First name', survivor: survivor.firstName, source: source.firstName),
-            _FieldPreviewRow(label: 'Middle name', survivor: survivor.middleName, source: source.middleName),
-            _FieldPreviewRow(label: 'Last name', survivor: survivor.lastName, source: source.lastName),
-            _FieldPreviewRow(label: 'Birth date', survivor: _fmtDate(survivor.birthDate), source: _fmtDate(source.birthDate)),
-            _FieldPreviewRow(label: 'Death date', survivor: _fmtDate(survivor.deathDate), source: _fmtDate(source.deathDate)),
-            _FieldPreviewRow(label: 'Birth place', survivor: survivor.birthPlace, source: source.birthPlace),
-            _FieldPreviewRow(label: 'Current place', survivor: survivor.currentPlace, source: source.currentPlace),
-            _FieldPreviewRow(label: 'Bio', survivor: survivor.biography, source: source.biography),
-            _FieldPreviewRow(label: 'Notes', survivor: survivor.notes, source: source.notes),
+            _FieldPreviewRow(
+              label: 'Name',
+              survivor: survivor.fullName,
+              source: source.fullName,
+            ),
+            _FieldPreviewRow(
+              label: 'First name',
+              survivor: survivor.firstName,
+              source: source.firstName,
+            ),
+            _FieldPreviewRow(
+              label: 'Middle name',
+              survivor: survivor.middleName,
+              source: source.middleName,
+            ),
+            _FieldPreviewRow(
+              label: 'Last name',
+              survivor: survivor.lastName,
+              source: source.lastName,
+            ),
+            _FieldPreviewRow(
+              label: 'Birth date',
+              survivor: _fmtDate(survivor.birthDate),
+              source: _fmtDate(source.birthDate),
+            ),
+            _FieldPreviewRow(
+              label: 'Death date',
+              survivor: _fmtDate(survivor.deathDate),
+              source: _fmtDate(source.deathDate),
+            ),
+            _FieldPreviewRow(
+              label: 'Birth place',
+              survivor: survivor.birthPlace,
+              source: source.birthPlace,
+            ),
+            _FieldPreviewRow(
+              label: 'Current place',
+              survivor: survivor.currentPlace,
+              source: source.currentPlace,
+            ),
+            _FieldPreviewRow(
+              label: 'Bio',
+              survivor: survivor.biography,
+              source: source.biography,
+            ),
+            _FieldPreviewRow(
+              label: 'Notes',
+              survivor: survivor.notes,
+              source: source.notes,
+            ),
             const Divider(height: 24),
             _SourceChoiceRow(
               label: 'Birth date',
@@ -289,7 +329,10 @@ class _SourceChoiceRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 110,
-            child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
           ),
           Expanded(
             child: Wrap(

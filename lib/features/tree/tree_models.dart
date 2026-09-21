@@ -38,7 +38,8 @@ class AncestrySlot {
   final GenealogyPerson? person;
 
   bool get isRoot => generation == 0;
-  bool get isHint => person == null && childId != null && relationToChild != null;
+  bool get isHint =>
+      person == null && childId != null && relationToChild != null;
   bool get isAncestor => person != null;
 }
 

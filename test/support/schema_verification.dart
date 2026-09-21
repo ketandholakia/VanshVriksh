@@ -24,11 +24,7 @@ Future<void> expectCanonicalSchema(
       )
       .get();
   final tables = tableRows.map((row) => row.data['name'] as String).toList();
-  expect(
-    tables,
-    expectedColumns.keys.toList(),
-    reason: 'table set$suffix',
-  );
+  expect(tables, expectedColumns.keys.toList(), reason: 'table set$suffix');
 
   for (final entry in expectedColumns.entries) {
     final rows = await db.customSelect('PRAGMA table_info(${entry.key})').get();
@@ -105,8 +101,9 @@ Future<Map<String, Object?>> schemaFingerprint(AppDatabase db) async {
   for (final table in tables) {
     final name = table.data['name'] as String;
     final columns = await db.customSelect('PRAGMA table_info($name)').get();
-    final foreignKeys =
-        await db.customSelect('PRAGMA foreign_key_list($name)').get();
+    final foreignKeys = await db
+        .customSelect('PRAGMA foreign_key_list($name)')
+        .get();
     final indexes = await db.customSelect("PRAGMA index_list('$name')").get();
 
     fingerprint[name] = {
@@ -138,8 +135,9 @@ Future<Map<String, Object?>> schemaFingerprint(AppDatabase db) async {
         "AND name NOT LIKE 'sqlite_autoindex%' ORDER BY name",
       )
       .get();
-  fingerprint['namedIndexes'] =
-      namedIndexes.map((row) => row.data['name']).toList();
+  fingerprint['namedIndexes'] = namedIndexes
+      .map((row) => row.data['name'])
+      .toList();
 
   return fingerprint;
 }

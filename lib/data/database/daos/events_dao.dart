@@ -24,14 +24,13 @@ class EventsDao extends DatabaseAccessor<AppDatabase> with _$EventsDaoMixin {
   Stream<List<Event>> watchEventsForPerson(String personId) {
     return (select(events)
           ..where((tbl) => tbl.personId.equals(personId))
-          ..orderBy([
-            (tbl) => OrderingTerm.desc(tbl.createdAt),
-          ]))
+          ..orderBy([(tbl) => OrderingTerm.desc(tbl.createdAt)]))
         .watch();
   }
 
   Future<Event?> getEventById(String eventId) {
-    return (select(events)..where((tbl) => tbl.id.equals(eventId)))
-        .getSingleOrNull();
+    return (select(
+      events,
+    )..where((tbl) => tbl.id.equals(eventId))).getSingleOrNull();
   }
 }

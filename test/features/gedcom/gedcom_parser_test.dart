@@ -45,7 +45,10 @@ void main() {
       final nodes = GedcomParser.parseLines(lines);
       final noteNode = nodes.first.getChild('NOTE');
 
-      expect(noteNode?.value, 'This is a long note\nthat continues on the next lineand has no space.');
+      expect(
+        noteNode?.value,
+        'This is a long note\nthat continues on the next lineand has no space.',
+      );
     });
   });
 }

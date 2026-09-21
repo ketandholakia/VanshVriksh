@@ -133,30 +133,32 @@ void main() {
       expect((await repository.getPersonById(id))!.notes, isNull);
     });
 
-    test('editing an imported person keeps qualifiers, places and life status',
-        () async {
-      final id = await addPerson(
-        firstName: 'Imported',
-        birthDate: DateTime(1900),
-        birthDateQualifier: 'ABT',
-        deathDate: DateTime(1970),
-        deathPlace: 'Surat',
-        isLiving: false,
-      );
+    test(
+      'editing an imported person keeps qualifiers, places and life status',
+      () async {
+        final id = await addPerson(
+          firstName: 'Imported',
+          birthDate: DateTime(1900),
+          birthDateQualifier: 'ABT',
+          deathDate: DateTime(1970),
+          deathPlace: 'Surat',
+          isLiving: false,
+        );
 
-      await repository.updatePerson(
-        GenealogyPersonsCompanion(
-          id: Value(id),
-          firstName: const Value('Imported Renamed'),
-        ),
-      );
+        await repository.updatePerson(
+          GenealogyPersonsCompanion(
+            id: Value(id),
+            firstName: const Value('Imported Renamed'),
+          ),
+        );
 
-      final after = (await repository.getPersonById(id))!;
-      expect(after.firstName, 'Imported Renamed');
-      expect(after.birthDateQualifier, 'ABT');
-      expect(after.deathPlace, 'Surat');
-      expect(after.isLiving, isFalse);
-    });
+        final after = (await repository.getPersonById(id))!;
+        expect(after.firstName, 'Imported Renamed');
+        expect(after.birthDateQualifier, 'ABT');
+        expect(after.deathPlace, 'Surat');
+        expect(after.isLiving, isFalse);
+      },
+    );
 
     test('editing an unknown person reports that nothing changed', () async {
       final changed = await repository.updatePerson(
@@ -239,35 +241,37 @@ void main() {
       expect(familyId, isNotEmpty);
     });
 
-    test('removing a child hides it without touching the family or its links',
-        () async {
-      final dad = await addPerson(firstName: 'Dad');
-      final mom = await addPerson(firstName: 'Mom', gender: 'F');
-      final kid = await addPerson(firstName: 'Kid');
-      await relationships.addSpouseRelationship(
-        treeId: treeId,
-        personAId: dad,
-        personBId: mom,
-      );
-      final familyId = (await repository.getFamiliesForPerson(dad)).single.id;
-      await repository.addChildToFamily(familyId: familyId, childId: kid);
+    test(
+      'removing a child hides it without touching the family or its links',
+      () async {
+        final dad = await addPerson(firstName: 'Dad');
+        final mom = await addPerson(firstName: 'Mom', gender: 'F');
+        final kid = await addPerson(firstName: 'Kid');
+        await relationships.addSpouseRelationship(
+          treeId: treeId,
+          personAId: dad,
+          personBId: mom,
+        );
+        final familyId = (await repository.getFamiliesForPerson(dad)).single.id;
+        await repository.addChildToFamily(familyId: familyId, childId: kid);
 
-      await repository.deletePerson(kid);
+        await repository.deletePerson(kid);
 
-      // Only the person is flagged: the family and the link row are intact, so
-      // the delete is exactly reversible.
-      final familyRow = (await db.select(db.familiesV2).get()).single;
-      expect(familyRow.isDeleted, isFalse);
-      expect(familyRow.husbandId, dad);
-      expect(familyRow.wifeId, mom);
-      expect(
-        (await db.select(db.familyChildrenV2).get()).single.isDeleted,
-        isFalse,
-      );
-      // ...and the removed child is gone from every lookup.
-      expect(await relationships.getChildren(dad), isEmpty);
-      expect(await relationships.getChildren(mom), isEmpty);
-    });
+        // Only the person is flagged: the family and the link row are intact, so
+        // the delete is exactly reversible.
+        final familyRow = (await db.select(db.familiesV2).get()).single;
+        expect(familyRow.isDeleted, isFalse);
+        expect(familyRow.husbandId, dad);
+        expect(familyRow.wifeId, mom);
+        expect(
+          (await db.select(db.familyChildrenV2).get()).single.isDeleted,
+          isFalse,
+        );
+        // ...and the removed child is gone from every lookup.
+        expect(await relationships.getChildren(dad), isEmpty);
+        expect(await relationships.getChildren(mom), isEmpty);
+      },
+    );
 
     test('a removed person is hidden from list, search, parents, children, '
         'siblings and spouses', () async {
@@ -306,7 +310,9 @@ void main() {
     test('child rows that reference the person are kept and come back on '
         'restore', () async {
       final id = await addPerson(firstName: 'HasEvents');
-      await db.into(db.events).insert(
+      await db
+          .into(db.events)
+          .insert(
             EventsCompanion.insert(
               id: 'event-1',
               personId: id,
@@ -346,20 +352,22 @@ void main() {
       expect((await repository.getPersonById(id))!.isDeleted, isTrue);
     });
 
-    test('the duplicate markers of a removed person are no longer reported',
-        () async {
-      final a = await addPerson(firstName: 'Same');
-      final b = await addPerson(firstName: 'Same');
-      await repository.markAsDuplicate(
-        treeId: treeId,
-        sourceId: a,
-        targetId: b,
-      );
-      expect(await repository.getDuplicateMarkers(treeId), hasLength(1));
+    test(
+      'the duplicate markers of a removed person are no longer reported',
+      () async {
+        final a = await addPerson(firstName: 'Same');
+        final b = await addPerson(firstName: 'Same');
+        await repository.markAsDuplicate(
+          treeId: treeId,
+          sourceId: a,
+          targetId: b,
+        );
+        expect(await repository.getDuplicateMarkers(treeId), hasLength(1));
 
-      await repository.deletePerson(b);
+        await repository.deletePerson(b);
 
-      expect(await repository.getDuplicateMarkers(treeId), isEmpty);
-    });
+        expect(await repository.getDuplicateMarkers(treeId), isEmpty);
+      },
+    );
   });
 }

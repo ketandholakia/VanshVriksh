@@ -26,10 +26,7 @@ class PersonAvatar extends StatelessWidget {
         : '?';
 
     if (!hasPhoto) {
-      return CircleAvatar(
-        radius: size / 2,
-        child: Text(initial),
-      );
+      return CircleAvatar(radius: size / 2, child: Text(initial));
     }
 
     return ClipOval(

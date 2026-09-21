@@ -25,7 +25,8 @@ class _PeopleListPageState extends ConsumerState<PeopleListPage> {
     final parts = <String>[
       if ((person.prefix ?? '').trim().isNotEmpty) person.prefix!.trim(),
       if ((person.firstName ?? '').trim().isNotEmpty) person.firstName!.trim(),
-      if ((person.middleName ?? '').trim().isNotEmpty) person.middleName!.trim(),
+      if ((person.middleName ?? '').trim().isNotEmpty)
+        person.middleName!.trim(),
       if ((person.lastName ?? '').trim().isNotEmpty) person.lastName!.trim(),
       if ((person.suffix ?? '').trim().isNotEmpty) person.suffix!.trim(),
     ];
@@ -37,7 +38,9 @@ class _PeopleListPageState extends ConsumerState<PeopleListPage> {
   @override
   Widget build(BuildContext context) {
     final uri = GoRouterState.of(context).uri;
-    final nextFilter = PersonListFilter.fromQuery(uri.queryParameters['filter']);
+    final nextFilter = PersonListFilter.fromQuery(
+      uri.queryParameters['filter'],
+    );
     if (nextFilter != _filter) {
       _filter = nextFilter;
     }
@@ -46,9 +49,11 @@ class _PeopleListPageState extends ConsumerState<PeopleListPage> {
     final dateFormat =
         ref.watch(dateDisplayFormatProvider).value ?? dateDisplayFormatDefault;
     final photoFitMode =
-        ref.watch(personPhotoFitModeProvider).value ?? personPhotoFitModeDefault;
+        ref.watch(personPhotoFitModeProvider).value ??
+        personPhotoFitModeDefault;
     final hideYearsForLiving =
-        ref.watch(hideYearsForLivingProvider).value ?? hideYearsForLivingDefault;
+        ref.watch(hideYearsForLivingProvider).value ??
+        hideYearsForLivingDefault;
 
     return Scaffold(
       appBar: AppBar(
@@ -80,8 +85,12 @@ class _PeopleListPageState extends ConsumerState<PeopleListPage> {
                     showCheckmark: false,
                     side: BorderSide(
                       color: selected
-                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.2)
-                          : Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.8),
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.primary.withValues(alpha: 0.2)
+                          : Theme.of(
+                              context,
+                            ).colorScheme.outlineVariant.withValues(alpha: 0.8),
                     ),
                     labelStyle: TextStyle(
                       fontWeight: FontWeight.w700,
@@ -206,36 +215,38 @@ enum PersonListFilter {
   }
 
   String get title => switch (this) {
-        PersonListFilter.all => 'People',
-        PersonListFilter.living => 'Living People',
-        PersonListFilter.deceased => 'Deceased People',
-        PersonListFilter.withPhotos => 'People With Photos',
-        PersonListFilter.missingPhotos => 'People Missing Photos',
-      };
+    PersonListFilter.all => 'People',
+    PersonListFilter.living => 'Living People',
+    PersonListFilter.deceased => 'Deceased People',
+    PersonListFilter.withPhotos => 'People With Photos',
+    PersonListFilter.missingPhotos => 'People Missing Photos',
+  };
 
   String get chipLabel => switch (this) {
-        PersonListFilter.all => 'All',
-        PersonListFilter.living => 'Living',
-        PersonListFilter.deceased => 'Deceased',
-        PersonListFilter.withPhotos => 'With Photos',
-        PersonListFilter.missingPhotos => 'Missing Photos',
-      };
+    PersonListFilter.all => 'All',
+    PersonListFilter.living => 'Living',
+    PersonListFilter.deceased => 'Deceased',
+    PersonListFilter.withPhotos => 'With Photos',
+    PersonListFilter.missingPhotos => 'Missing Photos',
+  };
 
   String get queryValue => switch (this) {
-        PersonListFilter.all => 'all',
-        PersonListFilter.living => 'living',
-        PersonListFilter.deceased => 'deceased',
-        PersonListFilter.withPhotos => 'with-photos',
-        PersonListFilter.missingPhotos => 'missing-photos',
-      };
+    PersonListFilter.all => 'all',
+    PersonListFilter.living => 'living',
+    PersonListFilter.deceased => 'deceased',
+    PersonListFilter.withPhotos => 'with-photos',
+    PersonListFilter.missingPhotos => 'missing-photos',
+  };
 
   bool matches(GenealogyPerson person) {
     return switch (this) {
       PersonListFilter.all => true,
       PersonListFilter.living => person.isLiving,
       PersonListFilter.deceased => !person.isLiving,
-      PersonListFilter.withPhotos => (person.profilePhotoPath ?? '').trim().isNotEmpty,
-      PersonListFilter.missingPhotos => (person.profilePhotoPath ?? '').trim().isEmpty,
+      PersonListFilter.withPhotos =>
+        (person.profilePhotoPath ?? '').trim().isNotEmpty,
+      PersonListFilter.missingPhotos =>
+        (person.profilePhotoPath ?? '').trim().isEmpty,
     };
   }
 }
@@ -264,14 +275,21 @@ class _EmptyPeopleView extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  hasSearch ? Icons.search_off_outlined : Icons.family_restroom_outlined,
+                  hasSearch
+                      ? Icons.search_off_outlined
+                      : Icons.family_restroom_outlined,
                   size: 72,
                   color: Theme.of(context).colorScheme.primary,
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  hasSearch ? 'No matching family member found' : 'No family members yet',
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                  hasSearch
+                      ? 'No matching family member found'
+                      : 'No family members yet',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
@@ -284,7 +302,8 @@ class _EmptyPeopleView extends StatelessWidget {
                 if (!hasSearch) ...[
                   const SizedBox(height: 20),
                   FilledButton.icon(
-                    onPressed: () => context.push('/people/add?returnTo=/people'),
+                    onPressed: () =>
+                        context.push('/people/add?returnTo=/people'),
                     icon: const Icon(Icons.person_add_alt_1),
                     label: const Text('Add First Person'),
                   ),
@@ -367,7 +386,10 @@ class _PersonListTile extends StatelessWidget {
                       children: [
                         Text(
                           displayName,
-                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -375,17 +397,26 @@ class _PersonListTile extends StatelessWidget {
                         Text(
                           [
                             if (lifespan.isNotEmpty) lifespan,
-                            if (birthPlace != null && birthPlace!.trim().isNotEmpty) birthPlace!,
+                            if (birthPlace != null &&
+                                birthPlace!.trim().isNotEmpty)
+                              birthPlace!,
                           ].join(' • '),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                          style: TextStyle(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
+                          ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.primary),
+                  Icon(
+                    Icons.chevron_right,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                 ],
               ),
             ),

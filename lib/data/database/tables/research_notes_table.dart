@@ -10,10 +10,10 @@ class ResearchNotes extends Table {
   TextColumn get id => text()();
 
   TextColumn get personId => text().nullable().references(
-        GenealogyPersons,
-        #id,
-        onDelete: KeyAction.restrict,
-      )();
+    GenealogyPersons,
+    #id,
+    onDelete: KeyAction.restrict,
+  )();
 
   TextColumn get noteText => text()();
 

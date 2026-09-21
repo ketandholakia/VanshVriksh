@@ -30,7 +30,8 @@ class GenealogyPersonFormPage extends ConsumerStatefulWidget {
       _GenealogyPersonFormPageState();
 }
 
-class _GenealogyPersonFormPageState extends ConsumerState<GenealogyPersonFormPage> {
+class _GenealogyPersonFormPageState
+    extends ConsumerState<GenealogyPersonFormPage> {
   final _formKey = GlobalKey<FormState>();
   final _firstNameController = TextEditingController();
   final _middleNameController = TextEditingController();
@@ -137,8 +138,7 @@ class _GenealogyPersonFormPageState extends ConsumerState<GenealogyPersonFormPag
       savedId = _loadedPersonId!;
     }
 
-    if (widget.linkPersonId != null &&
-        _loadedPersonId == null) {
+    if (widget.linkPersonId != null && _loadedPersonId == null) {
       final current = await repo.getPersonById(widget.linkPersonId!);
       if (current != null) {
         if (widget.relationKind == 'spouse') {
@@ -149,13 +149,13 @@ class _GenealogyPersonFormPageState extends ConsumerState<GenealogyPersonFormPag
               husbandId: current.gender == 'M'
                   ? current.id
                   : spouse.gender == 'M'
-                      ? spouse.id
-                      : current.id,
+                  ? spouse.id
+                  : current.id,
               wifeId: current.gender == 'F'
                   ? current.id
                   : spouse.gender == 'F'
-                      ? spouse.id
-                      : spouse.id,
+                  ? spouse.id
+                  : spouse.id,
               isPrimaryMarriage: true,
             );
           }
@@ -186,8 +186,8 @@ class _GenealogyPersonFormPageState extends ConsumerState<GenealogyPersonFormPag
       final relationLabel = widget.relationKind == 'spouse'
           ? 'spouse'
           : widget.relationKind == 'child'
-              ? 'child'
-              : 'person';
+          ? 'child'
+          : 'person';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Created and linked new $relationLabel successfully.'),
@@ -210,20 +210,15 @@ class _GenealogyPersonFormPageState extends ConsumerState<GenealogyPersonFormPag
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.personId == null ? 'Add Person (v2)' : 'Edit Person (v2)'),
-        actions: [
-          TextButton(
-            onPressed: _save,
-            child: const Text('Save'),
-          ),
-        ],
+        title: Text(
+          widget.personId == null ? 'Add Person (v2)' : 'Edit Person (v2)',
+        ),
+        actions: [TextButton(onPressed: _save, child: const Text('Save'))],
       ),
       body: Form(
         key: _formKey,
@@ -257,7 +252,9 @@ class _GenealogyPersonFormPageState extends ConsumerState<GenealogyPersonFormPag
             ],
             TextFormField(
               controller: _fullNameController,
-              decoration: const InputDecoration(labelText: 'Display Name Override'),
+              decoration: const InputDecoration(
+                labelText: 'Display Name Override',
+              ),
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(

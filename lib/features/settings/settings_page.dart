@@ -34,7 +34,8 @@ class SettingsPage extends ConsumerWidget {
     final themeModeAsync = ref.watch(appThemeModeProvider);
     final selectedThemeMode = themeModeAsync.value ?? appThemeModeDefault;
     final backupAutoAsync = ref.watch(backupAutoEnabledProvider);
-    final selectedBackupAuto = backupAutoAsync.value ?? backupAutoEnabledDefault;
+    final selectedBackupAuto =
+        backupAutoAsync.value ?? backupAutoEnabledDefault;
     final backupFrequencyAsync = ref.watch(backupFrequencyProvider);
     final selectedBackupFrequency =
         backupFrequencyAsync.value ?? backupFrequencyDefault;
@@ -101,7 +102,9 @@ class SettingsPage extends ConsumerWidget {
                     ListTile(
                       leading: const Icon(Icons.backup_outlined),
                       title: const Text('Backup & Restore'),
-                      subtitle: const Text('Export or restore your family tree data.'),
+                      subtitle: const Text(
+                        'Export or restore your family tree data.',
+                      ),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => context.push('/settings/backup'),
                     ),
@@ -109,7 +112,9 @@ class SettingsPage extends ConsumerWidget {
                     ListTile(
                       leading: const Icon(Icons.file_upload_outlined),
                       title: const Text('Import GEDCOM 5.5.1'),
-                      subtitle: const Text('Import genealogy records from a .ged file.'),
+                      subtitle: const Text(
+                        'Import genealogy records from a .ged file.',
+                      ),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => _importGedcom(context, ref),
                     ),
@@ -197,7 +202,9 @@ class SettingsPage extends ConsumerWidget {
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Encrypt Backup'),
-                        subtitle: const Text('Protect backups with a password.'),
+                        subtitle: const Text(
+                          'Protect backups with a password.',
+                        ),
                         value: selectedBackupEncrypt,
                         onChanged: backupEncryptAsync.isLoading
                             ? null
@@ -314,7 +321,7 @@ class SettingsPage extends ConsumerWidget {
                               style: TextStyle(fontWeight: FontWeight.w700),
                             ),
                           ),
-                      ],
+                        ],
                       ),
                       const SizedBox(height: 12),
                       Text(
@@ -1222,13 +1229,27 @@ Future<void> _importGedcom(BuildContext context, WidgetRef ref) async {
     final result = await FilePicker.platform.pickFiles(type: FileType.any);
     if (result != null && result.files.single.path != null) {
       final file = File(result.files.single.path!);
-      showDialog(context: context, barrierDismissible: false, builder: (context) => const Center(child: CircularProgressIndicator()));
-      await ref.read(gedcomImportProvider.notifier).importGedcomFile(file, AppConstants.defaultTreeId);
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+      await ref
+          .read(gedcomImportProvider.notifier)
+          .importGedcomFile(file, AppConstants.defaultTreeId);
       if (context.mounted) Navigator.of(context).pop();
-      if (context.mounted) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('GEDCOM Import Successful!'))); }
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('GEDCOM Import Successful!')),
+        );
+      }
     }
   } catch (e) {
     if (context.mounted) Navigator.of(context).pop();
-    if (context.mounted) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to import GEDCOM: $e'))); }
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to import GEDCOM: $e')));
+    }
   }
 }

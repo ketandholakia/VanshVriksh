@@ -5,6 +5,7 @@ import '../../data/database/app_database.dart';
 import '../../data/providers/genealogy_repository_provider.dart';
 import '../../data/providers/relationship_repository_provider.dart';
 import '../../core/extensions/genealogy_person_extensions.dart';
+
 class IntegrityIssue {
   const IntegrityIssue({
     required this.severity,
@@ -19,7 +20,9 @@ class IntegrityIssue {
   final String? personId;
 }
 
-final integrityIssuesProvider = FutureProvider<List<IntegrityIssue>>((ref) async {
+final integrityIssuesProvider = FutureProvider<List<IntegrityIssue>>((
+  ref,
+) async {
   final personRepo = ref.watch(genealogyRepositoryProvider);
   final relationshipRepo = ref.watch(relationshipRepositoryProvider);
 
@@ -38,7 +41,8 @@ final integrityIssuesProvider = FutureProvider<List<IntegrityIssue>>((ref) async
       final parent = byId[link.parentId];
       if (parent == null || parent.birthDate == null) continue;
 
-      final ageGap = person.birthDate!.difference(parent.birthDate!).inDays / 365.25;
+      final ageGap =
+          person.birthDate!.difference(parent.birthDate!).inDays / 365.25;
       if (ageGap < 0) {
         issues.add(
           IntegrityIssue(
@@ -89,7 +93,8 @@ final integrityIssuesProvider = FutureProvider<List<IntegrityIssue>>((ref) async
         IntegrityIssue(
           severity: 'error',
           title: 'Circular parent-child chain',
-          description: 'A circular parent-child chain exists in the current tree.',
+          description:
+              'A circular parent-child chain exists in the current tree.',
           personId: person.id,
         ),
       );

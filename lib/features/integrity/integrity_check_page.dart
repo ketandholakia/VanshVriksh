@@ -12,9 +12,7 @@ class IntegrityCheckPage extends ConsumerWidget {
     final issuesAsync = ref.watch(integrityIssuesProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Integrity Check'),
-      ),
+      appBar: AppBar(title: const Text('Integrity Check')),
       body: issuesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stackTrace) => Center(
@@ -52,7 +50,8 @@ class IntegrityCheckPage extends ConsumerWidget {
                   trailing: issue.personId == null
                       ? null
                       : TextButton(
-                          onPressed: () => context.push('/people/${issue.personId}'),
+                          onPressed: () =>
+                              context.push('/people/${issue.personId}'),
                           child: const Text('Open person'),
                         ),
                 ),

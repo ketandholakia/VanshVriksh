@@ -221,9 +221,11 @@ class GenealogyRepository {
     await _personDao.restorePerson(personId, DateTime.now());
   }
 
-  Future<GenealogyPerson?> getPersonById(String id) => _personDao.getPersonById(id);
+  Future<GenealogyPerson?> getPersonById(String id) =>
+      _personDao.getPersonById(id);
 
-  Stream<GenealogyPerson?> watchPersonById(String id) => _personDao.watchPersonById(id);
+  Stream<GenealogyPerson?> watchPersonById(String id) =>
+      _personDao.watchPersonById(id);
 
   Stream<List<GenealogyPerson>> watchPeopleByTree(String treeId) =>
       _personDao.watchPeopleByTree(treeId);
@@ -231,10 +233,10 @@ class GenealogyRepository {
   Future<List<GenealogyPerson>> searchPeople({
     required String treeId,
     required String query,
-  }) =>
-      _personDao.searchPeople(treeId: treeId, query: query);
+  }) => _personDao.searchPeople(treeId: treeId, query: query);
 
-  Future<List<GenealogyPerson>> getPeopleByTree(String treeId) => _personDao.getPeopleByTree(treeId);
+  Future<List<GenealogyPerson>> getPeopleByTree(String treeId) =>
+      _personDao.getPeopleByTree(treeId);
 
   /// Duplicate markers whose two people are both live and both in [treeId].
   ///
@@ -247,7 +249,9 @@ class GenealogyRepository {
     final people = await _personDao.getLivePeopleByIds([
       for (final marker in markers) ...[marker.personAId, marker.personBId],
     ]);
-    final treeByPerson = {for (final person in people) person.id: person.treeId};
+    final treeByPerson = {
+      for (final person in people) person.id: person.treeId,
+    };
 
     return markers
         .where(
@@ -287,26 +291,29 @@ class GenealogyRepository {
         ? (sourceId, targetId)
         : (targetId, sourceId);
 
-    await _database.into(_database.duplicateMarkers).insert(
-      DuplicateMarkersCompanion.insert(
-        id: IdGenerator.newId(),
-        personAId: personAId,
-        personBId: personBId,
-        reason: Value(reason),
-        createdAt: DateTime.now(),
-      ),
-      mode: InsertMode.insertOrIgnore,
-    );
+    await _database
+        .into(_database.duplicateMarkers)
+        .insert(
+          DuplicateMarkersCompanion.insert(
+            id: IdGenerator.newId(),
+            personAId: personAId,
+            personBId: personBId,
+            reason: Value(reason),
+            createdAt: DateTime.now(),
+          ),
+          mode: InsertMode.insertOrIgnore,
+        );
   }
 
   Future<void> deleteDuplicateMarker({
     required String personAId,
     required String personBId,
   }) async {
-    await (_database.delete(_database.duplicateMarkers)
-          ..where((t) =>
+    await (_database.delete(_database.duplicateMarkers)..where(
+          (t) =>
               (t.personAId.equals(personAId) & t.personBId.equals(personBId)) |
-              (t.personAId.equals(personBId) & t.personBId.equals(personAId))))
+              (t.personAId.equals(personBId) & t.personBId.equals(personAId)),
+        ))
         .go();
   }
 
@@ -314,26 +321,23 @@ class GenealogyRepository {
     required String survivorId,
     required String duplicateId,
   }) async {
-    final eventCount = (await (_database.select(_database.events)
-            ..where((t) => t.personId.equals(duplicateId)))
-          .get())
-        .length;
-    final noteCount = (await (_database.select(_database.researchNotes)
-            ..where((t) => t.personId.equals(duplicateId)))
-          .get())
-        .length;
-    final mediaCount = (await (_database.select(_database.mediaItems)
-            ..where((t) => t.personId.equals(duplicateId)))
-          .get())
-        .length;
+    final eventCount = (await (_database.select(
+      _database.events,
+    )..where((t) => t.personId.equals(duplicateId))).get()).length;
+    final noteCount = (await (_database.select(
+      _database.researchNotes,
+    )..where((t) => t.personId.equals(duplicateId))).get()).length;
+    final mediaCount = (await (_database.select(
+      _database.mediaItems,
+    )..where((t) => t.personId.equals(duplicateId))).get()).length;
     final families = await _personDao.getFamiliesForPerson(duplicateId);
-    final childLinks = (await (_database.select(_database.familyChildrenV2)
-            ..where(
-              (t) =>
-                  t.childId.equals(duplicateId) & t.isDeleted.equals(false),
-            ))
-          .get())
-        .length;
+    final childLinks =
+        (await (_database.select(_database.familyChildrenV2)..where(
+                  (t) =>
+                      t.childId.equals(duplicateId) & t.isDeleted.equals(false),
+                ))
+                .get())
+            .length;
 
     return DuplicateMergePreview(
       eventCount: eventCount,
@@ -446,8 +450,9 @@ class GenealogyRepository {
       // 1. Partnerships.
       for (final family in await _personDao.getFamiliesForPerson(duplicateId)) {
         final duplicateIsHusband = family.husbandId == duplicateId;
-        final otherPartnerId =
-            duplicateIsHusband ? family.wifeId : family.husbandId;
+        final otherPartnerId = duplicateIsHusband
+            ? family.wifeId
+            : family.husbandId;
 
         // Their own family: both slots hold the two people being merged.
         if (otherPartnerId == survivorId) {
@@ -503,18 +508,18 @@ class GenealogyRepository {
 
       // 2. Child links of the duplicate.
       final duplicateChildLinks =
-          await (_database.select(_database.familyChildrenV2)
-                ..where(
-                  (t) =>
-                      t.childId.equals(duplicateId) &
-                      t.isDeleted.equals(false),
-                ))
+          await (_database.select(_database.familyChildrenV2)..where(
+                (t) =>
+                    t.childId.equals(duplicateId) & t.isDeleted.equals(false),
+              ))
               .get();
       for (final link in duplicateChildLinks) {
         // `UNIQUE(family_id, child_id)` counts soft-deleted rows too, so this
         // clash check must consider them.
-        final existing =
-            await _personDao.getFamilyChildLink(link.familyId, survivorId);
+        final existing = await _personDao.getFamilyChildLink(
+          link.familyId,
+          survivorId,
+        );
         if (existing != null) {
           if (existing.isDeleted) {
             // A live link is about to exist for this pair again.
@@ -537,28 +542,31 @@ class GenealogyRepository {
       // 2b. Moving a family onto the survivor (rather than a link) can leave one
       //     child linked through two of the survivor's families, which would
       //     record the same parent twice. The extra link is removed.
-      childLinksCollapsed += await _collapseDuplicateParentageOf(survivorId, now);
+      childLinksCollapsed += await _collapseDuplicateParentageOf(
+        survivorId,
+        now,
+      );
 
       // 3. Repoint every row that references the duplicate.
-      await (_database.update(_database.surnameEvents)
-            ..where((t) => t.personId.equals(duplicateId)))
-          .write(
+      await (_database.update(
+        _database.surnameEvents,
+      )..where((t) => t.personId.equals(duplicateId))).write(
         SurnameEventsCompanion(
           personId: Value(survivorId),
           updatedAt: Value(now),
         ),
       );
-      await (_database.update(_database.surnameEvents)
-            ..where((t) => t.relatedPersonId.equals(duplicateId)))
-          .write(
+      await (_database.update(
+        _database.surnameEvents,
+      )..where((t) => t.relatedPersonId.equals(duplicateId))).write(
         SurnameEventsCompanion(
           relatedPersonId: Value(survivorId),
           updatedAt: Value(now),
         ),
       );
-      await (_database.update(_database.events)
-            ..where((t) => t.personId.equals(duplicateId)))
-          .write(
+      await (_database.update(
+        _database.events,
+      )..where((t) => t.personId.equals(duplicateId))).write(
         EventsCompanion(personId: Value(survivorId), updatedAt: Value(now)),
       );
       await (_database.update(_database.mediaItems)
@@ -693,13 +701,13 @@ class GenealogyRepository {
         ),
       );
 
-      final markers = await (_database.select(_database.duplicateMarkers)
-            ..where(
-              (t) =>
-                  t.personAId.equals(duplicateId) |
-                  t.personBId.equals(duplicateId),
-            ))
-          .get();
+      final markers =
+          await (_database.select(_database.duplicateMarkers)..where(
+                (t) =>
+                    t.personAId.equals(duplicateId) |
+                    t.personBId.equals(duplicateId),
+              ))
+              .get();
       for (final marker in markers) {
         final otherId = marker.personAId == duplicateId
             ? marker.personBId
@@ -710,27 +718,28 @@ class GenealogyRepository {
           final (low, high) = survivorId.compareTo(otherId) <= 0
               ? (survivorId, otherId)
               : (otherId, survivorId);
-          await _database.into(_database.duplicateMarkers).insert(
-            DuplicateMarkersCompanion.insert(
-              id: IdGenerator.newId(),
-              personAId: low,
-              personBId: high,
-              reason: Value(marker.reason),
-              createdAt: now,
-            ),
-            mode: InsertMode.insertOrIgnore,
-          );
+          await _database
+              .into(_database.duplicateMarkers)
+              .insert(
+                DuplicateMarkersCompanion.insert(
+                  id: IdGenerator.newId(),
+                  personAId: low,
+                  personBId: high,
+                  reason: Value(marker.reason),
+                  createdAt: now,
+                ),
+                mode: InsertMode.insertOrIgnore,
+              );
           markersRewritten++;
         } else {
           markersRemoved++;
         }
       }
-      await (_database.delete(_database.duplicateMarkers)
-            ..where(
-              (t) =>
-                  t.personAId.equals(duplicateId) |
-                  t.personBId.equals(duplicateId),
-            ))
+      await (_database.delete(_database.duplicateMarkers)..where(
+            (t) =>
+                t.personAId.equals(duplicateId) |
+                t.personBId.equals(duplicateId),
+          ))
           .go();
 
       return (
@@ -765,7 +774,8 @@ class GenealogyRepository {
 
     int partnerCount(String familyId) {
       final family = families.firstWhere((f) => f.id == familyId);
-      return (family.husbandId != null ? 1 : 0) + (family.wifeId != null ? 1 : 0);
+      return (family.husbandId != null ? 1 : 0) +
+          (family.wifeId != null ? 1 : 0);
     }
 
     var removed = 0;
@@ -838,8 +848,10 @@ class GenealogyRepository {
     var collapsed = 0;
 
     for (final link in await _personDao.getChildrenForFamily(fromFamilyId)) {
-      final existing =
-          await _personDao.getFamilyChildLink(toFamilyId, link.childId);
+      final existing = await _personDao.getFamilyChildLink(
+        toFamilyId,
+        link.childId,
+      );
       if (existing != null) {
         if (existing.isDeleted) {
           await _personDao.restoreFamilyChild(existing.id, now);
@@ -850,7 +862,8 @@ class GenealogyRepository {
       }
 
       final targetFamily = await _personDao.getFamilyById(toFamilyId);
-      final redundant = targetFamily != null &&
+      final redundant =
+          targetFamily != null &&
           await _childAlreadyLinkedViaAnotherFamily(
             childId: link.childId,
             family: targetFamily,
@@ -887,9 +900,11 @@ class GenealogyRepository {
     ];
     if (partnerIds.isEmpty) return false;
 
-    final links = await (_database.select(_database.familyChildrenV2)
-          ..where((t) => t.childId.equals(childId) & t.isDeleted.equals(false)))
-        .get();
+    final links =
+        await (_database.select(_database.familyChildrenV2)..where(
+              (t) => t.childId.equals(childId) & t.isDeleted.equals(false),
+            ))
+            .get();
 
     for (final link in links) {
       if (link.familyId == family.id) continue;

@@ -50,11 +50,7 @@ part 'app_database.g.dart';
     DuplicateMarkers,
     ResearchNotes,
   ],
-  daos: [
-    GenealogyPersonDao,
-    EventsDao,
-    ResearchNotesDao,
-  ],
+  daos: [GenealogyPersonDao, EventsDao, ResearchNotesDao],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(openConnection());
@@ -65,24 +61,24 @@ class AppDatabase extends _$AppDatabase {
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (m) async {
-          await m.createAll();
-        },
-        onUpgrade: (m, from, to) async {
-          // One consolidated path. Every pre-v12 database — including the very
-          // old ones that still carry the legacy `persons` / `relationships`
-          // tables — is upgraded by the same deterministic routine, so there is
-          // exactly one migration to reason about and to test.
-          //
-          // See scratch/audit/migration-strategy.md: schema v12 is the canonical
-          // baseline; earlier versions are supported as import paths only.
-          await _upgradeToCanonicalSchema(m);
-        },
-        beforeOpen: (details) async {
-          // Enable foreign keys on EVERY connection, not just first create.
-          await customStatement('PRAGMA foreign_keys = ON');
-        },
-      );
+    onCreate: (m) async {
+      await m.createAll();
+    },
+    onUpgrade: (m, from, to) async {
+      // One consolidated path. Every pre-v12 database — including the very
+      // old ones that still carry the legacy `persons` / `relationships`
+      // tables — is upgraded by the same deterministic routine, so there is
+      // exactly one migration to reason about and to test.
+      //
+      // See scratch/audit/migration-strategy.md: schema v12 is the canonical
+      // baseline; earlier versions are supported as import paths only.
+      await _upgradeToCanonicalSchema(m);
+    },
+    beforeOpen: (details) async {
+      // Enable foreign keys on EVERY connection, not just first create.
+      await customStatement('PRAGMA foreign_keys = ON');
+    },
+  );
 
   // ---------------------------------------------------------------------------
   // Migration to the canonical schema (v13)
@@ -301,7 +297,8 @@ class AppDatabase extends _$AppDatabase {
       await customStatement(
         "UPDATE genealogy_persons SET tree_id = '${AppConstants.defaultTreeId}' "
         "WHERE tree_id IS NULL OR tree_id NOT IN (SELECT id FROM family_trees)",
-      );      await customStatement(
+      );
+      await customStatement(
         'UPDATE genealogy_persons SET merged_into_id = NULL '
         'WHERE merged_into_id IS NOT NULL AND merged_into_id NOT IN '
         '(SELECT id FROM genealogy_persons)',
@@ -348,7 +345,9 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<int> _rowCount(String table) async {
-    final row = await customSelect('SELECT COUNT(*) AS c FROM $table').getSingle();
+    final row = await customSelect(
+      'SELECT COUNT(*) AS c FROM $table',
+    ).getSingle();
     return row.data['c'] as int? ?? 0;
   }
 
@@ -482,10 +481,7 @@ class AppDatabase extends _$AppDatabase {
               'SELECT id FROM families_v2 WHERE (husband_id = ? AND wife_id IS NULL) '
               'OR (wife_id = ? AND husband_id IS NULL) '
               'ORDER BY created_at, id LIMIT 1',
-              variables: [
-                Variable<String>(husband),
-                Variable<String>(husband),
-              ],
+              variables: [Variable<String>(husband), Variable<String>(husband)],
             ).get()
           : await customSelect(
               'SELECT id FROM families_v2 WHERE husband_id = ? AND wife_id = ? '
@@ -505,13 +501,7 @@ class AppDatabase extends _$AppDatabase {
         '(id, family_id, child_id, relationship_type, is_deleted, '
         ' created_at, updated_at) '
         "VALUES (?, ?, ?, 'biological', 0, ?, ?)",
-        [
-          'link-$familyId-$childId',
-          familyId,
-          childId,
-          createdAt,
-          createdAt,
-        ],
+        ['link-$familyId-$childId', familyId, childId, createdAt, createdAt],
       );
     }
 
@@ -544,15 +534,12 @@ class AppDatabase extends _$AppDatabase {
       String childId,
       int recordedParents,
     ) async {
-      await customStatement(
-        'UPDATE families_v2 SET notes = ? WHERE id = ?',
-        [
-          'Imported from legacy data: $childId was recorded with '
-              '$recordedParents parents, but a family holds two. This family '
-              'keeps one of the additional parents so no parentage is lost.',
-          familyId,
-        ],
-      );
+      await customStatement('UPDATE families_v2 SET notes = ? WHERE id = ?', [
+        'Imported from legacy data: $childId was recorded with '
+            '$recordedParents parents, but a family holds two. This family '
+            'keeps one of the additional parents so no parentage is lost.',
+        familyId,
+      ]);
     }
 
     var spouseRows = 0;
@@ -601,8 +588,7 @@ class AppDatabase extends _$AppDatabase {
         unresolvedRows++;
         continue;
       }
-      if (!genderById.containsKey(parent) ||
-          !genderById.containsKey(child)) {
+      if (!genderById.containsKey(parent) || !genderById.containsKey(child)) {
         unresolvedRows++;
         continue;
       }
@@ -656,9 +642,7 @@ class AppDatabase extends _$AppDatabase {
           parents.length,
         );
         await linkChild(extraFamilyId, childId, 0);
-        parentChildPairs.add(
-          (parentId: extraParentId, childId: childId),
-        );
+        parentChildPairs.add((parentId: extraParentId, childId: childId));
       }
     }
 

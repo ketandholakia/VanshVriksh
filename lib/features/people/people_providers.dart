@@ -21,11 +21,13 @@ final personByIdProvider = StreamProvider.family<GenealogyPerson?, String>((
   return repository.watchPersonById(personId);
 });
 
-final personRelationshipsProvider =
-    StreamProvider.family<void, String>((ref, personId) {
-      final repository = ref.watch(relationshipRepositoryProvider);
-      return repository.watchRelationshipsForPerson(personId);
-    });
+final personRelationshipsProvider = StreamProvider.family<void, String>((
+  ref,
+  personId,
+) {
+  final repository = ref.watch(relationshipRepositoryProvider);
+  return repository.watchRelationshipsForPerson(personId);
+});
 
 final parentsProvider = FutureProvider.family<List<GenealogyPerson>, String>((
   ref,

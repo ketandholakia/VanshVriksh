@@ -15,9 +15,11 @@ import 'genealogy_persons_table.dart';
 class DuplicateMarkers extends Table {
   TextColumn get id => text()();
 
-  TextColumn get personAId => text().references(GenealogyPersons, #id, onDelete: KeyAction.cascade)();
+  TextColumn get personAId =>
+      text().references(GenealogyPersons, #id, onDelete: KeyAction.cascade)();
 
-  TextColumn get personBId => text().references(GenealogyPersons, #id, onDelete: KeyAction.cascade)();
+  TextColumn get personBId =>
+      text().references(GenealogyPersons, #id, onDelete: KeyAction.cascade)();
 
   TextColumn get reason => text().nullable()();
 
@@ -27,7 +29,5 @@ class DuplicateMarkers extends Table {
   Set<Column> get primaryKey => {id};
 
   @override
-  List<String> get customConstraints => [
-        'UNIQUE(person_a_id, person_b_id)',
-      ];
+  List<String> get customConstraints => ['UNIQUE(person_a_id, person_b_id)'];
 }
