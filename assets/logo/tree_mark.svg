@@ -1,0 +1,26 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g>
+    <path d="M256 448C256 448 238 399 229 368C220 337 212 300 212 300" stroke="#C6934A" stroke-width="16" stroke-linecap="round"/>
+    <path d="M256 448C256 448 274 399 283 368C292 337 300 300 300 300" stroke="#C6934A" stroke-width="16" stroke-linecap="round"/>
+    <path d="M256 312C256 312 208 272 178 232C148 192 128 154 118 118" stroke="#1E4620" stroke-width="18" stroke-linecap="round"/>
+    <path d="M256 312C256 312 304 272 334 232C364 192 384 154 394 118" stroke="#1E4620" stroke-width="18" stroke-linecap="round"/>
+    <path d="M256 312C256 312 248 253 248 214C248 175 254 136 266 96" stroke="#1E4620" stroke-width="18" stroke-linecap="round"/>
+    <path d="M188 240C188 240 162 219 146 198" stroke="#1E4620" stroke-width="14" stroke-linecap="round"/>
+    <path d="M324 240C324 240 350 219 366 198" stroke="#1E4620" stroke-width="14" stroke-linecap="round"/>
+    <path d="M224 202C224 202 198 177 182 150" stroke="#1E4620" stroke-width="14" stroke-linecap="round"/>
+    <path d="M288 202C288 202 314 177 330 150" stroke="#1E4620" stroke-width="14" stroke-linecap="round"/>
+    <path d="M256 96C256 96 246 82 244 68C241 50 252 36 256 32C260 36 271 50 268 68C266 82 256 96 256 96Z" fill="#C6934A"/>
+    <circle cx="256" cy="128" r="12" fill="#C6934A"/>
+    <circle cx="220" cy="156" r="10" fill="#C6934A"/>
+    <circle cx="292" cy="156" r="10" fill="#C6934A"/>
+    <circle cx="188" cy="188" r="9" fill="#C6934A"/>
+    <circle cx="324" cy="188" r="9" fill="#C6934A"/>
+    <circle cx="158" cy="224" r="9" fill="#C6934A"/>
+    <circle cx="354" cy="224" r="9" fill="#C6934A"/>
+    <path d="M124 366C164 398 208 420 256 420C304 420 348 398 388 366" stroke="#C6934A" stroke-width="16" stroke-linecap="round"/>
+    <path d="M128 370C126 395 122 410 104 434" stroke="#C6934A" stroke-width="12" stroke-linecap="round"/>
+    <path d="M384 370C386 395 390 410 408 434" stroke="#C6934A" stroke-width="12" stroke-linecap="round"/>
+    <circle cx="256" cy="256" r="24" stroke="#C6934A" stroke-width="14"/>
+    <path d="M150 410C188 448 224 468 256 468C288 468 324 448 362 410" stroke="#1E4620" stroke-width="16" stroke-linecap="round"/>
+  </g>
+</svg>
