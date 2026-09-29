@@ -228,8 +228,7 @@ GenerationTreeLayout computeGenerationTreeLayout({
   void placeGroup(_Group group, double left) {
     if (!placed.add(group.id)) return;
 
-    final top =
-        (group.generation - topGeneration) * (cardHeight + levelGap);
+    final top = (group.generation - topGeneration) * (cardHeight + levelGap);
     var x = left;
     for (final person in group.personIds) {
       cardRects[person] = Rect.fromLTWH(x, top, cardWidth, cardHeight);

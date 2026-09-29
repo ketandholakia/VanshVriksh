@@ -1,16 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:archive/archive_io.dart';
 import 'package:crypto/crypto.dart';
 import 'package:encrypt/encrypt.dart' as encrypt;
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:googleapis/drive/v3.dart' as drive;
-import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/services.dart';
 import 'package:pointycastle/export.dart' as pc;
 
 class BackupService {
@@ -72,94 +69,6 @@ class BackupService {
         }
       }
     }
-  }
-
-  Future<File> uploadBackupToGoogleDrive({String? password}) async {
-    final backupFile = await createBackup(password: password);
-    final googleSignIn = GoogleSignIn(scopes: [drive.DriveApi.driveFileScope]);
-
-    final account = await _signInToGoogle(googleSignIn);
-    if (account == null) {
-      throw Exception('Google sign-in cancelled.');
-    }
-
-    final authHeaders = await account.authHeaders;
-    final client = _GoogleAuthClient(authHeaders);
-    final api = drive.DriveApi(client);
-
-    final driveFile = drive.File()
-      ..name = p.basename(backupFile.path)
-      ..parents = ['appDataFolder'];
-
-    final media = drive.Media(
-      backupFile.openRead(),
-      await backupFile.length(),
-      contentType: 'application/octet-stream',
-    );
-
-    await api.files.create(
-      driveFile,
-      uploadMedia: media,
-      uploadOptions: drive.UploadOptions.resumable,
-    );
-
-    await _recordBackup(
-      location: 'google_drive',
-      fileName: p.basename(backupFile.path),
-      filePath: backupFile.path,
-      encrypted: password != null && password.isNotEmpty,
-    );
-    return backupFile;
-  }
-
-  Future<File> restoreLatestFromGoogleDrive({String? password}) async {
-    final googleSignIn = GoogleSignIn(scopes: [drive.DriveApi.driveFileScope]);
-
-    final account = await _signInToGoogle(googleSignIn);
-    if (account == null) {
-      throw Exception('Google sign-in cancelled.');
-    }
-
-    final authHeaders = await account.authHeaders;
-    final client = _GoogleAuthClient(authHeaders);
-    final api = drive.DriveApi(client);
-
-    final response = await api.files.list(
-      spaces: 'appDataFolder',
-      orderBy: 'modifiedTime desc',
-      $fields: 'files(id,name,modifiedTime)',
-      pageSize: 1,
-    );
-
-    final files = response.files;
-    final latest = (files == null || files.isEmpty) ? null : files.first;
-    if (latest == null || latest.id == null) {
-      throw Exception('No cloud backup found in Google Drive.');
-    }
-
-    final media =
-        await api.files.get(
-              latest.id!,
-              downloadOptions: drive.DownloadOptions.fullMedia,
-            )
-            as drive.Media;
-
-    final appDir = await getApplicationDocumentsDirectory();
-    final restorePath = p.join(appDir.path, latest.name ?? 'cloud_backup.zip');
-    final file = File(restorePath);
-    final sink = file.openWrite();
-    await for (final chunk in media.stream) {
-      sink.add(chunk);
-    }
-    await sink.close();
-
-    await _recordBackup(
-      location: 'google_drive',
-      fileName: latest.name ?? p.basename(restorePath),
-      filePath: restorePath,
-      encrypted: _isEncryptedFile(file),
-    );
-    return file;
   }
 
   Future<List<BackupRecord>> getBackupHistory() async {
@@ -245,32 +154,6 @@ class BackupService {
 
   bool _isEncryptedFile(File file) =>
       p.extension(file.path).toLowerCase() == '.enc';
-
-  Future<GoogleSignInAccount?> _signInToGoogle(
-    GoogleSignIn googleSignIn,
-  ) async {
-    try {
-      final silentAccount = await googleSignIn.signInSilently();
-      if (silentAccount != null) {
-        return silentAccount;
-      }
-      return await googleSignIn.signIn();
-    } on PlatformException catch (e) {
-      throw Exception(_formatGoogleSignInError(e));
-    }
-  }
-
-  String _formatGoogleSignInError(PlatformException error) {
-    final message = error.message ?? 'Unknown Google sign-in error.';
-    final code = error.code.toLowerCase();
-
-    if (code.contains('sign_in_failed') || message.contains('E0.d: 10')) {
-      return 'Google sign-in failed because the Android OAuth setup is incomplete. '
-          'Check the package name, SHA-1 fingerprint, and Google Cloud OAuth client for this app.';
-    }
-
-    return 'Google sign-in failed: ${error.code}${message.isEmpty ? '' : ' - $message'}';
-  }
 
   List<int> _encryptBytes(List<int> input, String password) {
     final key = encrypt.Key(_deriveKey(password));
@@ -394,23 +277,5 @@ class BackupRecord {
       status: data['status'] as String? ?? 'success',
       encrypted: data['encrypted'] as bool? ?? false,
     );
-  }
-}
-
-class _GoogleAuthClient extends http.BaseClient {
-  _GoogleAuthClient(this._headers);
-
-  final Map<String, String> _headers;
-  final http.Client _client = http.Client();
-
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) {
-    request.headers.addAll(_headers);
-    return _client.send(request);
-  }
-
-  @override
-  void close() {
-    _client.close();
   }
 }

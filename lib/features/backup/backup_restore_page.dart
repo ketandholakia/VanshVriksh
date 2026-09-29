@@ -106,44 +106,6 @@ class _BackupRestorePageState extends ConsumerState<BackupRestorePage> {
     }
   }
 
-  Future<void> _createCloudBackup() async {
-    final backupService = ref.read(backupServiceProvider);
-    final encryptBackups = ref.read(backupEncryptProvider).value ?? true;
-    final password = encryptBackups
-        ? await _promptForPassword(
-            title: 'Cloud Backup Password',
-            description:
-                'Enter a password to encrypt this backup before uploading it to Google Drive.',
-          )
-        : null;
-    if (encryptBackups && password == null) return;
-
-    setState(() {
-      _isWorking = true;
-    });
-
-    try {
-      final backupFile = await backupService.uploadBackupToGoogleDrive(
-        password: password,
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Cloud backup uploaded: ${backupFile.path}')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Cloud backup failed: $e')));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isWorking = false;
-        });
-      }
-    }
-  }
-
   Future<void> _restoreBackup() async {
     final shouldContinue = await showDialog<bool>(
       context: context,
@@ -222,57 +184,6 @@ class _BackupRestorePageState extends ConsumerState<BackupRestorePage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Restore failed: $e')));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isWorking = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _restoreFromCloud() async {
-    final backupService = ref.read(backupServiceProvider);
-    final password = await _promptForPassword(
-      title: 'Restore Cloud Backup',
-      description:
-          'If the latest cloud backup is encrypted, enter the password to restore it.',
-    );
-
-    setState(() {
-      _isWorking = true;
-    });
-
-    try {
-      final backupFile = await backupService.restoreLatestFromGoogleDrive(
-        password: password,
-      );
-      await backupService.restoreBackup(backupFile, password: password);
-
-      if (!mounted) return;
-
-      await showDialog<void>(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: const Text('Cloud Restore Completed'),
-            content: const Text(
-              'Cloud backup restored successfully. Please close and reopen the app to reload the database.',
-            ),
-            actions: [
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
-              ),
-            ],
-          );
-        },
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Cloud restore failed: $e')));
     } finally {
       if (mounted) {
         setState(() {
@@ -425,34 +336,12 @@ class _BackupRestorePageState extends ConsumerState<BackupRestorePage> {
           ),
           Card(
             child: ListTile(
-              leading: const Icon(Icons.cloud_upload_outlined),
-              title: const Text('Cloud Backup'),
-              subtitle: const Text('Upload your backup to Google Drive.'),
-              trailing: const Icon(Icons.chevron_right),
-              enabled: !_isWorking,
-              onTap: _isWorking ? null : _createCloudBackup,
-            ),
-          ),
-          Card(
-            child: ListTile(
               leading: const Icon(Icons.restore_outlined),
               title: const Text('Restore Local Backup'),
               subtitle: const Text('Import a VanshVriksh ZIP backup file.'),
               trailing: const Icon(Icons.chevron_right),
               enabled: !_isWorking,
               onTap: _isWorking ? null : _restoreBackup,
-            ),
-          ),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.cloud_download_outlined),
-              title: const Text('Restore from Cloud'),
-              subtitle: const Text(
-                'Download the latest backup from Google Drive and restore it.',
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              enabled: !_isWorking,
-              onTap: _isWorking ? null : _restoreFromCloud,
             ),
           ),
           const SizedBox(height: 20),
@@ -533,7 +422,7 @@ class _BackupHeaderCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Create regular backups and store them safely on Google Drive, email, or external storage.',
+              'Create regular backups and share them to cloud storage, email, or external storage.',
               textAlign: TextAlign.center,
             ),
           ],

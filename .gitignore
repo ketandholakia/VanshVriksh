@@ -47,3 +47,17 @@ app.*.map.json
 # Nested build outputs (the root /build/ rule does not cover platform dirs)
 /android/build/
 
+# OpenClaw assistant workspace (kept locally; not part of the app)
+/AGENTS.md
+/SOUL.md
+/USER.md
+/IDENTITY.md
+/TOOLS.md
+/HEARTBEAT.md
+/MEMORY.md
+/.openclaw/
+/memory/
+/scratch/
+/evolution-drafts/
+/.openclaw-attachments/
+

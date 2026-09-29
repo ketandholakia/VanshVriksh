@@ -1,0 +1,1 @@
+Initial release: offline family tree with interactive tree and fan chart views, people and relationship management, events, media, GEDCOM import, duplicate detection, and encrypted local backups.

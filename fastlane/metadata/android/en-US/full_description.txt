@@ -1,0 +1,25 @@
+VanshVriksh is an offline, local-first family tree and genealogy app.
+
+Build and explore your family history: add people and relationships, record life events, attach photos and media, and view your tree as an interactive diagram or a fan chart.
+
+Features
+* Interactive family tree with generation-based layout
+* Fan chart view for a compact overview of ancestors
+* Person profiles with facts, events, relationships, photos and media
+* Multiple family trees
+* GEDCOM import
+* Upcoming birthdays dashboard
+* Duplicate detection and merging
+* Data integrity checks
+* Research notes for tracking your findings
+* Encrypted local backups that you can export, share and restore
+
+Your data stays on your device
+VanshVriksh stores everything locally. There are no accounts, no ads, no analytics and no tracking. Backups are ZIP files (optionally AES-encrypted) that you can share with any app — including cloud storage of your choice.
+
+Permissions
+* Media/photo access: used to attach pictures to family members.
+* Location (optional): only used if you choose to record a place with an event; you can skip it entirely.
+
+Open source
+Source code: https://github.com/ketandholakia/VanshVriksh

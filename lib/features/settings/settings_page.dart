@@ -188,7 +188,9 @@ class SettingsPage extends ConsumerWidget {
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Wi-Fi Only'),
-                        subtitle: const Text('Prefer Wi-Fi for cloud backups.'),
+                        subtitle: const Text(
+                          'Prefer Wi-Fi for automatic backups.',
+                        ),
                         value: selectedBackupWifiOnly,
                         onChanged: backupWifiOnlyAsync.isLoading
                             ? null

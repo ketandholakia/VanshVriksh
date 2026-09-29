@@ -1,0 +1,74 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# F-Droid build recipe — DRAFT for a fdroiddata merge request
+#
+# Target location in the fdroiddata repository:
+#     metadata/io.github.ketandholakia.vanshvriksh.yml
+#
+# Before submitting:
+#   1. Remove ALL comments (fdroiddata CI prefers comment-free files).
+#   2. Double-check `License:` matches the LICENSE in the repo and that
+#      `commit:` points at the real release.
+#   3. Make sure `commit:` points at the actual release (tag v1.0.0 or its SHA)
+#      and that versionName/versionCode match pubspec.yaml (version: 1.0.0+1).
+#   4. If the application ID changes, rename this file to match.
+# ─────────────────────────────────────────────────────────────────────────────
+
+Categories:
+  - Science & Education
+
+License: GPL-3.0-or-later
+
+AuthorName: Ketan Dholakia
+AuthorEmail: ketanmci@gmail.com
+SourceCode: https://github.com/ketandholakia/VanshVriksh
+IssueTracker: https://github.com/ketandholakia/VanshVriksh/issues
+
+AutoName: VanshVriksh
+
+Summary: "Family tree & genealogy: charts, events, photos, backups"
+
+Description: |-
+  VanshVriksh is an offline, local-first family tree and genealogy app.
+
+  Build and explore your family history: add people and relationships,
+  record life events, attach photos and media, and view your tree as an
+  interactive diagram or a fan chart.
+
+  All data stays on your device: no accounts, no ads, no tracking.
+  Backups are ZIP files (optionally encrypted) that you can export and
+  share with any app.
+
+RepoType: git
+Repo: https://github.com/ketandholakia/VanshVriksh.git
+
+Builds:
+  - versionName: 1.0.0
+    versionCode: 1
+    # Tag (must exist on GitHub) or full commit SHA of the release
+    commit: v1.0.0
+    output: build/app/outputs/flutter-apk/app-release.apk
+    srclibs:
+      # Must match the Flutter version used by .github/workflows/ci.yml
+      - flutter@3.44.0
+    rm:
+      - ios
+      - linux
+      - macos
+      - web
+      - windows
+    prebuild:
+      # Keep the Dart package cache inside the checkout so it is scanned
+      - export PUB_CACHE=$(pwd)/.pub-cache
+      - $$flutter$$/bin/flutter config --no-analytics
+      - $$flutter$$/bin/flutter pub get --enforce-lockfile
+    scandelete:
+      - .pub-cache
+    build:
+      - export PUB_CACHE=$(pwd)/.pub-cache
+      - $$flutter$$/bin/flutter build apk
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+UpdateCheckData: pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
+CurrentVersion: 1.0.0
+CurrentVersionCode: 1
