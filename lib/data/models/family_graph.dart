@@ -72,6 +72,50 @@ class FamilyGraph {
     return result.values.toList();
   }
 
+  /// The couples that involve at least one of [personIds], trimmed to the
+  /// partners and children that are also in [personIds].
+  ///
+  /// Tree layouts need the family grouping itself ("these two partners and
+  /// these children form one union"), not just pairwise parent/child lookups:
+  /// spouses have to share a row, which no per-person relationship query can
+  /// express. Children are ordered by birth order where recorded.
+  List<FamilyGrouping> familiesAmong(Set<String> personIds) {
+    final groupings = <FamilyGrouping>[];
+    for (final family in _familiesById.values) {
+      final partners = partnerIdsOf(
+        family.id,
+      ).where(personIds.contains).toList(growable: false);
+      if (partners.isEmpty) continue;
+
+      final links = [...?_linksByFamily[family.id]]
+        ..sort((a, b) {
+          final left = a.birthOrder;
+          final right = b.birthOrder;
+          if (left == null && right == null) return 0;
+          if (left == null) return 1;
+          if (right == null) return -1;
+          return left.compareTo(right);
+        });
+      final children = [
+        for (final link in links)
+          if (personIds.contains(link.childId)) link.childId,
+      ];
+
+      // A lone partner with no visible children adds nothing; a couple without
+      // children still needs to be grouped so the two cards sit side by side.
+      if (partners.length < 2 && children.isEmpty) continue;
+
+      groupings.add(
+        FamilyGrouping(
+          familyId: family.id,
+          partnerIds: partners,
+          childIds: children,
+        ),
+      );
+    }
+    return groupings;
+  }
+
   /// The recorded partners of a family, in slot order.
   List<String> partnerIdsOf(String familyId) {
     final family = _familiesById[familyId];
@@ -114,4 +158,22 @@ class FamilyGraph {
     }
     return index;
   }
+}
+
+/// One couple (a `families_v2` row) reduced to the people the caller cares
+/// about: the partners and children of that union that are in the visible set.
+class FamilyGrouping {
+  const FamilyGrouping({
+    required this.familyId,
+    required this.partnerIds,
+    required this.childIds,
+  });
+
+  final String familyId;
+
+  /// One or two partners, in husband/wife slot order.
+  final List<String> partnerIds;
+
+  /// Children of this union, oldest first where birth order is recorded.
+  final List<String> childIds;
 }

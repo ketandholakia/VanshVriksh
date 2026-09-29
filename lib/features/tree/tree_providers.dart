@@ -80,7 +80,6 @@ final multiGenFamilyTreeProvider =
       );
 
       final nodes = <String, GenealogyPerson>{rootPerson.id: rootPerson};
-      final edges = <TreeEdge>[];
       final visitedNodes = <String>{rootPerson.id};
 
       // Configuration for depth
@@ -95,13 +94,6 @@ final multiGenFamilyTreeProvider =
         for (final id in currentUpQueue) {
           for (final parent in graph.parentsOf(id)) {
             nodes[parent.id] = parent;
-            edges.add(
-              TreeEdge(
-                sourceId: parent.id,
-                targetId: id,
-                relationType: 'parent_child',
-              ),
-            );
             if (!visitedNodes.contains(parent.id)) {
               visitedNodes.add(parent.id);
               nextQueue.add(parent.id);
@@ -119,13 +111,6 @@ final multiGenFamilyTreeProvider =
         for (final id in currentDownQueue) {
           for (final child in graph.childrenOf(id)) {
             nodes[child.id] = child;
-            edges.add(
-              TreeEdge(
-                sourceId: id,
-                targetId: child.id,
-                relationType: 'parent_child',
-              ),
-            );
             if (!visitedNodes.contains(child.id)) {
               visitedNodes.add(child.id);
               nextQueue.add(child.id);
@@ -135,20 +120,29 @@ final multiGenFamilyTreeProvider =
         currentDownQueue = nextQueue;
       }
 
-      // Attach the spouses of everyone found.
+      // Attach the spouses of everyone found, so couples render side by side.
       for (final id in nodes.keys.toList()) {
         for (final spouse in graph.spousesOf(id)) {
           nodes[spouse.id] = spouse;
-          edges.add(
-            TreeEdge(sourceId: id, targetId: spouse.id, relationType: 'spouse'),
-          );
         }
       }
+
+      // The layout is driven by unions, not by pairwise edges: the caller needs
+      // to know that two partners and their children form one couple so the
+      // partners share a row and the children hang below the couple.
+      final couples = [
+        for (final grouping in graph.familiesAmong(nodes.keys.toSet()))
+          TreeCouple(
+            familyId: grouping.familyId,
+            partnerIds: grouping.partnerIds,
+            childIds: grouping.childIds,
+          ),
+      ];
 
       return MultiGenFamilyTreeData(
         rootPerson: rootPerson,
         nodes: nodes,
-        edges: edges,
+        couples: couples,
       );
     });
 

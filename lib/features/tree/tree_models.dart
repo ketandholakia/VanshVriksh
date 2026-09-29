@@ -47,22 +47,32 @@ class MultiGenFamilyTreeData {
   const MultiGenFamilyTreeData({
     required this.rootPerson,
     required this.nodes,
-    required this.edges,
+    required this.couples,
   });
 
   final GenealogyPerson rootPerson;
   final Map<String, GenealogyPerson> nodes;
-  final List<TreeEdge> edges;
+
+  /// The unions among [nodes]: a couple and the children of that union.
+  ///
+  /// A tree layout is driven by these rather than by pairwise edges, because
+  /// spouses belong on the same generation row and their shared children hang
+  /// below the union, not below one partner.
+  final List<TreeCouple> couples;
 }
 
-class TreeEdge {
-  const TreeEdge({
-    required this.sourceId,
-    required this.targetId,
-    required this.relationType,
+class TreeCouple {
+  const TreeCouple({
+    required this.familyId,
+    required this.partnerIds,
+    required this.childIds,
   });
 
-  final String sourceId;
-  final String targetId;
-  final String relationType; // 'parent_child', 'spouse'
+  final String familyId;
+
+  /// The partners of this union that are present in the tree, in slot order.
+  final List<String> partnerIds;
+
+  /// The children of this union that are present in the tree, oldest first.
+  final List<String> childIds;
 }

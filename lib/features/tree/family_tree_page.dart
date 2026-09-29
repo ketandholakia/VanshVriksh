@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,10 +11,10 @@ import '../../data/database/app_database.dart';
 import '../people/people_providers.dart';
 import '../settings/app_settings_provider.dart';
 import '../settings/display_formatters.dart';
+import 'generation_tree_layout.dart';
 import 'tree_models.dart';
 import 'tree_providers.dart';
 import 'tree_view_mode_toggle.dart';
-import 'package:graphview/GraphView.dart';
 
 class FamilyTreePage extends ConsumerStatefulWidget {
   const FamilyTreePage({super.key, this.rootPersonId});
@@ -186,7 +188,7 @@ class _FamilyTreePageState extends ConsumerState<FamilyTreePage> {
                       );
                     }
 
-                    return _BasicTreeCanvas(
+                    return _GenerationTreeCanvas(
                       treeData: treeData,
                       dateFormat: dateFormat,
                       labelStyle: labelStyle,
@@ -288,8 +290,8 @@ class _EmptyTreeView extends StatelessWidget {
   }
 }
 
-class _BasicTreeCanvas extends StatefulWidget {
-  const _BasicTreeCanvas({
+class _GenerationTreeCanvas extends StatefulWidget {
+  const _GenerationTreeCanvas({
     required this.treeData,
     required this.dateFormat,
     required this.labelStyle,
@@ -312,117 +314,182 @@ class _BasicTreeCanvas extends StatefulWidget {
   final bool zoomOnLoad;
 
   @override
-  State<_BasicTreeCanvas> createState() => _BasicTreeCanvasState();
+  State<_GenerationTreeCanvas> createState() => _GenerationTreeCanvasState();
 }
 
-class _BasicTreeCanvasState extends State<_BasicTreeCanvas> {
-  final Graph graph = Graph()..isTree = true;
-  late SugiyamaConfiguration configuration;
+class _GenerationTreeCanvasState extends State<_GenerationTreeCanvas> {
+  final TransformationController _controller = TransformationController();
+  bool _fittedToViewport = false;
 
   @override
-  void initState() {
-    super.initState();
-    configuration = SugiyamaConfiguration()
-      ..nodeSeparation = widget.spacing == TreeCardSpacing.spacious
-          ? 40
-          : widget.spacing == TreeCardSpacing.compact
-          ? 10
-          : 25
-      ..levelSeparation = widget.spacing == TreeCardSpacing.spacious
-          ? 80
-          : widget.spacing == TreeCardSpacing.compact
-          ? 40
-          : 60
-      ..orientation = 1; // Top-to-Bottom
+  void didUpdateWidget(covariant _GenerationTreeCanvas oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.treeData.rootPerson.id != widget.treeData.rootPerson.id) {
+      _fittedToViewport = false;
+      _controller.value = Matrix4.identity();
+    }
   }
 
   @override
-  void didUpdateWidget(covariant _BasicTreeCanvas oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.spacing != widget.spacing) {
-      configuration
-        ..nodeSeparation = widget.spacing == TreeCardSpacing.spacious
-            ? 40
-            : widget.spacing == TreeCardSpacing.compact
-            ? 10
-            : 25
-        ..levelSeparation = widget.spacing == TreeCardSpacing.spacious
-            ? 80
-            : widget.spacing == TreeCardSpacing.compact
-            ? 40
-            : 60;
-    }
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  double get _densityFactor => switch (widget.density) {
+    TreeCardDensity.compact => 0.9,
+    TreeCardDensity.normal => 1.0,
+    TreeCardDensity.spacious => 1.12,
+  };
+
+  double get _lineThicknessValue => switch (widget.lineThickness) {
+    TreeLineThickness.thin => 1.4,
+    TreeLineThickness.thick => 3.2,
+    TreeLineThickness.normal => 2.2,
+  };
+
+  GenerationTreeLayout _layout() {
+    final (coupleGap, siblingGap, levelGap) = switch (widget.spacing) {
+      TreeCardSpacing.compact => (14.0, 16.0, 34.0),
+      TreeCardSpacing.spacious => (36.0, 46.0, 84.0),
+      TreeCardSpacing.normal => (26.0, 30.0, 56.0),
+    };
+    return computeGenerationTreeLayout(
+      rootId: widget.treeData.rootPerson.id,
+      couples: [
+        for (final couple in widget.treeData.couples)
+          TreeLayoutCouple(
+            familyId: couple.familyId,
+            partnerIds: couple.partnerIds,
+            childIds: couple.childIds,
+          ),
+      ],
+      cardSize: Size(180 * _densityFactor, 82 * _densityFactor),
+      coupleGap: coupleGap,
+      siblingGap: siblingGap,
+      levelGap: levelGap,
+    );
+  }
+
+  /// Frame the whole tree on open instead of dropping the user into the
+  /// top-left corner where a wide tree looks like a single card.
+  void _fitToViewport(Size viewport, Size canvas) {
+    if (_fittedToViewport || viewport.isEmpty || canvas.isEmpty) return;
+    _fittedToViewport = true;
+    final scale = math.min(
+      1.0,
+      math.min(viewport.width / canvas.width, viewport.height / canvas.height),
+    );
+    _controller.value = Matrix4.identity()
+      ..translateByDouble(
+        (viewport.width - canvas.width * scale) / 2,
+        (viewport.height - canvas.height * scale) / 2,
+        0,
+        1,
+      )
+      ..scaleByDouble(scale, scale, 1, 1);
   }
 
   @override
   Widget build(BuildContext context) {
-    graph.edges.clear();
-    graph.nodes.clear();
+    final layout = _layout();
+    final colorScheme = Theme.of(context).colorScheme;
+    final rootId = widget.treeData.rootPerson.id;
 
-    final Map<String, Node> nodeMap = {};
-    for (final person in widget.treeData.nodes.values) {
-      nodeMap[person.id] = Node.Id(person.id);
-    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewport = Size(constraints.maxWidth, constraints.maxHeight);
+        if (widget.zoomOnLoad && !_fittedToViewport && !viewport.isEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _fitToViewport(viewport, layout.canvasSize);
+          });
+        }
 
-    for (final edge in widget.treeData.edges) {
-      if (nodeMap.containsKey(edge.sourceId) &&
-          nodeMap.containsKey(edge.targetId)) {
-        graph.addEdge(nodeMap[edge.sourceId]!, nodeMap[edge.targetId]!);
-      }
-    }
-
-    final double densityFactor = widget.density == TreeCardDensity.compact
-        ? 0.9
-        : widget.density == TreeCardDensity.spacious
-        ? 1.12
-        : 1.0;
-    final double nodeWidth = 180 * densityFactor;
-    final double nodeHeight = 82 * densityFactor;
-
-    final lineThicknessValue = widget.lineThickness == TreeLineThickness.thin
-        ? 1.4
-        : widget.lineThickness == TreeLineThickness.thick
-        ? 3.2
-        : 2.2;
-
-    return InteractiveViewer(
-      constrained: false,
-      boundaryMargin: const EdgeInsets.all(1000),
-      minScale: 0.1,
-      maxScale: 2.5,
-      child: GraphView(
-        graph: graph,
-        algorithm: SugiyamaAlgorithm(configuration),
-        paint: Paint()
-          ..color = Theme.of(context).colorScheme.primary.withValues(alpha: 0.6)
-          ..strokeWidth = lineThicknessValue
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round
-          ..strokeJoin = StrokeJoin.round,
-        builder: (Node node) {
-          final personId = node.key!.value as String;
-          final person = widget.treeData.nodes[personId]!;
-          return SizedBox(
-            width: nodeWidth,
-            height: nodeHeight,
-            child: _TreePersonCard(
-              person: person,
-              relationLabel: personId == widget.treeData.rootPerson.id
-                  ? 'Root'
-                  : '',
-              isRoot: personId == widget.treeData.rootPerson.id,
-              isHint: false,
-              dateFormat: widget.dateFormat,
-              labelStyle: widget.labelStyle,
-              photoFitMode: widget.photoFitMode,
-              density: widget.density,
-              hideYearsForLiving: widget.hideYearsForLiving,
+        return InteractiveViewer(
+          constrained: false,
+          transformationController: _controller,
+          boundaryMargin: const EdgeInsets.all(1200),
+          minScale: 0.05,
+          maxScale: 2.5,
+          child: SizedBox(
+            width: layout.canvasSize.width,
+            height: layout.canvasSize.height,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _TreeConnectorPainter(
+                      connectors: layout.connectors,
+                      color: colorScheme.primary.withValues(alpha: 0.6),
+                      strokeWidth: _lineThicknessValue,
+                    ),
+                  ),
+                ),
+                for (final entry in layout.cardRects.entries)
+                  if (widget.treeData.nodes[entry.key] != null)
+                    Positioned(
+                      left: entry.value.left,
+                      top: entry.value.top,
+                      width: entry.value.width,
+                      height: entry.value.height,
+                      child: _TreePersonCard(
+                        person: widget.treeData.nodes[entry.key]!,
+                        relationLabel: entry.key == rootId ? 'Root' : '',
+                        isRoot: entry.key == rootId,
+                        isHint: false,
+                        dateFormat: widget.dateFormat,
+                        labelStyle: widget.labelStyle,
+                        photoFitMode: widget.photoFitMode,
+                        density: widget.density,
+                        hideYearsForLiving: widget.hideYearsForLiving,
+                      ),
+                    ),
+              ],
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
+}
+
+class _TreeConnectorPainter extends CustomPainter {
+  const _TreeConnectorPainter({
+    required this.connectors,
+    required this.color,
+    required this.strokeWidth,
+  });
+
+  final List<TreeLayoutPath> connectors;
+  final Color color;
+  final double strokeWidth;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (connectors.isEmpty) return;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    for (final points in connectors) {
+      if (points.length < 2) continue;
+      final path = Path()..moveTo(points.first.dx, points.first.dy);
+      for (final point in points.skip(1)) {
+        path.lineTo(point.dx, point.dy);
+      }
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_TreeConnectorPainter oldDelegate) =>
+      oldDelegate.connectors != connectors ||
+      oldDelegate.color != color ||
+      oldDelegate.strokeWidth != strokeWidth;
 }
 
 class _TreePersonCard extends StatelessWidget {
