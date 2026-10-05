@@ -7,6 +7,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/extensions/genealogy_person_extensions.dart';
 import '../people/people_providers.dart';
 import '../gedcom/gedcom_import_providers.dart';
+import '../gedcom/gedcom_importer.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 
@@ -106,7 +107,7 @@ class SettingsPage extends ConsumerWidget {
                         'Export or restore your family tree data.',
                       ),
                       trailing: const Icon(Icons.chevron_right),
-                      onTap: () => context.push('/settings/backup'),
+                      onTap: () => context.push('/backup'),
                     ),
                     const Divider(height: 1),
                     ListTile(
@@ -267,23 +268,6 @@ class SettingsPage extends ConsumerWidget {
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 8),
-              Card(
-                child: ListTile(
-                  leading: const Icon(Icons.file_upload_outlined),
-                  title: const Text('GEDCOM Import'),
-                  subtitle: const Text(
-                    'Coming soon: import .ged genealogy files.',
-                  ),
-                  trailing: const Chip(label: Text('Soon')),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('GEDCOM import will be added later.'),
-                      ),
-                    );
-                  },
-                ),
-              ),
               Card(
                 child: ListTile(
                   leading: const Icon(Icons.file_download_outlined),
@@ -1239,10 +1223,47 @@ Future<void> _importGedcom(BuildContext context, WidgetRef ref) async {
       await ref
           .read(gedcomImportProvider.notifier)
           .importGedcomFile(file, AppConstants.defaultTreeId);
+      final importResult =
+          ref.read(gedcomImportProvider).value ??
+          const GedcomImportResult(people: 0, families: 0, childLinks: 0);
       if (context.mounted) Navigator.of(context).pop();
       if (context.mounted) {
+        final summary = StringBuffer(
+          'Imported ${importResult.people} people and ${importResult.families} '
+          'families.',
+        );
+        if (importResult.hasWarnings) {
+          summary.write(
+            ' ${importResult.warnings.length} record(s) were skipped.',
+          );
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('GEDCOM Import Successful!')),
+          SnackBar(
+            content: Text(summary.toString()),
+            action: importResult.hasWarnings
+                ? SnackBarAction(
+                    label: 'Details',
+                    onPressed: () {
+                      showDialog<void>(
+                        context: context,
+                        builder: (dialogContext) => AlertDialog(
+                          title: const Text('GEDCOM import warnings'),
+                          content: SingleChildScrollView(
+                            child: Text(importResult.warnings.join('\n')),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () =>
+                                  Navigator.of(dialogContext).pop(),
+                              child: const Text('Close'),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  )
+                : null,
+          ),
         );
       }
     }

@@ -7,13 +7,14 @@ import '../../data/providers/database_provider.dart';
 import 'gedcom_importer.dart';
 import 'gedcom_parser.dart';
 
-final gedcomImportProvider = AsyncNotifierProvider<GedcomImportNotifier, void>(
-  GedcomImportNotifier.new,
-);
+final gedcomImportProvider =
+    AsyncNotifierProvider<GedcomImportNotifier, GedcomImportResult?>(
+      GedcomImportNotifier.new,
+    );
 
-class GedcomImportNotifier extends AsyncNotifier<void> {
+class GedcomImportNotifier extends AsyncNotifier<GedcomImportResult?> {
   @override
-  FutureOr<void> build() {}
+  FutureOr<GedcomImportResult?> build() => null;
 
   Future<void> importGedcomFile(File file, String treeId) async {
     state = const AsyncValue.loading();
@@ -21,7 +22,10 @@ class GedcomImportNotifier extends AsyncNotifier<void> {
       final nodes = await GedcomParser.parseFile(file);
       final db = ref.read(databaseProvider);
       final importer = GedcomImporter(db);
-      await importer.importGedcom(nodes, treeId);
+      return importer.importGedcom(nodes, treeId);
     });
+
+    final error = state.error;
+    if (error != null) throw error;
   }
 }

@@ -1,5 +1,6 @@
-import 'dart:convert';
 import 'dart:io';
+
+import 'gedcom_decoder.dart';
 
 class GedcomNode {
   GedcomNode({required this.level, this.id, required this.tag, this.value});
@@ -24,7 +25,7 @@ class GedcomNode {
 
 class GedcomParser {
   static Future<List<GedcomNode>> parseFile(File file) async {
-    final lines = await file.readAsLines(encoding: utf8);
+    final lines = await GedcomDecoding.decodeLines(file);
     return parseLines(lines);
   }
 
