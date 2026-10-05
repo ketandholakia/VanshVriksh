@@ -84,65 +84,80 @@ GenerationTreeLayout computeGenerationTreeLayout({
   }
 
   final generation = <String, int>{rootId: 0};
-  final pending = <String>[rootId];
-  var guard = 0;
-  while (pending.isNotEmpty && guard++ < 200000) {
-    final person = pending.removeAt(0);
-    final current = generation[person]!;
 
-    // This person as a partner or parent.
-    for (final coupleIndex in coupleIndicesOfPerson[person] ?? const <int>[]) {
-      final couple = couples[coupleIndex];
-      for (final partner in couple.partnerIds) {
-        if (partner == person) continue;
-        final existing = generation[partner];
-        if (existing == null) {
-          generation[partner] = current;
-          pending.add(partner);
-        } else if (current > existing) {
-          generation[partner] = current;
-          pending.add(partner);
-        }
-      }
-      for (final child in couple.childIds) {
-        final wanted = current + 1;
-        final existing = generation[child];
-        if (existing == null || existing < wanted) {
-          generation[child] = wanted;
-          pending.add(child);
-        }
-      }
-    }
+  // One propagation pass from a seed: a partner shares the row, a child drops
+  // one row, a parent rises one row. The queue is re-entered whenever a
+  // generation is corrected so the whole component stays consistent. People in
+  // components the root cannot reach (disconnected couples, stray partners)
+  // never meet the first seed, so the pass repeats with a new seed until
+  // everyone has a row.
+  void propagateFrom(String seed) {
+    generation.putIfAbsent(seed, () => 0);
+    final pending = <String>[seed];
+    var guard = 0;
+    while (pending.isNotEmpty && guard++ < 200000) {
+      final person = pending.removeAt(0);
+      final current = generation[person]!;
 
-    // This person as a child of a couple.
-    for (final coupleIndex in coupleIndicesAsChild[person] ?? const <int>[]) {
-      final couple = couples[coupleIndex];
-      final parentGeneration = current - 1;
-      for (final partner in couple.partnerIds) {
-        final existing = generation[partner];
-        if (existing == null) {
-          generation[partner] = parentGeneration;
-          pending.add(partner);
-        } else if (existing > parentGeneration) {
-          generation[partner] = parentGeneration;
-          pending.add(partner);
+      // This person as a partner or parent.
+      for (final coupleIndex
+          in coupleIndicesOfPerson[person] ?? const <int>[]) {
+        final couple = couples[coupleIndex];
+        for (final partner in couple.partnerIds) {
+          if (partner == person) continue;
+          final existing = generation[partner];
+          if (existing == null) {
+            generation[partner] = current;
+            pending.add(partner);
+          } else if (current > existing) {
+            generation[partner] = current;
+            pending.add(partner);
+          }
+        }
+        for (final child in couple.childIds) {
+          final wanted = current + 1;
+          final existing = generation[child];
+          if (existing == null || existing < wanted) {
+            generation[child] = wanted;
+            pending.add(child);
+          }
         }
       }
-      for (final sibling in couple.childIds) {
-        if (sibling == person) continue;
-        final existing = generation[sibling];
-        if (existing == null) {
-          generation[sibling] = current;
-          pending.add(sibling);
-        } else if (existing < current) {
-          generation[sibling] = current;
-          pending.add(sibling);
+
+      // This person as a child of a couple.
+      for (final coupleIndex in coupleIndicesAsChild[person] ?? const <int>[]) {
+        final couple = couples[coupleIndex];
+        final parentGeneration = current - 1;
+        for (final partner in couple.partnerIds) {
+          final existing = generation[partner];
+          if (existing == null) {
+            generation[partner] = parentGeneration;
+            pending.add(partner);
+          } else if (existing > parentGeneration) {
+            generation[partner] = parentGeneration;
+            pending.add(partner);
+          }
+        }
+        for (final sibling in couple.childIds) {
+          if (sibling == person) continue;
+          final existing = generation[sibling];
+          if (existing == null) {
+            generation[sibling] = current;
+            pending.add(sibling);
+          } else if (existing < current) {
+            generation[sibling] = current;
+            pending.add(sibling);
+          }
         }
       }
     }
   }
+
+  propagateFrom(rootId);
   for (final person in personIds) {
-    generation.putIfAbsent(person, () => 0);
+    if (!generation.containsKey(person)) {
+      propagateFrom(person);
+    }
   }
 
   // --------------------------------------------------------------- grouping
