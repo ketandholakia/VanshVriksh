@@ -68,6 +68,11 @@ class GenealogyPersons extends Table {
   TextColumn get religion => text().nullable()();
   TextColumn get ethnicity => text().nullable()();
 
+  /// Hereditary conditions, causes of death, and other medical context the
+  /// genogram view renders. Free text on purpose — medical history does not
+  /// fit checkbox shapes.
+  TextColumn get medicalNotes => text().nullable()();
+
   BoolColumn get isPrivate => boolean().withDefault(const Constant(false))();
   IntColumn get privacyLevel => integer().withDefault(const Constant(0))();
 

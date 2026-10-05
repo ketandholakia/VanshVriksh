@@ -21,6 +21,10 @@ class PersonSaveData {
     this.deathDate,
     this.biography,
     this.notes,
+    this.occupation,
+    this.religion,
+    this.ethnicity,
+    this.medicalNotes,
     this.isPrivate = false,
     this.isLiving = true,
   });
@@ -40,6 +44,14 @@ class PersonSaveData {
   final DateTime? deathDate;
   final String? biography;
   final String? notes;
+  final String? occupation;
+  final String? religion;
+  final String? ethnicity;
+
+  /// Medical context the genogram renders (hereditary conditions, causes of
+  /// death). Free text on purpose.
+  final String? medicalNotes;
+
   final bool isPrivate;
   final bool isLiving;
 }

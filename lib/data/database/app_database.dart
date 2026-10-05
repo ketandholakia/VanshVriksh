@@ -10,6 +10,7 @@ import 'tables/family_children_v2_table.dart';
 import 'tables/family_trees_table.dart';
 import 'tables/genealogy_persons_table.dart';
 import 'tables/media_items_table.dart';
+import 'tables/person_bonds_table.dart';
 import 'tables/research_notes_table.dart';
 import 'tables/surname_events_table.dart';
 import 'daos/events_dao.dart';
@@ -49,6 +50,7 @@ part 'app_database.g.dart';
     Events,
     DuplicateMarkers,
     ResearchNotes,
+    PersonBonds,
   ],
   daos: [GenealogyPersonDao, EventsDao, ResearchNotesDao],
 )
@@ -57,7 +59,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -140,6 +142,7 @@ class AppDatabase extends _$AppDatabase {
     await ensure('events', () => m.createTable(events));
     await ensure('duplicate_markers', () => m.createTable(duplicateMarkers));
     await ensure('research_notes', () => m.createTable(researchNotes));
+    await ensure('person_bonds', () => m.createTable(personBonds));
   }
 
   /// Rebuilds every canonical table so the physical schema matches the model:
@@ -166,6 +169,7 @@ class AppDatabase extends _$AppDatabase {
     await m.alterTable(TableMigration(events));
     await m.alterTable(TableMigration(mediaItems));
     await m.alterTable(TableMigration(researchNotes));
+    await m.alterTable(TableMigration(personBonds));
   }
 
   /// Older `persons` tables lack columns that later versions added. They are

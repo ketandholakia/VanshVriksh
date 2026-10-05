@@ -57,6 +57,7 @@ class GenealogyRepository {
     String? occupation,
     String? religion,
     String? ethnicity,
+    String? medicalNotes,
     bool isPrivate = false,
     int privacyLevel = 0,
     String displayNameFormat = 'birth_married',
@@ -125,6 +126,10 @@ class GenealogyRepository {
       isLiving: person.isLiving,
       biography: person.biography,
       notes: person.notes,
+      occupation: person.occupation,
+      religion: person.religion,
+      ethnicity: person.ethnicity,
+      medicalNotes: person.medicalNotes,
       isPrivate: person.isPrivate,
     );
   }
@@ -159,6 +164,7 @@ class GenealogyRepository {
     String? occupation,
     String? religion,
     String? ethnicity,
+    String? medicalNotes,
     bool isPrivate = false,
     int privacyLevel = 0,
     String displayNameFormat = 'birth_married',
@@ -204,6 +210,7 @@ class GenealogyRepository {
         occupation: Value(occupation?.trim()),
         religion: Value(religion?.trim()),
         ethnicity: Value(ethnicity?.trim()),
+        medicalNotes: Value(medicalNotes?.trim()),
         isPrivate: Value(isPrivate),
         privacyLevel: Value(privacyLevel),
         displayNameFormat: Value(displayNameFormat),
@@ -777,6 +784,9 @@ class GenealogyRepository {
           ),
           occupation: Value(_keep(survivor.occupation, duplicate.occupation)),
           religion: Value(_keep(survivor.religion, duplicate.religion)),
+          medicalNotes: Value(
+            _keep(survivor.medicalNotes, duplicate.medicalNotes),
+          ),
           ethnicity: Value(_keep(survivor.ethnicity, duplicate.ethnicity)),
           profilePhotoPath: Value(
             _keep(survivor.profilePhotoPath, duplicate.profilePhotoPath),

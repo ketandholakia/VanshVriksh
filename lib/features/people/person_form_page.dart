@@ -64,6 +64,7 @@ class _PersonFormPageState extends ConsumerState<PersonFormPage> {
   final _currentPlaceController = TextEditingController();
   final _bioController = TextEditingController();
   final _notesController = TextEditingController();
+  final _medicalNotesController = TextEditingController();
 
   DateTime? _birthDate;
   DateTime? _deathDate;
@@ -117,6 +118,7 @@ class _PersonFormPageState extends ConsumerState<PersonFormPage> {
     _currentPlaceController.dispose();
     _bioController.dispose();
     _notesController.dispose();
+    _medicalNotesController.dispose();
     super.dispose();
   }
 
@@ -139,6 +141,7 @@ class _PersonFormPageState extends ConsumerState<PersonFormPage> {
     _currentPlaceController.text = person.currentPlace ?? '';
     _bioController.text = person.bio ?? '';
     _notesController.text = person.notes ?? '';
+    _medicalNotesController.text = person.medicalNotes ?? '';
 
     _gender = person.gender;
     if (_gender != 'female') {
@@ -669,6 +672,7 @@ class _PersonFormPageState extends ConsumerState<PersonFormPage> {
               currentPlace: Value(_emptyToNull(_currentPlaceController.text)),
               biography: Value(_emptyToNull(_bioController.text)),
               notes: Value(_emptyToNull(_notesController.text)),
+              medicalNotes: Value(_emptyToNull(_medicalNotesController.text)),
               isPrivate: Value(_isPrivate),
               profilePhotoPath: Value(photoPath),
             ),
@@ -710,6 +714,7 @@ class _PersonFormPageState extends ConsumerState<PersonFormPage> {
           currentPlace: _emptyToNull(_currentPlaceController.text),
           biography: _emptyToNull(_bioController.text),
           notes: _emptyToNull(_notesController.text),
+          medicalNotes: _emptyToNull(_medicalNotesController.text),
           isPrivate: _isPrivate,
           isLiving: _deathDate == null,
         );
@@ -1221,6 +1226,17 @@ class _PersonFormPageState extends ConsumerState<PersonFormPage> {
                   labelText: 'Private Notes',
                   alignLabelWithHint: true,
                   prefixIcon: Icon(Icons.notes_outlined),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _medicalNotesController,
+                minLines: 2,
+                maxLines: 5,
+                decoration: const InputDecoration(
+                  labelText: 'Medical Notes',
+                  alignLabelWithHint: true,
+                  prefixIcon: Icon(Icons.medical_services_outlined),
                 ),
               ),
               const SizedBox(height: 28),

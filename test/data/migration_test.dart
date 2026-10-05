@@ -451,7 +451,7 @@ void main() {
         'c2',
         'c3',
       });
-      expect(storedUserVersion(), 14);
+      expect(storedUserVersion(), 15);
     });
   });
 

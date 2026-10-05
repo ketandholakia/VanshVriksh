@@ -12,6 +12,7 @@ mixin _$GenealogyPersonDaoMixin on DatabaseAccessor<AppDatabase> {
   $FamiliesV2Table get familiesV2 => attachedDatabase.familiesV2;
   $FamilyChildrenV2Table get familyChildrenV2 =>
       attachedDatabase.familyChildrenV2;
+  $PersonBondsTable get personBonds => attachedDatabase.personBonds;
   GenealogyPersonDaoManager get managers => GenealogyPersonDaoManager(this);
 }
 

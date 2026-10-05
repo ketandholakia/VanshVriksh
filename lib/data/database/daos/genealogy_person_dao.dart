@@ -142,6 +142,10 @@ class GenealogyPersonDao extends DatabaseAccessor<AppDatabase>
     return into(familiesV2).insert(family);
   }
 
+  Future<void> createPersonBond(PersonBondsCompanion bond) {
+    return into(personBonds).insert(bond);
+  }
+
   /// Applies [changes] to the family with [id]. Keyed partial update.
   Future<int> updateFamilyFields(String id, FamiliesV2Companion changes) {
     return (update(

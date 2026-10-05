@@ -871,4 +871,111 @@ class RelationshipRepository {
         )
         .toList();
   }
+
+  // ---------------------------------------------------------------------------
+  // Person bonds — the genogram's relationship dynamics.
+  // ---------------------------------------------------------------------------
+
+  /// The bond types the genogram renders. Closing the set here keeps the
+  /// painter, the editor and the storage honest about what a `bond_type` can
+  /// be.
+  static const Set<String> personBondTypes = {
+    'close',
+    'conflict',
+    'estranged',
+    'distant',
+  };
+
+  /// Records [bondType] between two people. Idempotent: re-adding an
+  /// existing pair's bond updates its type instead of failing.
+  ///
+  /// The pair is stored canonically ordered, so the stored row does not
+  /// depend on argument order. Both people must exist, be live and belong to
+  /// [treeId]; a person cannot have a bond with themselves.
+  Future<void> addPersonBond({
+    required String treeId,
+    required String personAId,
+    required String personBId,
+    required String bondType,
+    String? notes,
+  }) async {
+    if (personAId == personBId) {
+      throw ArgumentError('A person cannot have a bond with themselves.');
+    }
+    if (!personBondTypes.contains(bondType)) {
+      throw ArgumentError(
+        'Unknown bond type: $bondType. Expected one of '
+        '${personBondTypes.toList()..sort()}.',
+      );
+    }
+
+    await _database.transaction(() async {
+      final a = await _personDao.getPersonById(personAId);
+      final b = await _personDao.getPersonById(personBId);
+      if (a == null || a.isDeleted || b == null || b.isDeleted) {
+        throw ArgumentError('Both people must exist to record a bond.');
+      }
+      if (a.treeId != treeId || b.treeId != treeId) {
+        throw ArgumentError('Both people must belong to tree $treeId.');
+      }
+
+      final first = personAId.compareTo(personBId) <= 0 ? personAId : personBId;
+      final second = identical(first, personAId) ? personBId : personAId;
+      final now = DateTime.now();
+
+      final existing =
+          await (_database.select(_database.personBonds)..where(
+                (t) => t.personAId.equals(first) & t.personBId.equals(second),
+              ))
+              .getSingleOrNull();
+
+      if (existing != null) {
+        await (_database.update(
+          _database.personBonds,
+        )..where((t) => t.id.equals(existing.id))).write(
+          PersonBondsCompanion(
+            bondType: Value(bondType),
+            notes: Value(notes?.trim()),
+            treeId: Value(treeId),
+            updatedAt: Value(now),
+          ),
+        );
+        return;
+      }
+
+      await _personDao.createPersonBond(
+        PersonBondsCompanion.insert(
+          id: IdGenerator.newId(),
+          personAId: first,
+          personBId: second,
+          bondType: bondType,
+          notes: Value(notes?.trim()),
+          treeId: treeId,
+          createdAt: Value(now),
+          updatedAt: Value(now),
+        ),
+      );
+    });
+  }
+
+  /// Removes the bond between two people, whichever order they are given.
+  /// Returns 1 when a bond was removed, 0 when there was none.
+  Future<int> removePersonBond({
+    required String personAId,
+    required String personBId,
+  }) {
+    final first = personAId.compareTo(personBId) <= 0 ? personAId : personBId;
+    final second = identical(first, personAId) ? personBId : personAId;
+    return (_database.delete(
+          _database.personBonds,
+        )..where((t) => t.personAId.equals(first) & t.personBId.equals(second)))
+        .go();
+  }
+
+  /// Every bond recorded in [treeId], for the genogram to draw.
+  Future<List<PersonBond>> getBondsForTree(String treeId) {
+    return (_database.select(
+      _database.personBonds,
+    )..where((t) => t.treeId.equals(treeId))).get();
+  }
 }

@@ -336,6 +336,17 @@ class $GenealogyPersonsTable extends GenealogyPersons
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _medicalNotesMeta = const VerificationMeta(
+    'medicalNotes',
+  );
+  @override
+  late final GeneratedColumn<String> medicalNotes = GeneratedColumn<String>(
+    'medical_notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _isPrivateMeta = const VerificationMeta(
     'isPrivate',
   );
@@ -467,6 +478,7 @@ class $GenealogyPersonsTable extends GenealogyPersons
     occupation,
     religion,
     ethnicity,
+    medicalNotes,
     isPrivate,
     privacyLevel,
     treeId,
@@ -707,6 +719,15 @@ class $GenealogyPersonsTable extends GenealogyPersons
         ethnicity.isAcceptableOrUnknown(data['ethnicity']!, _ethnicityMeta),
       );
     }
+    if (data.containsKey('medical_notes')) {
+      context.handle(
+        _medicalNotesMeta,
+        medicalNotes.isAcceptableOrUnknown(
+          data['medical_notes']!,
+          _medicalNotesMeta,
+        ),
+      );
+    }
     if (data.containsKey('is_private')) {
       context.handle(
         _isPrivateMeta,
@@ -894,6 +915,10 @@ class $GenealogyPersonsTable extends GenealogyPersons
         DriftSqlType.string,
         data['${effectivePrefix}ethnicity'],
       ),
+      medicalNotes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}medical_notes'],
+      ),
       isPrivate: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_private'],
@@ -966,6 +991,11 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
   final String? occupation;
   final String? religion;
   final String? ethnicity;
+
+  /// Hereditary conditions, causes of death, and other medical context the
+  /// genogram view renders. Free text on purpose — medical history does not
+  /// fit checkbox shapes.
+  final String? medicalNotes;
   final bool isPrivate;
   final int privacyLevel;
 
@@ -1017,6 +1047,7 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
     this.occupation,
     this.religion,
     this.ethnicity,
+    this.medicalNotes,
     required this.isPrivate,
     required this.privacyLevel,
     required this.treeId,
@@ -1108,6 +1139,9 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
     }
     if (!nullToAbsent || ethnicity != null) {
       map['ethnicity'] = Variable<String>(ethnicity);
+    }
+    if (!nullToAbsent || medicalNotes != null) {
+      map['medical_notes'] = Variable<String>(medicalNotes);
     }
     map['is_private'] = Variable<bool>(isPrivate);
     map['privacy_level'] = Variable<int>(privacyLevel);
@@ -1204,6 +1238,9 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
       ethnicity: ethnicity == null && nullToAbsent
           ? const Value.absent()
           : Value(ethnicity),
+      medicalNotes: medicalNotes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(medicalNotes),
       isPrivate: Value(isPrivate),
       privacyLevel: Value(privacyLevel),
       treeId: Value(treeId),
@@ -1259,6 +1296,7 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
       occupation: serializer.fromJson<String?>(json['occupation']),
       religion: serializer.fromJson<String?>(json['religion']),
       ethnicity: serializer.fromJson<String?>(json['ethnicity']),
+      medicalNotes: serializer.fromJson<String?>(json['medicalNotes']),
       isPrivate: serializer.fromJson<bool>(json['isPrivate']),
       privacyLevel: serializer.fromJson<int>(json['privacyLevel']),
       treeId: serializer.fromJson<String>(json['treeId']),
@@ -1303,6 +1341,7 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
       'occupation': serializer.toJson<String?>(occupation),
       'religion': serializer.toJson<String?>(religion),
       'ethnicity': serializer.toJson<String?>(ethnicity),
+      'medicalNotes': serializer.toJson<String?>(medicalNotes),
       'isPrivate': serializer.toJson<bool>(isPrivate),
       'privacyLevel': serializer.toJson<int>(privacyLevel),
       'treeId': serializer.toJson<String>(treeId),
@@ -1345,6 +1384,7 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
     Value<String?> occupation = const Value.absent(),
     Value<String?> religion = const Value.absent(),
     Value<String?> ethnicity = const Value.absent(),
+    Value<String?> medicalNotes = const Value.absent(),
     bool? isPrivate,
     int? privacyLevel,
     String? treeId,
@@ -1402,6 +1442,7 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
     occupation: occupation.present ? occupation.value : this.occupation,
     religion: religion.present ? religion.value : this.religion,
     ethnicity: ethnicity.present ? ethnicity.value : this.ethnicity,
+    medicalNotes: medicalNotes.present ? medicalNotes.value : this.medicalNotes,
     isPrivate: isPrivate ?? this.isPrivate,
     privacyLevel: privacyLevel ?? this.privacyLevel,
     treeId: treeId ?? this.treeId,
@@ -1475,6 +1516,9 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
           : this.occupation,
       religion: data.religion.present ? data.religion.value : this.religion,
       ethnicity: data.ethnicity.present ? data.ethnicity.value : this.ethnicity,
+      medicalNotes: data.medicalNotes.present
+          ? data.medicalNotes.value
+          : this.medicalNotes,
       isPrivate: data.isPrivate.present ? data.isPrivate.value : this.isPrivate,
       privacyLevel: data.privacyLevel.present
           ? data.privacyLevel.value
@@ -1523,6 +1567,7 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
           ..write('occupation: $occupation, ')
           ..write('religion: $religion, ')
           ..write('ethnicity: $ethnicity, ')
+          ..write('medicalNotes: $medicalNotes, ')
           ..write('isPrivate: $isPrivate, ')
           ..write('privacyLevel: $privacyLevel, ')
           ..write('treeId: $treeId, ')
@@ -1567,6 +1612,7 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
     occupation,
     religion,
     ethnicity,
+    medicalNotes,
     isPrivate,
     privacyLevel,
     treeId,
@@ -1610,6 +1656,7 @@ class GenealogyPerson extends DataClass implements Insertable<GenealogyPerson> {
           other.occupation == this.occupation &&
           other.religion == this.religion &&
           other.ethnicity == this.ethnicity &&
+          other.medicalNotes == this.medicalNotes &&
           other.isPrivate == this.isPrivate &&
           other.privacyLevel == this.privacyLevel &&
           other.treeId == this.treeId &&
@@ -1651,6 +1698,7 @@ class GenealogyPersonsCompanion extends UpdateCompanion<GenealogyPerson> {
   final Value<String?> occupation;
   final Value<String?> religion;
   final Value<String?> ethnicity;
+  final Value<String?> medicalNotes;
   final Value<bool> isPrivate;
   final Value<int> privacyLevel;
   final Value<String> treeId;
@@ -1691,6 +1739,7 @@ class GenealogyPersonsCompanion extends UpdateCompanion<GenealogyPerson> {
     this.occupation = const Value.absent(),
     this.religion = const Value.absent(),
     this.ethnicity = const Value.absent(),
+    this.medicalNotes = const Value.absent(),
     this.isPrivate = const Value.absent(),
     this.privacyLevel = const Value.absent(),
     this.treeId = const Value.absent(),
@@ -1732,6 +1781,7 @@ class GenealogyPersonsCompanion extends UpdateCompanion<GenealogyPerson> {
     this.occupation = const Value.absent(),
     this.religion = const Value.absent(),
     this.ethnicity = const Value.absent(),
+    this.medicalNotes = const Value.absent(),
     this.isPrivate = const Value.absent(),
     this.privacyLevel = const Value.absent(),
     required String treeId,
@@ -1777,6 +1827,7 @@ class GenealogyPersonsCompanion extends UpdateCompanion<GenealogyPerson> {
     Expression<String>? occupation,
     Expression<String>? religion,
     Expression<String>? ethnicity,
+    Expression<String>? medicalNotes,
     Expression<bool>? isPrivate,
     Expression<int>? privacyLevel,
     Expression<String>? treeId,
@@ -1820,6 +1871,7 @@ class GenealogyPersonsCompanion extends UpdateCompanion<GenealogyPerson> {
       if (occupation != null) 'occupation': occupation,
       if (religion != null) 'religion': religion,
       if (ethnicity != null) 'ethnicity': ethnicity,
+      if (medicalNotes != null) 'medical_notes': medicalNotes,
       if (isPrivate != null) 'is_private': isPrivate,
       if (privacyLevel != null) 'privacy_level': privacyLevel,
       if (treeId != null) 'tree_id': treeId,
@@ -1863,6 +1915,7 @@ class GenealogyPersonsCompanion extends UpdateCompanion<GenealogyPerson> {
     Value<String?>? occupation,
     Value<String?>? religion,
     Value<String?>? ethnicity,
+    Value<String?>? medicalNotes,
     Value<bool>? isPrivate,
     Value<int>? privacyLevel,
     Value<String>? treeId,
@@ -1904,6 +1957,7 @@ class GenealogyPersonsCompanion extends UpdateCompanion<GenealogyPerson> {
       occupation: occupation ?? this.occupation,
       religion: religion ?? this.religion,
       ethnicity: ethnicity ?? this.ethnicity,
+      medicalNotes: medicalNotes ?? this.medicalNotes,
       isPrivate: isPrivate ?? this.isPrivate,
       privacyLevel: privacyLevel ?? this.privacyLevel,
       treeId: treeId ?? this.treeId,
@@ -2009,6 +2063,9 @@ class GenealogyPersonsCompanion extends UpdateCompanion<GenealogyPerson> {
     if (ethnicity.present) {
       map['ethnicity'] = Variable<String>(ethnicity.value);
     }
+    if (medicalNotes.present) {
+      map['medical_notes'] = Variable<String>(medicalNotes.value);
+    }
     if (isPrivate.present) {
       map['is_private'] = Variable<bool>(isPrivate.value);
     }
@@ -2072,6 +2129,7 @@ class GenealogyPersonsCompanion extends UpdateCompanion<GenealogyPerson> {
           ..write('occupation: $occupation, ')
           ..write('religion: $religion, ')
           ..write('ethnicity: $ethnicity, ')
+          ..write('medicalNotes: $medicalNotes, ')
           ..write('isPrivate: $isPrivate, ')
           ..write('privacyLevel: $privacyLevel, ')
           ..write('treeId: $treeId, ')
@@ -8154,6 +8212,580 @@ class ResearchNotesCompanion extends UpdateCompanion<ResearchNote> {
   }
 }
 
+class $PersonBondsTable extends PersonBonds
+    with TableInfo<$PersonBondsTable, PersonBond> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PersonBondsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _personAIdMeta = const VerificationMeta(
+    'personAId',
+  );
+  @override
+  late final GeneratedColumn<String> personAId = GeneratedColumn<String>(
+    'person_a_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES genealogy_persons (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _personBIdMeta = const VerificationMeta(
+    'personBId',
+  );
+  @override
+  late final GeneratedColumn<String> personBId = GeneratedColumn<String>(
+    'person_b_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES genealogy_persons (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _bondTypeMeta = const VerificationMeta(
+    'bondType',
+  );
+  @override
+  late final GeneratedColumn<String> bondType = GeneratedColumn<String>(
+    'bond_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _notesMeta = const VerificationMeta('notes');
+  @override
+  late final GeneratedColumn<String> notes = GeneratedColumn<String>(
+    'notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _treeIdMeta = const VerificationMeta('treeId');
+  @override
+  late final GeneratedColumn<String> treeId = GeneratedColumn<String>(
+    'tree_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isDeletedMeta = const VerificationMeta(
+    'isDeleted',
+  );
+  @override
+  late final GeneratedColumn<bool> isDeleted = GeneratedColumn<bool>(
+    'is_deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_deleted" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    personAId,
+    personBId,
+    bondType,
+    notes,
+    treeId,
+    isDeleted,
+    createdAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'person_bonds';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<PersonBond> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('person_a_id')) {
+      context.handle(
+        _personAIdMeta,
+        personAId.isAcceptableOrUnknown(data['person_a_id']!, _personAIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_personAIdMeta);
+    }
+    if (data.containsKey('person_b_id')) {
+      context.handle(
+        _personBIdMeta,
+        personBId.isAcceptableOrUnknown(data['person_b_id']!, _personBIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_personBIdMeta);
+    }
+    if (data.containsKey('bond_type')) {
+      context.handle(
+        _bondTypeMeta,
+        bondType.isAcceptableOrUnknown(data['bond_type']!, _bondTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bondTypeMeta);
+    }
+    if (data.containsKey('notes')) {
+      context.handle(
+        _notesMeta,
+        notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
+      );
+    }
+    if (data.containsKey('tree_id')) {
+      context.handle(
+        _treeIdMeta,
+        treeId.isAcceptableOrUnknown(data['tree_id']!, _treeIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_treeIdMeta);
+    }
+    if (data.containsKey('is_deleted')) {
+      context.handle(
+        _isDeletedMeta,
+        isDeleted.isAcceptableOrUnknown(data['is_deleted']!, _isDeletedMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  PersonBond map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PersonBond(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      personAId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}person_a_id'],
+      )!,
+      personBId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}person_b_id'],
+      )!,
+      bondType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}bond_type'],
+      )!,
+      notes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}notes'],
+      ),
+      treeId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tree_id'],
+      )!,
+      isDeleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_deleted'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      ),
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      ),
+    );
+  }
+
+  @override
+  $PersonBondsTable createAlias(String alias) {
+    return $PersonBondsTable(attachedDatabase, alias);
+  }
+}
+
+class PersonBond extends DataClass implements Insertable<PersonBond> {
+  final String id;
+
+  /// Lexicographically smaller id of the pair.
+  final String personAId;
+
+  /// Lexicographically larger id of the pair.
+  final String personBId;
+
+  /// `close`, `conflict`, `estranged` or `distant`.
+  final String bondType;
+
+  /// Free-text context — when the dynamic started, what is known about it.
+  final String? notes;
+  final String treeId;
+  final bool isDeleted;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+  const PersonBond({
+    required this.id,
+    required this.personAId,
+    required this.personBId,
+    required this.bondType,
+    this.notes,
+    required this.treeId,
+    required this.isDeleted,
+    this.createdAt,
+    this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['person_a_id'] = Variable<String>(personAId);
+    map['person_b_id'] = Variable<String>(personBId);
+    map['bond_type'] = Variable<String>(bondType);
+    if (!nullToAbsent || notes != null) {
+      map['notes'] = Variable<String>(notes);
+    }
+    map['tree_id'] = Variable<String>(treeId);
+    map['is_deleted'] = Variable<bool>(isDeleted);
+    if (!nullToAbsent || createdAt != null) {
+      map['created_at'] = Variable<DateTime>(createdAt);
+    }
+    if (!nullToAbsent || updatedAt != null) {
+      map['updated_at'] = Variable<DateTime>(updatedAt);
+    }
+    return map;
+  }
+
+  PersonBondsCompanion toCompanion(bool nullToAbsent) {
+    return PersonBondsCompanion(
+      id: Value(id),
+      personAId: Value(personAId),
+      personBId: Value(personBId),
+      bondType: Value(bondType),
+      notes: notes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(notes),
+      treeId: Value(treeId),
+      isDeleted: Value(isDeleted),
+      createdAt: createdAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(createdAt),
+      updatedAt: updatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(updatedAt),
+    );
+  }
+
+  factory PersonBond.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PersonBond(
+      id: serializer.fromJson<String>(json['id']),
+      personAId: serializer.fromJson<String>(json['personAId']),
+      personBId: serializer.fromJson<String>(json['personBId']),
+      bondType: serializer.fromJson<String>(json['bondType']),
+      notes: serializer.fromJson<String?>(json['notes']),
+      treeId: serializer.fromJson<String>(json['treeId']),
+      isDeleted: serializer.fromJson<bool>(json['isDeleted']),
+      createdAt: serializer.fromJson<DateTime?>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime?>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'personAId': serializer.toJson<String>(personAId),
+      'personBId': serializer.toJson<String>(personBId),
+      'bondType': serializer.toJson<String>(bondType),
+      'notes': serializer.toJson<String?>(notes),
+      'treeId': serializer.toJson<String>(treeId),
+      'isDeleted': serializer.toJson<bool>(isDeleted),
+      'createdAt': serializer.toJson<DateTime?>(createdAt),
+      'updatedAt': serializer.toJson<DateTime?>(updatedAt),
+    };
+  }
+
+  PersonBond copyWith({
+    String? id,
+    String? personAId,
+    String? personBId,
+    String? bondType,
+    Value<String?> notes = const Value.absent(),
+    String? treeId,
+    bool? isDeleted,
+    Value<DateTime?> createdAt = const Value.absent(),
+    Value<DateTime?> updatedAt = const Value.absent(),
+  }) => PersonBond(
+    id: id ?? this.id,
+    personAId: personAId ?? this.personAId,
+    personBId: personBId ?? this.personBId,
+    bondType: bondType ?? this.bondType,
+    notes: notes.present ? notes.value : this.notes,
+    treeId: treeId ?? this.treeId,
+    isDeleted: isDeleted ?? this.isDeleted,
+    createdAt: createdAt.present ? createdAt.value : this.createdAt,
+    updatedAt: updatedAt.present ? updatedAt.value : this.updatedAt,
+  );
+  PersonBond copyWithCompanion(PersonBondsCompanion data) {
+    return PersonBond(
+      id: data.id.present ? data.id.value : this.id,
+      personAId: data.personAId.present ? data.personAId.value : this.personAId,
+      personBId: data.personBId.present ? data.personBId.value : this.personBId,
+      bondType: data.bondType.present ? data.bondType.value : this.bondType,
+      notes: data.notes.present ? data.notes.value : this.notes,
+      treeId: data.treeId.present ? data.treeId.value : this.treeId,
+      isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PersonBond(')
+          ..write('id: $id, ')
+          ..write('personAId: $personAId, ')
+          ..write('personBId: $personBId, ')
+          ..write('bondType: $bondType, ')
+          ..write('notes: $notes, ')
+          ..write('treeId: $treeId, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    personAId,
+    personBId,
+    bondType,
+    notes,
+    treeId,
+    isDeleted,
+    createdAt,
+    updatedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PersonBond &&
+          other.id == this.id &&
+          other.personAId == this.personAId &&
+          other.personBId == this.personBId &&
+          other.bondType == this.bondType &&
+          other.notes == this.notes &&
+          other.treeId == this.treeId &&
+          other.isDeleted == this.isDeleted &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class PersonBondsCompanion extends UpdateCompanion<PersonBond> {
+  final Value<String> id;
+  final Value<String> personAId;
+  final Value<String> personBId;
+  final Value<String> bondType;
+  final Value<String?> notes;
+  final Value<String> treeId;
+  final Value<bool> isDeleted;
+  final Value<DateTime?> createdAt;
+  final Value<DateTime?> updatedAt;
+  final Value<int> rowid;
+  const PersonBondsCompanion({
+    this.id = const Value.absent(),
+    this.personAId = const Value.absent(),
+    this.personBId = const Value.absent(),
+    this.bondType = const Value.absent(),
+    this.notes = const Value.absent(),
+    this.treeId = const Value.absent(),
+    this.isDeleted = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  PersonBondsCompanion.insert({
+    required String id,
+    required String personAId,
+    required String personBId,
+    required String bondType,
+    this.notes = const Value.absent(),
+    required String treeId,
+    this.isDeleted = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       personAId = Value(personAId),
+       personBId = Value(personBId),
+       bondType = Value(bondType),
+       treeId = Value(treeId);
+  static Insertable<PersonBond> custom({
+    Expression<String>? id,
+    Expression<String>? personAId,
+    Expression<String>? personBId,
+    Expression<String>? bondType,
+    Expression<String>? notes,
+    Expression<String>? treeId,
+    Expression<bool>? isDeleted,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (personAId != null) 'person_a_id': personAId,
+      if (personBId != null) 'person_b_id': personBId,
+      if (bondType != null) 'bond_type': bondType,
+      if (notes != null) 'notes': notes,
+      if (treeId != null) 'tree_id': treeId,
+      if (isDeleted != null) 'is_deleted': isDeleted,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  PersonBondsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? personAId,
+    Value<String>? personBId,
+    Value<String>? bondType,
+    Value<String?>? notes,
+    Value<String>? treeId,
+    Value<bool>? isDeleted,
+    Value<DateTime?>? createdAt,
+    Value<DateTime?>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return PersonBondsCompanion(
+      id: id ?? this.id,
+      personAId: personAId ?? this.personAId,
+      personBId: personBId ?? this.personBId,
+      bondType: bondType ?? this.bondType,
+      notes: notes ?? this.notes,
+      treeId: treeId ?? this.treeId,
+      isDeleted: isDeleted ?? this.isDeleted,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (personAId.present) {
+      map['person_a_id'] = Variable<String>(personAId.value);
+    }
+    if (personBId.present) {
+      map['person_b_id'] = Variable<String>(personBId.value);
+    }
+    if (bondType.present) {
+      map['bond_type'] = Variable<String>(bondType.value);
+    }
+    if (notes.present) {
+      map['notes'] = Variable<String>(notes.value);
+    }
+    if (treeId.present) {
+      map['tree_id'] = Variable<String>(treeId.value);
+    }
+    if (isDeleted.present) {
+      map['is_deleted'] = Variable<bool>(isDeleted.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PersonBondsCompanion(')
+          ..write('id: $id, ')
+          ..write('personAId: $personAId, ')
+          ..write('personBId: $personBId, ')
+          ..write('bondType: $bondType, ')
+          ..write('notes: $notes, ')
+          ..write('treeId: $treeId, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -8172,6 +8804,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     this,
   );
   late final $ResearchNotesTable researchNotes = $ResearchNotesTable(this);
+  late final $PersonBondsTable personBonds = $PersonBondsTable(this);
   late final Index idxFamilyTreesRootPerson = Index(
     'idx_family_trees_root_person',
     'CREATE INDEX idx_family_trees_root_person ON family_trees (root_person_id)',
@@ -8228,6 +8861,14 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'idx_research_notes_person_id',
     'CREATE INDEX idx_research_notes_person_id ON research_notes (person_id)',
   );
+  late final Index idxPersonBondsPersonA = Index(
+    'idx_person_bonds_person_a',
+    'CREATE INDEX idx_person_bonds_person_a ON person_bonds (person_a_id)',
+  );
+  late final Index idxPersonBondsPersonB = Index(
+    'idx_person_bonds_person_b',
+    'CREATE INDEX idx_person_bonds_person_b ON person_bonds (person_b_id)',
+  );
   late final GenealogyPersonDao genealogyPersonDao = GenealogyPersonDao(
     this as AppDatabase,
   );
@@ -8249,6 +8890,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     mediaItems,
     duplicateMarkers,
     researchNotes,
+    personBonds,
     idxFamilyTreesRootPerson,
     idxGenealogyPersonsTreeId,
     idxGenealogyPersonsMergedInto,
@@ -8263,6 +8905,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     idxEventsPersonId,
     idxDuplicateMarkersPersonB,
     idxResearchNotesPersonId,
+    idxPersonBondsPersonA,
+    idxPersonBondsPersonB,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -8308,6 +8952,20 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       ),
       result: [TableUpdate('duplicate_markers', kind: UpdateKind.delete)],
     ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'genealogy_persons',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('person_bonds', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'genealogy_persons',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('person_bonds', kind: UpdateKind.delete)],
+    ),
   ]);
 }
 
@@ -8343,6 +9001,7 @@ typedef $$GenealogyPersonsTableCreateCompanionBuilder =
       Value<String?> occupation,
       Value<String?> religion,
       Value<String?> ethnicity,
+      Value<String?> medicalNotes,
       Value<bool> isPrivate,
       Value<int> privacyLevel,
       required String treeId,
@@ -8385,6 +9044,7 @@ typedef $$GenealogyPersonsTableUpdateCompanionBuilder =
       Value<String?> occupation,
       Value<String?> religion,
       Value<String?> ethnicity,
+      Value<String?> medicalNotes,
       Value<bool> isPrivate,
       Value<int> privacyLevel,
       Value<String> treeId,
@@ -8613,6 +9273,48 @@ final class $$GenealogyPersonsTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<$PersonBondsTable, List<PersonBond>>
+  _bondsAsATable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.personBonds,
+    aliasName: $_aliasNameGenerator(
+      db.genealogyPersons.id,
+      db.personBonds.personAId,
+    ),
+  );
+
+  $$PersonBondsTableProcessedTableManager get bondsAsA {
+    final manager = $$PersonBondsTableTableManager(
+      $_db,
+      $_db.personBonds,
+    ).filter((f) => f.personAId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_bondsAsATable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$PersonBondsTable, List<PersonBond>>
+  _bondsAsBTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.personBonds,
+    aliasName: $_aliasNameGenerator(
+      db.genealogyPersons.id,
+      db.personBonds.personBId,
+    ),
+  );
+
+  $$PersonBondsTableProcessedTableManager get bondsAsB {
+    final manager = $$PersonBondsTableTableManager(
+      $_db,
+      $_db.personBonds,
+    ).filter((f) => f.personBId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_bondsAsBTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$GenealogyPersonsTableFilterComposer
@@ -8771,6 +9473,11 @@ class $$GenealogyPersonsTableFilterComposer
 
   ColumnFilters<String> get ethnicity => $composableBuilder(
     column: $table.ethnicity,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get medicalNotes => $composableBuilder(
+    column: $table.medicalNotes,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9056,6 +9763,56 @@ class $$GenealogyPersonsTableFilterComposer
     );
     return f(composer);
   }
+
+  Expression<bool> bondsAsA(
+    Expression<bool> Function($$PersonBondsTableFilterComposer f) f,
+  ) {
+    final $$PersonBondsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.personBonds,
+      getReferencedColumn: (t) => t.personAId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PersonBondsTableFilterComposer(
+            $db: $db,
+            $table: $db.personBonds,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> bondsAsB(
+    Expression<bool> Function($$PersonBondsTableFilterComposer f) f,
+  ) {
+    final $$PersonBondsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.personBonds,
+      getReferencedColumn: (t) => t.personBId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PersonBondsTableFilterComposer(
+            $db: $db,
+            $table: $db.personBonds,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$GenealogyPersonsTableOrderingComposer
@@ -9214,6 +9971,11 @@ class $$GenealogyPersonsTableOrderingComposer
 
   ColumnOrderings<String> get ethnicity => $composableBuilder(
     column: $table.ethnicity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get medicalNotes => $composableBuilder(
+    column: $table.medicalNotes,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -9406,6 +10168,11 @@ class $$GenealogyPersonsTableAnnotationComposer
 
   GeneratedColumn<String> get ethnicity =>
       $composableBuilder(column: $table.ethnicity, builder: (column) => column);
+
+  GeneratedColumn<String> get medicalNotes => $composableBuilder(
+    column: $table.medicalNotes,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<bool> get isPrivate =>
       $composableBuilder(column: $table.isPrivate, builder: (column) => column);
@@ -9677,6 +10444,56 @@ class $$GenealogyPersonsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> bondsAsA<T extends Object>(
+    Expression<T> Function($$PersonBondsTableAnnotationComposer a) f,
+  ) {
+    final $$PersonBondsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.personBonds,
+      getReferencedColumn: (t) => t.personAId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PersonBondsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.personBonds,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<T> bondsAsB<T extends Object>(
+    Expression<T> Function($$PersonBondsTableAnnotationComposer a) f,
+  ) {
+    final $$PersonBondsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.personBonds,
+      getReferencedColumn: (t) => t.personBId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PersonBondsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.personBonds,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$GenealogyPersonsTableTableManager
@@ -9703,6 +10520,8 @@ class $$GenealogyPersonsTableTableManager
             bool childFamilyLinks,
             bool mediaItemsRefs,
             bool researchNotesRefs,
+            bool bondsAsA,
+            bool bondsAsB,
           })
         > {
   $$GenealogyPersonsTableTableManager(
@@ -9750,6 +10569,7 @@ class $$GenealogyPersonsTableTableManager
                 Value<String?> occupation = const Value.absent(),
                 Value<String?> religion = const Value.absent(),
                 Value<String?> ethnicity = const Value.absent(),
+                Value<String?> medicalNotes = const Value.absent(),
                 Value<bool> isPrivate = const Value.absent(),
                 Value<int> privacyLevel = const Value.absent(),
                 Value<String> treeId = const Value.absent(),
@@ -9790,6 +10610,7 @@ class $$GenealogyPersonsTableTableManager
                 occupation: occupation,
                 religion: religion,
                 ethnicity: ethnicity,
+                medicalNotes: medicalNotes,
                 isPrivate: isPrivate,
                 privacyLevel: privacyLevel,
                 treeId: treeId,
@@ -9832,6 +10653,7 @@ class $$GenealogyPersonsTableTableManager
                 Value<String?> occupation = const Value.absent(),
                 Value<String?> religion = const Value.absent(),
                 Value<String?> ethnicity = const Value.absent(),
+                Value<String?> medicalNotes = const Value.absent(),
                 Value<bool> isPrivate = const Value.absent(),
                 Value<int> privacyLevel = const Value.absent(),
                 required String treeId,
@@ -9872,6 +10694,7 @@ class $$GenealogyPersonsTableTableManager
                 occupation: occupation,
                 religion: religion,
                 ethnicity: ethnicity,
+                medicalNotes: medicalNotes,
                 isPrivate: isPrivate,
                 privacyLevel: privacyLevel,
                 treeId: treeId,
@@ -9902,6 +10725,8 @@ class $$GenealogyPersonsTableTableManager
                 childFamilyLinks = false,
                 mediaItemsRefs = false,
                 researchNotesRefs = false,
+                bondsAsA = false,
+                bondsAsB = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -9915,6 +10740,8 @@ class $$GenealogyPersonsTableTableManager
                     if (childFamilyLinks) db.familyChildrenV2,
                     if (mediaItemsRefs) db.mediaItems,
                     if (researchNotesRefs) db.researchNotes,
+                    if (bondsAsA) db.personBonds,
+                    if (bondsAsB) db.personBonds,
                   ],
                   addJoins:
                       <
@@ -10141,6 +10968,48 @@ class $$GenealogyPersonsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (bondsAsA)
+                        await $_getPrefetchedData<
+                          GenealogyPerson,
+                          $GenealogyPersonsTable,
+                          PersonBond
+                        >(
+                          currentTable: table,
+                          referencedTable: $$GenealogyPersonsTableReferences
+                              ._bondsAsATable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$GenealogyPersonsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).bondsAsA,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.personAId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (bondsAsB)
+                        await $_getPrefetchedData<
+                          GenealogyPerson,
+                          $GenealogyPersonsTable,
+                          PersonBond
+                        >(
+                          currentTable: table,
+                          referencedTable: $$GenealogyPersonsTableReferences
+                              ._bondsAsBTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$GenealogyPersonsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).bondsAsB,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.personBId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -10172,6 +11041,8 @@ typedef $$GenealogyPersonsTableProcessedTableManager =
         bool childFamilyLinks,
         bool mediaItemsRefs,
         bool researchNotesRefs,
+        bool bondsAsA,
+        bool bondsAsB,
       })
     >;
 typedef $$FamilyTreesTableCreateCompanionBuilder =
@@ -14784,6 +15655,489 @@ typedef $$ResearchNotesTableProcessedTableManager =
       ResearchNote,
       PrefetchHooks Function({bool personId})
     >;
+typedef $$PersonBondsTableCreateCompanionBuilder =
+    PersonBondsCompanion Function({
+      required String id,
+      required String personAId,
+      required String personBId,
+      required String bondType,
+      Value<String?> notes,
+      required String treeId,
+      Value<bool> isDeleted,
+      Value<DateTime?> createdAt,
+      Value<DateTime?> updatedAt,
+      Value<int> rowid,
+    });
+typedef $$PersonBondsTableUpdateCompanionBuilder =
+    PersonBondsCompanion Function({
+      Value<String> id,
+      Value<String> personAId,
+      Value<String> personBId,
+      Value<String> bondType,
+      Value<String?> notes,
+      Value<String> treeId,
+      Value<bool> isDeleted,
+      Value<DateTime?> createdAt,
+      Value<DateTime?> updatedAt,
+      Value<int> rowid,
+    });
+
+final class $$PersonBondsTableReferences
+    extends BaseReferences<_$AppDatabase, $PersonBondsTable, PersonBond> {
+  $$PersonBondsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $GenealogyPersonsTable _personAIdTable(_$AppDatabase db) =>
+      db.genealogyPersons.createAlias(
+        $_aliasNameGenerator(db.personBonds.personAId, db.genealogyPersons.id),
+      );
+
+  $$GenealogyPersonsTableProcessedTableManager get personAId {
+    final $_column = $_itemColumn<String>('person_a_id')!;
+
+    final manager = $$GenealogyPersonsTableTableManager(
+      $_db,
+      $_db.genealogyPersons,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_personAIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $GenealogyPersonsTable _personBIdTable(_$AppDatabase db) =>
+      db.genealogyPersons.createAlias(
+        $_aliasNameGenerator(db.personBonds.personBId, db.genealogyPersons.id),
+      );
+
+  $$GenealogyPersonsTableProcessedTableManager get personBId {
+    final $_column = $_itemColumn<String>('person_b_id')!;
+
+    final manager = $$GenealogyPersonsTableTableManager(
+      $_db,
+      $_db.genealogyPersons,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_personBIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$PersonBondsTableFilterComposer
+    extends Composer<_$AppDatabase, $PersonBondsTable> {
+  $$PersonBondsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get bondType => $composableBuilder(
+    column: $table.bondType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get notes => $composableBuilder(
+    column: $table.notes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get treeId => $composableBuilder(
+    column: $table.treeId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$GenealogyPersonsTableFilterComposer get personAId {
+    final $$GenealogyPersonsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.personAId,
+      referencedTable: $db.genealogyPersons,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GenealogyPersonsTableFilterComposer(
+            $db: $db,
+            $table: $db.genealogyPersons,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$GenealogyPersonsTableFilterComposer get personBId {
+    final $$GenealogyPersonsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.personBId,
+      referencedTable: $db.genealogyPersons,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GenealogyPersonsTableFilterComposer(
+            $db: $db,
+            $table: $db.genealogyPersons,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$PersonBondsTableOrderingComposer
+    extends Composer<_$AppDatabase, $PersonBondsTable> {
+  $$PersonBondsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get bondType => $composableBuilder(
+    column: $table.bondType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get notes => $composableBuilder(
+    column: $table.notes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get treeId => $composableBuilder(
+    column: $table.treeId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$GenealogyPersonsTableOrderingComposer get personAId {
+    final $$GenealogyPersonsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.personAId,
+      referencedTable: $db.genealogyPersons,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GenealogyPersonsTableOrderingComposer(
+            $db: $db,
+            $table: $db.genealogyPersons,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$GenealogyPersonsTableOrderingComposer get personBId {
+    final $$GenealogyPersonsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.personBId,
+      referencedTable: $db.genealogyPersons,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GenealogyPersonsTableOrderingComposer(
+            $db: $db,
+            $table: $db.genealogyPersons,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$PersonBondsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PersonBondsTable> {
+  $$PersonBondsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get bondType =>
+      $composableBuilder(column: $table.bondType, builder: (column) => column);
+
+  GeneratedColumn<String> get notes =>
+      $composableBuilder(column: $table.notes, builder: (column) => column);
+
+  GeneratedColumn<String> get treeId =>
+      $composableBuilder(column: $table.treeId, builder: (column) => column);
+
+  GeneratedColumn<bool> get isDeleted =>
+      $composableBuilder(column: $table.isDeleted, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$GenealogyPersonsTableAnnotationComposer get personAId {
+    final $$GenealogyPersonsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.personAId,
+      referencedTable: $db.genealogyPersons,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GenealogyPersonsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.genealogyPersons,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$GenealogyPersonsTableAnnotationComposer get personBId {
+    final $$GenealogyPersonsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.personBId,
+      referencedTable: $db.genealogyPersons,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$GenealogyPersonsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.genealogyPersons,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$PersonBondsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $PersonBondsTable,
+          PersonBond,
+          $$PersonBondsTableFilterComposer,
+          $$PersonBondsTableOrderingComposer,
+          $$PersonBondsTableAnnotationComposer,
+          $$PersonBondsTableCreateCompanionBuilder,
+          $$PersonBondsTableUpdateCompanionBuilder,
+          (PersonBond, $$PersonBondsTableReferences),
+          PersonBond,
+          PrefetchHooks Function({bool personAId, bool personBId})
+        > {
+  $$PersonBondsTableTableManager(_$AppDatabase db, $PersonBondsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PersonBondsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PersonBondsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PersonBondsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> personAId = const Value.absent(),
+                Value<String> personBId = const Value.absent(),
+                Value<String> bondType = const Value.absent(),
+                Value<String?> notes = const Value.absent(),
+                Value<String> treeId = const Value.absent(),
+                Value<bool> isDeleted = const Value.absent(),
+                Value<DateTime?> createdAt = const Value.absent(),
+                Value<DateTime?> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PersonBondsCompanion(
+                id: id,
+                personAId: personAId,
+                personBId: personBId,
+                bondType: bondType,
+                notes: notes,
+                treeId: treeId,
+                isDeleted: isDeleted,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String personAId,
+                required String personBId,
+                required String bondType,
+                Value<String?> notes = const Value.absent(),
+                required String treeId,
+                Value<bool> isDeleted = const Value.absent(),
+                Value<DateTime?> createdAt = const Value.absent(),
+                Value<DateTime?> updatedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PersonBondsCompanion.insert(
+                id: id,
+                personAId: personAId,
+                personBId: personBId,
+                bondType: bondType,
+                notes: notes,
+                treeId: treeId,
+                isDeleted: isDeleted,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$PersonBondsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({personAId = false, personBId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (personAId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.personAId,
+                                referencedTable: $$PersonBondsTableReferences
+                                    ._personAIdTable(db),
+                                referencedColumn: $$PersonBondsTableReferences
+                                    ._personAIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+                    if (personBId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.personBId,
+                                referencedTable: $$PersonBondsTableReferences
+                                    ._personBIdTable(db),
+                                referencedColumn: $$PersonBondsTableReferences
+                                    ._personBIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$PersonBondsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $PersonBondsTable,
+      PersonBond,
+      $$PersonBondsTableFilterComposer,
+      $$PersonBondsTableOrderingComposer,
+      $$PersonBondsTableAnnotationComposer,
+      $$PersonBondsTableCreateCompanionBuilder,
+      $$PersonBondsTableUpdateCompanionBuilder,
+      (PersonBond, $$PersonBondsTableReferences),
+      PersonBond,
+      PrefetchHooks Function({bool personAId, bool personBId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -14806,4 +16160,6 @@ class $AppDatabaseManager {
       $$DuplicateMarkersTableTableManager(_db, _db.duplicateMarkers);
   $$ResearchNotesTableTableManager get researchNotes =>
       $$ResearchNotesTableTableManager(_db, _db.researchNotes);
+  $$PersonBondsTableTableManager get personBonds =>
+      $$PersonBondsTableTableManager(_db, _db.personBonds);
 }

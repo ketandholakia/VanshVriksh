@@ -9,7 +9,7 @@
 // Column entries are `name|notnull|primaryKeyPosition|default` as reported by
 // `PRAGMA table_info`.
 //
-// Schema version: 14. Last reviewed: 2026-09-21.
+// Schema version: 15. Last reviewed: 2026-10-05.
 //
 // `citations`, `citation_links` and `todos` are deliberately absent. Earlier
 // versions created them, but no code ever produced or read them, so they were
@@ -124,6 +124,7 @@ const Map<String, List<String>> expectedColumns = {
     'occupation|0|0|null',
     'religion|0|0|null',
     'ethnicity|0|0|null',
+    'medical_notes|0|0|null',
     'is_private|1|0|0',
     'privacy_level|1|0|0',
     'tree_id|1|0|null',
@@ -141,6 +142,17 @@ const Map<String, List<String>> expectedColumns = {
     'title|0|0|null',
     'description|0|0|null',
     'created_at|1|0|null',
+  ],
+  'person_bonds': [
+    'id|1|1|null',
+    'person_a_id|1|0|null',
+    'person_b_id|1|0|null',
+    'bond_type|1|0|null',
+    'notes|0|0|null',
+    'tree_id|1|0|null',
+    'is_deleted|1|0|0',
+    'created_at|0|0|null',
+    'updated_at|0|0|null',
   ],
   'research_notes': [
     'id|1|1|null',
@@ -195,6 +207,10 @@ const Map<String, List<String>> expectedForeignKeys = {
     'merged_into_id|genealogy_persons|SET NULL',
   ],
   'media_items': ['person_id|genealogy_persons|RESTRICT'],
+  'person_bonds': [
+    'person_a_id|genealogy_persons|CASCADE',
+    'person_b_id|genealogy_persons|CASCADE',
+  ],
   'research_notes': ['person_id|genealogy_persons|RESTRICT'],
   'surname_events': [
     'person_id|genealogy_persons|RESTRICT',
@@ -215,6 +231,8 @@ const Set<String> expectedIndexes = {
   'idx_genealogy_persons_merged_into',
   'idx_genealogy_persons_tree_id',
   'idx_media_items_person_id',
+  'idx_person_bonds_person_a',
+  'idx_person_bonds_person_b',
   'idx_research_notes_person_id',
   'idx_surname_events_person_id',
   'idx_surname_events_related_event_id',
@@ -227,7 +245,8 @@ const Map<String, Set<String>> expectedUniqueConstraints = {
   'families_v2': {'husband_id, wife_id'},
   'family_children_v2': {'family_id, child_id'},
   'genealogy_persons': {'uuid'},
+  'person_bonds': {'person_a_id, person_b_id'},
 };
 
 /// The schema version these expectations describe.
-const int expectedSchemaVersion = 14;
+const int expectedSchemaVersion = 15;
