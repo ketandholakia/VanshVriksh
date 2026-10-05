@@ -92,6 +92,18 @@ class _AddRelationshipPageState extends ConsumerState<AddRelationshipPage> {
             personBId: relatedPersonId,
           );
           break;
+        case 'sibling':
+          // One logical operation: the sibling is attached to every family the
+          // profile person is a child of, and all links commit or roll back
+          // together.
+          await ref
+              .read(personSaveServiceProvider)
+              .addExistingSibling(
+                treeId: AppConstants.defaultTreeId,
+                personId: currentPerson.id,
+                siblingId: relatedPersonId,
+              );
+          break;
       }
 
       if (!mounted) return;
@@ -133,6 +145,8 @@ class _AddRelationshipPageState extends ConsumerState<AddRelationshipPage> {
         return 'Selected person will become spouse of this profile person.';
       case 'child':
         return 'Selected person will become son or daughter of this profile person.';
+      case 'sibling':
+        return 'Selected person will share this profile person\'s parents.';
       default:
         return '';
     }
@@ -144,6 +158,7 @@ class _AddRelationshipPageState extends ConsumerState<AddRelationshipPage> {
       case 'mother':
       case 'spouse':
       case 'child':
+      case 'sibling':
         return relation;
       default:
         return null;
@@ -167,6 +182,8 @@ class _AddRelationshipPageState extends ConsumerState<AddRelationshipPage> {
         return 'Create Spouse';
       case 'child':
         return 'Create Son or Daughter';
+      case 'sibling':
+        return 'Create Sibling';
       default:
         return 'Create Person';
     }
@@ -188,16 +205,19 @@ class _AddRelationshipPageState extends ConsumerState<AddRelationshipPage> {
   }
 
   void _openNewPersonForm(GenealogyPerson currentPerson) {
+    final isSibling = _selectedRelation == 'sibling';
     final relationKind = switch (_selectedRelation) {
       'father' || 'mother' => 'parent',
       'child' => 'child',
       'spouse' => 'spouse',
+      'sibling' => 'sibling',
       _ => 'parent',
     };
 
     final queryParameters = <String, String>{
       'linkPersonId': currentPerson.id,
       'relationKind': relationKind,
+      if (isSibling) 'siblingOfPersonId': currentPerson.id,
       'returnTo': '/people/${widget.personId}',
       'initialGender': _initialGenderForNewPerson(currentPerson.gender),
     };
@@ -267,6 +287,10 @@ class _AddRelationshipPageState extends ConsumerState<AddRelationshipPage> {
                       DropdownMenuItem(
                         value: 'child',
                         child: Text('Son or Daughter'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'sibling',
+                        child: Text('Sibling'),
                       ),
                     ],
                     onChanged: (value) {

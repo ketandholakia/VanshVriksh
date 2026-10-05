@@ -147,6 +147,11 @@ class _PersonFactFormPageState extends ConsumerState<PersonFactFormPage> {
 
       if (!mounted) return;
       context.go('/people/${widget.personId}/facts');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not save: $e')));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

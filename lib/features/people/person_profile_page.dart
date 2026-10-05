@@ -1301,7 +1301,9 @@ class _RelationAvailability {
     final canAddMother = parents.length < 2 && !hasMother;
     final canAddChild = true;
     final canAddSpouse = spousesAsync.asData?.value.isEmpty ?? false;
-    final canAddSibling = hasFather && hasMother;
+    // One recorded parent is enough to establish a sibling: the sibling is
+    // attached to every family the profile person is a child of.
+    final canAddSibling = parents.isNotEmpty;
 
     return _RelationAvailability(
       canAddFather: canAddFather,
@@ -1328,7 +1330,7 @@ void _showRelationChoiceSheet({
     _RelationAction.daughter => 'child',
     _RelationAction.spouse => 'spouse',
     _RelationAction.child => 'child',
-    _RelationAction.sibling => 'child',
+    _RelationAction.sibling => 'sibling',
   };
 
   final title = switch (action) {
