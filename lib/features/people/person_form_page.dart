@@ -77,6 +77,9 @@ class _PersonFormPageState extends ConsumerState<PersonFormPage> {
   bool _isResolvingCurrentPlace = false;
   bool _isSearchingBirthPlaces = false;
   int _birthPlaceSearchToken = 0;
+  // Remote place search is debounced: one Nominatim request per pause in
+  // typing, not per keystroke.
+  Timer? _placeSearchDebounce;
   String? _selectedSpouseId;
   String? _selectedSiblingParentId;
 
@@ -100,6 +103,7 @@ class _PersonFormPageState extends ConsumerState<PersonFormPage> {
 
   @override
   void dispose() {
+    _placeSearchDebounce?.cancel();
     _prefixController.dispose();
     _fullNameController.dispose();
     _firstNameController.dispose();
@@ -1144,7 +1148,11 @@ class _PersonFormPageState extends ConsumerState<PersonFormPage> {
                           : null,
                     ),
                     onChanged: (value) {
-                      unawaited(_searchBirthPlaces(value));
+                      _placeSearchDebounce?.cancel();
+                      _placeSearchDebounce = Timer(
+                        const Duration(milliseconds: 350),
+                        () => unawaited(_searchBirthPlaces(value)),
+                      );
                     },
                   ),
                   if (_placeSuggestions.isNotEmpty) ...[

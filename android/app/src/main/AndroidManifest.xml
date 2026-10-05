@@ -1,6 +1,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Place autocomplete (Nominatim) and reverse geocoding. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- "Use current place" in the person form. Coarse only: no precise
+         location is needed to resolve a city-level place name. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Profile photo picking. Superseded by READ_MEDIA_IMAGES on API 33+. -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
 
     <application
         android:label="VanshVriksh"
