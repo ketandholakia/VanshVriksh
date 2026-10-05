@@ -1,16 +1,28 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:archive/archive_io.dart';
-import 'package:crypto/crypto.dart';
-import 'package:encrypt/encrypt.dart' as encrypt;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:pointycastle/export.dart' as pc;
+import 'package:sqlite3/sqlite3.dart' as sql;
 
+import '../data/database/app_database.dart';
+import 'backup_container.dart';
+
+/// Creates and restores VanshVriksh backups.
+///
+/// A backup is a ZIP of the database file plus the photo/media directories.
+/// With a password it is wrapped in the `VVBK1` container — see
+/// [BackupContainerCodec] for the format and the crypto.
 class BackupService {
+  BackupService({AppDatabase? database}) : _database = database;
+
+  /// The live connection, used only to checkpoint the WAL so the database
+  /// file on disk is complete before it is copied or replaced. Optional:
+  /// without it the service still works, just without the checkpoint.
+  final AppDatabase? _database;
+
   static const String databaseFileName = 'vanshvriksh.db';
   static const String profilePhotosFolderName = 'profile_photos';
   static const String personMediaFolderName = 'person_media';
@@ -20,6 +32,10 @@ class BackupService {
   static const String lastBackupFileKey = 'last_backup_file';
 
   Future<File> createBackup({String? password}) async {
+    // Flush any write-ahead log into the database file so the copy captures
+    // every committed transaction.
+    await _checkpointLiveDatabase();
+
     final backupFile = await _createZipBackup();
     if (password == null || password.isEmpty) {
       await _recordBackup(
@@ -32,6 +48,12 @@ class BackupService {
     }
 
     final encryptedFile = await _encryptBackupFile(backupFile, password);
+    // The password protects nothing if the plaintext zip stays behind.
+    try {
+      await backupFile.delete();
+    } catch (_) {
+      // Best effort; the encrypted file is already safely written.
+    }
     await _recordBackup(
       location: 'local',
       fileName: p.basename(encryptedFile.path),
@@ -53,21 +75,148 @@ class BackupService {
       throw Exception('Invalid backup file. Database not found in backup.');
     }
 
-    for (final file in archive.files) {
-      final outputPath = p.join(appDir.path, file.name);
-
-      if (file.isFile) {
-        final outputFile = File(outputPath);
-        if (!await outputFile.parent.exists()) {
-          await outputFile.parent.create(recursive: true);
-        }
-        await outputFile.writeAsBytes(file.content as List<int>);
-      } else {
-        final outputDir = Directory(outputPath);
-        if (!await outputDir.exists()) {
-          await outputDir.create(recursive: true);
+    // Stage everything in a scratch directory first. Nothing in the app
+    // directory is touched until every entry has passed the path check and
+    // the staged database has passed an integrity check.
+    final stagingDir = Directory(
+      p.join(
+        appDir.path,
+        'backups',
+        'restore_staging_${DateTime.now().millisecondsSinceEpoch}',
+      ),
+    );
+    await stagingDir.create(recursive: true);
+    try {
+      for (final file in archive.files) {
+        // Refuses absolute paths and `..` segments (zip slip) before the
+        // name is ever joined onto a directory.
+        final destination = safeRestoreDestination(appDir.path, file.name);
+        final stagedPath = p.join(
+          stagingDir.path,
+          p.relative(destination, from: appDir.path),
+        );
+        if (file.isFile) {
+          final outputFile = File(stagedPath);
+          if (!await outputFile.parent.exists()) {
+            await outputFile.parent.create(recursive: true);
+          }
+          await outputFile.writeAsBytes(file.content as List<int>);
+        } else {
+          final outputDir = Directory(stagedPath);
+          if (!await outputDir.exists()) {
+            await outputDir.create(recursive: true);
+          }
         }
       }
+
+      _verifyStagedDatabase(p.join(stagingDir.path, databaseFileName));
+
+      // Snapshot the current state first, so restoring a wrong or broken
+      // file is recoverable.
+      final snapshot = await _createZipBackup(
+        fileNamePrefix: 'vanshvriksh_pre_restore',
+      );
+      await _recordBackup(
+        location: 'pre-restore',
+        fileName: p.basename(snapshot.path),
+        filePath: snapshot.path,
+        encrypted: false,
+      );
+
+      await _checkpointLiveDatabase();
+
+      // Copy the verified staged files into place.
+      await for (final entity in stagingDir.list(recursive: true)) {
+        final relative = p.relative(entity.path, from: stagingDir.path);
+        final target = p.join(appDir.path, relative);
+        if (entity is File) {
+          final targetFile = File(target);
+          if (!await targetFile.parent.exists()) {
+            await targetFile.parent.create(recursive: true);
+          }
+          await entity.copy(target);
+        } else if (entity is Directory) {
+          final targetDir = Directory(target);
+          if (!await targetDir.exists()) {
+            await targetDir.create(recursive: true);
+          }
+        }
+      }
+
+      // Stale journal companions of the replaced database would corrupt the
+      // freshly copied file on next open.
+      for (final companion in ['-wal', '-shm']) {
+        final companionFile = File(
+          '${p.join(appDir.path, databaseFileName)}$companion',
+        );
+        if (await companionFile.exists()) {
+          try {
+            await companionFile.delete();
+          } catch (_) {
+            // The connection may hold it open; the checkpoint above has
+            // already folded its contents into the database file.
+          }
+        }
+      }
+    } finally {
+      try {
+        await stagingDir.delete(recursive: true);
+      } catch (_) {
+        // Best effort cleanup.
+      }
+    }
+  }
+
+  /// Resolves [entryName] (a ZIP entry path) to a path inside [rootDir],
+  /// refusing anything that would escape it: absolute paths, drive letters,
+  /// backslash tricks, and `..` segments.
+  static String safeRestoreDestination(String rootDir, String entryName) {
+    final normalized = entryName.replaceAll('\\', '/');
+    if (normalized.startsWith('/') ||
+        RegExp(r'^[A-Za-z]:').hasMatch(normalized)) {
+      throw FormatException('Unsafe backup entry (absolute path): $entryName');
+    }
+    final segments = normalized
+        .split('/')
+        .where((segment) => segment.isNotEmpty && segment != '.')
+        .toList();
+    if (segments.isEmpty) {
+      throw FormatException('Unsafe backup entry (empty path): $entryName');
+    }
+    if (segments.contains('..')) {
+      throw FormatException('Unsafe backup entry (path traversal): $entryName');
+    }
+    return p.joinAll([rootDir, ...segments]);
+  }
+
+  /// Opens the staged database read-only and runs SQLite's integrity check,
+  /// so a corrupt restore fails before overwriting the live data.
+  void _verifyStagedDatabase(String path) {
+    final db = sql.sqlite3.open(path, mode: sql.OpenMode.readOnly);
+    try {
+      final rows = db.select('PRAGMA integrity_check');
+      final status = rows.isEmpty
+          ? ''
+          : (rows.first.values.first?.toString() ?? '');
+      if (status != 'ok') {
+        throw Exception(
+          'The backup database failed the integrity check ($status). '
+          'The live data was not modified.',
+        );
+      }
+    } finally {
+      db.close();
+    }
+  }
+
+  Future<void> _checkpointLiveDatabase() async {
+    final db = _database;
+    if (db == null) return;
+    try {
+      db.customStatement('PRAGMA wal_checkpoint(TRUNCATE)');
+    } catch (_) {
+      // The connection may be closing; the file copy still captures the
+      // last committed state.
     }
   }
 
@@ -83,7 +232,9 @@ class BackupService {
     return history.isEmpty ? null : history.first;
   }
 
-  Future<File> _createZipBackup() async {
+  Future<File> _createZipBackup({
+    String fileNamePrefix = 'vanshvriksh_backup',
+  }) async {
     final appDir = await getApplicationDocumentsDirectory();
 
     final dbFile = File(p.join(appDir.path, databaseFileName));
@@ -98,7 +249,7 @@ class BackupService {
 
     final now = DateTime.now();
     final fileName =
-        'vanshvriksh_backup_${now.year}_${_two(now.month)}_${_two(now.day)}_${_two(now.hour)}_${_two(now.minute)}.zip';
+        '${fileNamePrefix}_${now.year}_${_two(now.month)}_${_two(now.day)}_${_two(now.hour)}_${_two(now.minute)}.zip';
     final backupPath = p.join(backupDir.path, fileName);
 
     final encoder = ZipFileEncoder();
@@ -124,7 +275,7 @@ class BackupService {
   }
 
   Future<File> _encryptBackupFile(File backupFile, String password) async {
-    final encryptedBytes = _encryptBytes(
+    final encryptedBytes = BackupContainerCodec.encrypt(
       await backupFile.readAsBytes(),
       password,
     );
@@ -138,9 +289,13 @@ class BackupService {
     File backupFile,
     String? password,
   ) async {
-    final encrypted = _isEncryptedFile(backupFile);
+    final bytes = await backupFile.readAsBytes();
+    // Encrypted files are recognised by extension and by the container
+    // magic, so a renamed backup still asks for its password.
+    final encrypted =
+        _isEncryptedFile(backupFile) || BackupContainerCodec.hasMagic(bytes);
     if (!encrypted) {
-      return backupFile.readAsBytes();
+      return bytes;
     }
 
     if (password == null || password.isEmpty) {
@@ -149,66 +304,11 @@ class BackupService {
       );
     }
 
-    return _decryptBytes(await backupFile.readAsBytes(), password);
+    return BackupContainerCodec.decrypt(bytes, password);
   }
 
   bool _isEncryptedFile(File file) =>
       p.extension(file.path).toLowerCase() == '.enc';
-
-  List<int> _encryptBytes(List<int> input, String password) {
-    final key = encrypt.Key(_deriveKey(password));
-    final iv = encrypt.IV.fromSecureRandom(16);
-    final encrypter = encrypt.Encrypter(
-      encrypt.AES(key, mode: encrypt.AESMode.cbc),
-    );
-    final encrypted = encrypter.encryptBytes(Uint8List.fromList(input), iv: iv);
-    return [...iv.bytes, ...encrypted.bytes];
-  }
-
-  List<int> _decryptBytes(List<int> input, String password) {
-    if (input.length <= 16) {
-      throw Exception('Invalid encrypted backup.');
-    }
-
-    final iv = encrypt.IV(Uint8List.fromList(input.sublist(0, 16)));
-    final cipherBytes = input.sublist(16);
-
-    // First try with the new PBKDF2 key
-    try {
-      final key = encrypt.Key(_deriveKey(password));
-      final encrypter = encrypt.Encrypter(
-        encrypt.AES(key, mode: encrypt.AESMode.cbc),
-      );
-      return encrypter.decryptBytes(
-        encrypt.Encrypted(Uint8List.fromList(cipherBytes)),
-        iv: iv,
-      );
-    } catch (e) {
-      // If decryption fails (padding or MAC error), fallback to legacy SHA-256 key
-      final legacyKey = encrypt.Key(_deriveLegacyKey(password));
-      final encrypter = encrypt.Encrypter(
-        encrypt.AES(legacyKey, mode: encrypt.AESMode.cbc),
-      );
-      return encrypter.decryptBytes(
-        encrypt.Encrypted(Uint8List.fromList(cipherBytes)),
-        iv: iv,
-      );
-    }
-  }
-
-  Uint8List _deriveKey(String password) {
-    // PBKDF2 with 100,000 iterations for secure key derivation
-    final salt = utf8.encode('vanshvriksh_backup_salt');
-    final derivator = pc.KeyDerivator('SHA-256/HMAC/PBKDF2');
-    derivator.init(pc.Pbkdf2Parameters(Uint8List.fromList(salt), 100000, 32));
-    return derivator.process(Uint8List.fromList(utf8.encode(password)));
-  }
-
-  Uint8List _deriveLegacyKey(String password) {
-    // Legacy insecure SHA-256 derivation used in v1 backups
-    final digest = sha256.convert(utf8.encode(password));
-    return Uint8List.fromList(digest.bytes);
-  }
 
   Future<void> _recordBackup({
     required String location,
