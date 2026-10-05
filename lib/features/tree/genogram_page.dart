@@ -2,34 +2,102 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../../core/constants/app_constants.dart';
+import '../settings/app_settings_provider.dart';
 import '../../core/extensions/genealogy_person_extensions.dart';
 import '../../data/database/app_database.dart';
+import '../../data/providers/relationship_repository_provider.dart';
 import 'ancestor_tree_layout.dart';
+import 'chart_image_exporter.dart';
 import 'chart_providers.dart';
 import 'generation_tree_layout.dart';
 import 'tree_models.dart';
 
 /// A genogram-style view of the family over the hourglass arrangement:
 /// squares for male, circles for female, a cross through the deceased,
-/// double slashes on a divorced couple's union line, and dashed connector
-/// lines for adopted/foster/step parentage.
+/// double slashes on a divorced couple's union line, dashed connector lines
+/// for adopted/foster/step parentage, and the standard relationship-dynamic
+/// lines (close, distant, conflict, estranged) recorded as person bonds.
 ///
-/// It maps what the data model actually records — gender, life dates,
-/// divorce, and the parentage type — and draws no medical or emotional
-/// annotations, because the schema has no fields for them yet. It is the
-/// honest v1: standard genogram *symbols* over the facts the app stores.
-class GenogramChartPage extends ConsumerWidget {
+/// Medical context (hereditary conditions, causes of death) is written on
+/// each person's form ("Medical Notes") and shown from a person's legend
+/// sheet here.
+class GenogramChartPage extends ConsumerStatefulWidget {
   const GenogramChartPage({super.key, required this.personId});
 
   final String personId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final chart = ref.watch(genogramChartProvider(personId));
+  ConsumerState<GenogramChartPage> createState() => _GenogramChartPageState();
+}
+
+class _GenogramChartPageState extends ConsumerState<GenogramChartPage> {
+  void Function(Canvas canvas, Size size)? _painter;
+  Size _canvasSize = Size.zero;
+  bool _exporting = false;
+
+  Future<void> _exportPng() async {
+    final painter = _painter;
+    if (painter == null || _exporting || _canvasSize.isEmpty) return;
+    setState(() => _exporting = true);
+    try {
+      final file = await renderChartPng(
+        canvasSize: _canvasSize,
+        dateFormat: DateDisplayFormat.fullDate,
+        fileNamePrefix: 'vanshvriksh_genogram',
+        paint: painter,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Genogram image saved: ${file.path}')),
+      );
+      await SharePlus.instance.share(
+        ShareParams(files: [XFile(file.path)], text: 'Genogram - VanshVriksh'),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not export the genogram: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final chart = ref.watch(genogramChartProvider(widget.personId));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Genogram')),
+      appBar: AppBar(
+        title: const Text('Genogram'),
+        actions: [
+          IconButton(
+            tooltip: 'Save as image',
+            onPressed: _painter == null || _exporting ? null : _exportPng,
+            icon: _exporting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.image_outlined),
+          ),
+          chart.maybeWhen(
+            data: (data) => data == null
+                ? const SizedBox.shrink()
+                : IconButton(
+                    tooltip: 'Relationships & medical',
+                    icon: const Icon(Icons.edit_note_outlined),
+                    onPressed: () =>
+                        showGenogramAnnotationsSheet(context, ref, data),
+                  ),
+            orElse: () => const SizedBox.shrink(),
+          ),
+        ],
+      ),
       body: chart.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(
@@ -73,19 +141,432 @@ class GenogramChartPage extends ConsumerWidget {
             focusId: data.focusId,
           );
 
-          return GenogramCanvas(
-            layout: layout,
-            people: data.people,
-            focusId: data.focusId,
-            fatherOf: data.ancestors.fatherOf,
-            motherOf: data.ancestors.motherOf,
-            couples: data.descendants.couples,
-            families: data.families,
-            childLinkTypes: data.childLinkTypes,
+          _painter = (canvas, size) {
+            GenogramPainter(
+              cardRects: layout.cardRects,
+              people: data.people,
+              focusId: data.focusId,
+              couples: data.descendants.couples,
+              familiesById: {
+                for (final family in data.families) family.id: family,
+              },
+              childLinkTypes: data.childLinkTypes,
+              bonds: data.bonds,
+              fatherOf: data.ancestors.fatherOf,
+              motherOf: data.ancestors.motherOf,
+              lineColor: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: 0.65),
+              maleColor: Theme.of(context).colorScheme.primary,
+              femaleColor: Theme.of(context).colorScheme.tertiary,
+              textColor: Theme.of(context).colorScheme.onSurface,
+              focusColor: Theme.of(context).colorScheme.primary,
+              levelGap: 46,
+            ).paint(canvas, size);
+          };
+          _canvasSize = layout.canvasSize;
+
+          return Stack(
+            children: [
+              GenogramCanvas(
+                layout: layout,
+                people: data.people,
+                focusId: data.focusId,
+                fatherOf: data.ancestors.fatherOf,
+                motherOf: data.ancestors.motherOf,
+                couples: data.descendants.couples,
+                families: data.families,
+                childLinkTypes: data.childLinkTypes,
+                bonds: data.bonds,
+              ),
+              const Positioned(left: 12, bottom: 12, child: _BondLegend()),
+            ],
           );
         },
       ),
     );
+  }
+}
+
+/// The legend for the relationship-dynamic lines.
+class _BondLegend extends StatelessWidget {
+  const _BondLegend();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final line = colorScheme.primary.withValues(alpha: 0.65);
+
+    Widget sample(Widget line) => SizedBox(width: 34, height: 12, child: line);
+
+    return Card(
+      color: colorScheme.surface.withValues(alpha: 0.92),
+      elevation: 1,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _legendRow(
+              sample(
+                CustomPaint(
+                  painter: _LegendLinePainter(kind: 'close', color: line),
+                  size: const Size(34, 12),
+                ),
+              ),
+              'Close',
+            ),
+            const SizedBox(height: 4),
+            _legendRow(
+              sample(
+                CustomPaint(
+                  painter: _LegendLinePainter(kind: 'conflict', color: line),
+                  size: const Size(34, 12),
+                ),
+              ),
+              'Conflict',
+            ),
+            const SizedBox(height: 4),
+            _legendRow(
+              sample(
+                CustomPaint(
+                  painter: _LegendLinePainter(kind: 'estranged', color: line),
+                  size: const Size(34, 12),
+                ),
+              ),
+              'Estranged',
+            ),
+            const SizedBox(height: 4),
+            _legendRow(
+              sample(
+                CustomPaint(
+                  painter: _LegendLinePainter(kind: 'distant', color: line),
+                  size: const Size(34, 12),
+                ),
+              ),
+              'Distant',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _legendRow(Widget sample, String label) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      sample,
+      const SizedBox(width: 8),
+      Text(label, style: const TextStyle(fontSize: 11)),
+    ],
+  );
+}
+
+class _LegendLinePainter extends CustomPainter {
+  const _LegendLinePainter({required this.kind, required this.color});
+
+  final String kind;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final start = Offset(0, size.height / 2);
+    final end = Offset(size.width, size.height / 2);
+    final painter = GenogramPainter(
+      cardRects: const {},
+      people: const {},
+      focusId: '',
+      couples: const [],
+      familiesById: const {},
+      childLinkTypes: const {},
+      bonds: const [],
+      fatherOf: const {},
+      motherOf: const {},
+      lineColor: color,
+      maleColor: color,
+      femaleColor: color,
+      textColor: color,
+      focusColor: color,
+      levelGap: 46,
+    );
+    switch (kind) {
+      case 'close':
+        painter._line(canvas, start, end);
+        painter._line(canvas, start.translate(0, 4), end.translate(0, 4));
+        break;
+      case 'conflict':
+        final segments = 6;
+        final step = size.width / segments;
+        final points = <Offset>[start];
+        for (var i = 1; i < segments; i++) {
+          points.add(
+            Offset(start.dx + step * i, start.dy + (i.isOdd ? -5.0 : 5.0)),
+          );
+        }
+        points.add(end);
+        painter._polyline(canvas, points);
+        break;
+      case 'distant':
+        painter._dashedPolyline(canvas, [start, end], dash: 2, gap: 4);
+        break;
+      default:
+        painter._dashedPolyline(canvas, [start, end]);
+        final mid = Offset(size.width / 2, size.height / 2);
+        painter._line(canvas, mid.translate(-4, -6), mid.translate(4, 6));
+        break;
+    }
+  }
+
+  @override
+  bool shouldRepaint(_LegendLinePainter oldDelegate) =>
+      oldDelegate.kind != kind || oldDelegate.color != color;
+}
+
+/// Adds, retypes and removes relationship bonds among the visible people, and
+/// shows each person's medical notes.
+Future<void> showGenogramAnnotationsSheet(
+  BuildContext context,
+  WidgetRef ref,
+  GenogramChartData data,
+) {
+  return showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (sheetContext) => DriftSafeAnnotationsSheet(data: data),
+  );
+}
+
+class DriftSafeAnnotationsSheet extends ConsumerStatefulWidget {
+  const DriftSafeAnnotationsSheet({super.key, required this.data});
+
+  final GenogramChartData data;
+
+  @override
+  ConsumerState<DriftSafeAnnotationsSheet> createState() =>
+      _DriftSafeAnnotationsSheetState();
+}
+
+class _DriftSafeAnnotationsSheetState
+    extends ConsumerState<DriftSafeAnnotationsSheet> {
+  String? _personAId;
+  String? _personBId;
+  String _bondType = 'close';
+  bool _saving = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final data = widget.data;
+    final people = data.people.values.toList()
+      ..sort(
+        (a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()),
+      );
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 8,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Relationship dynamics',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'These lines are drawn on the genogram between the two '
+                'people. Medical notes live on each person\'s form and show '
+                'below.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              ..._existingBonds(data),
+              const Divider(height: 24),
+              const Text('Add a bond'),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      initialValue: _personAId,
+                      decoration: const InputDecoration(labelText: 'Person'),
+                      items: [
+                        for (final person in people)
+                          DropdownMenuItem(
+                            value: person.id,
+                            child: Text(
+                              person.fullName,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                      onChanged: (value) => setState(() => _personAId = value),
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Text('—'),
+                  ),
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      initialValue: _personBId,
+                      decoration: const InputDecoration(labelText: 'Person'),
+                      items: [
+                        for (final person in people)
+                          DropdownMenuItem(
+                            value: person.id,
+                            child: Text(
+                              person.fullName,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                      onChanged: (value) => setState(() => _personBId = value),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'close', label: Text('Close')),
+                  ButtonSegment(value: 'conflict', label: Text('Conflict')),
+                  ButtonSegment(value: 'estranged', label: Text('Estranged')),
+                  ButtonSegment(value: 'distant', label: Text('Distant')),
+                ],
+                selected: {_bondType},
+                onSelectionChanged: (selection) =>
+                    setState(() => _bondType = selection.first),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: _saving ? null : () => _saveBond(),
+                icon: _saving
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.add_link_outlined),
+                label: const Text('Save bond'),
+              ),
+              const Divider(height: 24),
+              const Text('Medical notes'),
+              const SizedBox(height: 8),
+              ..._medicalNotes(data),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _existingBonds(GenogramChartData data) {
+    if (data.bonds.isEmpty) {
+      return [
+        Text(
+          'No relationship dynamics recorded yet.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ];
+    }
+    String name(String id) => data.people[id]?.fullName ?? 'Unknown';
+
+    return [
+      for (final bond in data.bonds)
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          leading: const Icon(Icons.link_outlined),
+          title: Text('${name(bond.personAId)} — ${name(bond.personBId)}'),
+          subtitle: Text(bond.bondType),
+          trailing: IconButton(
+            tooltip: 'Remove bond',
+            icon: const Icon(Icons.link_off_outlined),
+            onPressed: () async {
+              await ref
+                  .read(relationshipRepositoryProvider)
+                  .removePersonBond(
+                    personAId: bond.personAId,
+                    personBId: bond.personBId,
+                  );
+              ref.invalidate(genogramChartProvider(data.focusId));
+              if (mounted) Navigator.of(context).pop();
+            },
+          ),
+        ),
+    ];
+  }
+
+  Future<void> _saveBond() async {
+    final a = _personAId;
+    final b = _personBId;
+    if (a == null || b == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Pick both people.')));
+      return;
+    }
+    if (a == b) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pick two different people.')),
+      );
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      await ref
+          .read(relationshipRepositoryProvider)
+          .addPersonBond(
+            treeId: AppConstants.defaultTreeId,
+            personAId: a,
+            personBId: b,
+            bondType: _bondType,
+          );
+      ref.invalidate(genogramChartProvider(widget.data.focusId));
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not save the bond: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  List<Widget> _medicalNotes(GenogramChartData data) {
+    final entries = data.medicalNotes.entries.toList();
+    if (entries.isEmpty) {
+      return [
+        Text(
+          'No medical notes recorded. Add them on a person\'s edit form.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ];
+    }
+    return [
+      for (final entry in entries)
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          leading: const Icon(Icons.medical_services_outlined),
+          title: Text(data.people[entry.key]?.fullName ?? 'Unknown'),
+          subtitle: Text(entry.value),
+        ),
+    ];
   }
 }
 
@@ -100,6 +581,7 @@ class GenogramCanvas extends StatelessWidget {
     required this.couples,
     required this.families,
     required this.childLinkTypes,
+    this.bonds = const [],
   });
 
   final GenerationTreeLayout layout;
@@ -110,6 +592,7 @@ class GenogramCanvas extends StatelessWidget {
   final List<TreeCouple> couples;
   final List<FamiliesV2Data> families;
   final Map<String, String> childLinkTypes;
+  final List<PersonBond> bonds;
 
   @override
   Widget build(BuildContext context) {
@@ -133,6 +616,7 @@ class GenogramCanvas extends StatelessWidget {
             couples: couples,
             familiesById: familiesById,
             childLinkTypes: childLinkTypes,
+            bonds: bonds,
             fatherOf: fatherOf,
             motherOf: motherOf,
             lineColor: lineColor,
@@ -157,6 +641,7 @@ class GenogramPainter extends CustomPainter {
     required this.couples,
     required this.familiesById,
     required this.childLinkTypes,
+    this.bonds = const [],
     required this.fatherOf,
     required this.motherOf,
     required this.lineColor,
@@ -173,6 +658,7 @@ class GenogramPainter extends CustomPainter {
   final List<TreeCouple> couples;
   final Map<String, FamiliesV2Data> familiesById;
   final Map<String, String> childLinkTypes;
+  final List<PersonBond> bonds;
   final Map<String, String?> fatherOf;
   final Map<String, String?> motherOf;
   final Color lineColor;
@@ -187,12 +673,54 @@ class GenogramPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    _drawBondLines(canvas);
     _drawUnionLines(canvas);
     _drawAncestorChildLines(canvas);
     for (final entry in cardRects.entries) {
       final person = people[entry.key];
       if (person != null) {
         _drawPerson(canvas, person, entry.value, entry.key == focusId);
+      }
+    }
+  }
+
+  /// Relationship dynamics between visible pairs, drawn in the standard
+  /// genogram patterns: close = two parallel lines, distant = dotted,
+  /// conflict = zigzag, estranged = dashed with a perpendicular slash.
+  void _drawBondLines(Canvas canvas) {
+    for (final bond in bonds) {
+      final a = cardRects[bond.personAId];
+      final b = cardRects[bond.personBId];
+      if (a == null || b == null) continue;
+      final start = Offset(a.right, a.center.dy);
+      final end = Offset(b.left, b.center.dy);
+      if (end.dx <= start.dx) continue; // only horizontal pairs
+      switch (bond.bondType) {
+        case 'close':
+          _line(canvas, start, end);
+          _line(canvas, start.translate(0, 4), end.translate(0, 4));
+          break;
+        case 'distant':
+          _dashedPolyline(canvas, [start, end], dash: 2, gap: 5);
+          break;
+        case 'conflict':
+          final segments = 8;
+          final step = (end.dx - start.dx) / segments;
+          final points = <Offset>[start];
+          for (var i = 1; i < segments; i++) {
+            points.add(
+              Offset(start.dx + step * i, start.dy + (i.isOdd ? -6.0 : 6.0)),
+            );
+          }
+          points.add(end);
+          _polyline(canvas, points);
+          break;
+        case 'estranged':
+        default:
+          _dashedPolyline(canvas, [start, end]);
+          final mid = Offset((start.dx + end.dx) / 2, start.dy);
+          _line(canvas, mid.translate(-5, -7), mid.translate(5, 7), width: 2.4);
+          break;
       }
     }
   }
@@ -380,14 +908,17 @@ class GenogramPainter extends CustomPainter {
     canvas.drawPath(path, paint);
   }
 
-  void _dashedPolyline(Canvas canvas, List<Offset> points) {
+  void _dashedPolyline(
+    Canvas canvas,
+    List<Offset> points, {
+    double dash = 6,
+    double gap = 5,
+  }) {
     final paint = Paint()
       ..color = lineColor
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
-    const dash = 6.0;
-    const gap = 5.0;
     for (var i = 0; i < points.length - 1; i++) {
       final start = points[i];
       final end = points[i + 1];

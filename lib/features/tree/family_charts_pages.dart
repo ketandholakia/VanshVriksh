@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../data/database/app_database.dart';
 import '../settings/app_settings_provider.dart';
 import 'ancestor_tree_layout.dart';
 import 'chart_canvas.dart';
+import 'chart_image_exporter.dart';
 import 'chart_providers.dart';
 import 'generation_tree_layout.dart';
 
@@ -151,7 +153,7 @@ class BowTieChartPage extends ConsumerWidget {
   }
 }
 
-class _ChartScaffold<T> extends ConsumerWidget {
+class _ChartScaffold<T> extends ConsumerStatefulWidget {
   const _ChartScaffold({
     required this.title,
     required this.personId,
@@ -165,27 +167,88 @@ class _ChartScaffold<T> extends ConsumerWidget {
   final GenerationTreeLayout Function(T data) buildLayout;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ChartScaffold<T>> createState() => _ChartScaffoldState<T>();
+}
+
+class _ChartScaffoldState<T> extends ConsumerState<_ChartScaffold<T>> {
+  GenerationTreeLayout? _lastLayout;
+  Map<String, GenealogyPerson>? _lastPeople;
+  bool _exporting = false;
+
+  Future<void> _exportPng() async {
+    final layout = _lastLayout;
+    final people = _lastPeople;
+    if (layout == null || people == null || _exporting) return;
+    setState(() => _exporting = true);
+    try {
+      final file = await renderLayoutPng(
+        layout: layout,
+        people: people,
+        rootId: widget.personId,
+        dateFormat:
+            ref.read(dateDisplayFormatProvider).value ??
+            DateDisplayFormat.fullDate,
+        hideYearsForLiving: ref.read(hideYearsForLivingProvider).value ?? false,
+        fileNamePrefix:
+            'vanshvriksh_${widget.title.toLowerCase().replaceAll(' ', '_')}',
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Chart image saved: ${file.path}')),
+      );
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          text: '${widget.title} chart - VanshVriksh',
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not export the chart: $e')));
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final dateFormat =
         ref.watch(dateDisplayFormatProvider).value ??
         DateDisplayFormat.fullDate;
     final hideYears = ref.watch(hideYearsForLivingProvider).value ?? false;
 
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: chart.when(
+      appBar: AppBar(
+        title: Text(widget.title),
+        actions: [
+          IconButton(
+            tooltip: 'Save as image',
+            onPressed: _lastLayout == null || _exporting ? null : _exportPng,
+            icon: _exporting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.image_outlined),
+          ),
+        ],
+      ),
+      body: widget.chart.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Text('Failed to load chart:\n$error'),
+            child: Text('Failed to load chart: $error'),
           ),
         ),
         data: (data) {
           if (data == null) {
             return const Center(child: Text('Person not found'));
           }
-          final layout = buildLayout(data);
+          final layout = widget.buildLayout(data);
           final people = switch (data) {
             DirectLineData d => d.people,
             DescendantLineData d => d.people,
@@ -193,6 +256,8 @@ class _ChartScaffold<T> extends ConsumerWidget {
             BowTieChartData d => d.people,
             _ => <String, GenealogyPerson>{},
           };
+          _lastLayout = layout;
+          _lastPeople = people;
 
           return InheritedChartSettings(
             dateFormat: dateFormat,
@@ -200,7 +265,7 @@ class _ChartScaffold<T> extends ConsumerWidget {
             child: FamilyChartCanvas(
               layout: layout,
               people: people,
-              rootId: personId,
+              rootId: widget.personId,
             ),
           );
         },

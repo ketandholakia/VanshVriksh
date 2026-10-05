@@ -327,6 +327,8 @@ class GenogramChartData extends HourglassChartData {
     required super.descendants,
     required this.families,
     required this.childLinkTypes,
+    required this.bonds,
+    required this.medicalNotes,
   });
 
   /// The live families of the visible couples.
@@ -334,6 +336,13 @@ class GenogramChartData extends HourglassChartData {
 
   /// `'$familyId:$childId'` → link type (`biological`, `adopted`, …).
   final Map<String, String> childLinkTypes;
+
+  /// Every recorded relationship dynamic in the tree; the painter draws the
+  /// ones whose pair is visible.
+  final List<PersonBond> bonds;
+
+  /// `personId` → medical notes, shown on the person's detail sheet.
+  final Map<String, String> medicalNotes;
 }
 
 final genogramChartProvider = FutureProvider.family<GenogramChartData?, String>(
@@ -369,12 +378,22 @@ final genogramChartProvider = FutureProvider.family<GenogramChartData?, String>(
       }
     }
 
+    final bonds = await ref
+        .watch(relationshipRepositoryProvider)
+        .getBondsForTree(person.treeId);
+
     return GenogramChartData(
       focusId: personId,
       ancestors: ancestors,
       descendants: descendants,
       families: families,
       childLinkTypes: childLinkTypes,
+      bonds: bonds,
+      medicalNotes: {
+        for (final person in graph.people.values)
+          if (person.medicalNotes?.trim().isNotEmpty ?? false)
+            person.id: person.medicalNotes!.trim(),
+      },
     );
   },
 );
