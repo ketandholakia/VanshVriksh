@@ -52,6 +52,17 @@ class FamilyGraph {
     return result.values.toList();
   }
 
+  /// How [childId] is linked into [familyId] (`biological`, `adopted`,
+  /// `foster`, `step`), or null when there is no such live link. The genogram
+  /// view uses it to dash non-biological parentage lines.
+  String? childLinkType(String familyId, String childId) {
+    for (final link
+        in _linksByFamily[familyId] ?? const <FamilyChildrenV2Data>[]) {
+      if (link.childId == childId) return link.relationshipType;
+    }
+    return null;
+  }
+
   /// The recorded children of [personId], resolved to people.
   List<GenealogyPerson> childrenOf(String personId) {
     final result = <String, GenealogyPerson>{};

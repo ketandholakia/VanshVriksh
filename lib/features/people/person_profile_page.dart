@@ -10,6 +10,7 @@ import '../../data/providers/genealogy_repository_provider.dart';
 import '../../data/providers/relationship_repository_provider.dart';
 import '../../data/repositories/relationship_repository.dart';
 import '../settings/app_settings_provider.dart';
+import '../tree/family_charts_pages.dart';
 import '../settings/display_formatters.dart';
 import '../../core/extensions/genealogy_person_extensions.dart';
 import 'people_providers.dart';
@@ -178,7 +179,7 @@ class PersonProfilePage extends ConsumerWidget {
                 right: 14,
                 bottom: 8,
                 child: _ActionDock(
-                  onTree: () => context.push('/tree/$personId'),
+                  onTree: () => showChartPicker(context, personId),
                   onMedia: () => context.push('/people/$personId/media'),
                   onFacts: () => context.push('/people/$personId/facts'),
                   onEdit: () => context.push('/people/$personId/edit'),

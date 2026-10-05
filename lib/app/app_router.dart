@@ -16,7 +16,10 @@ import '../features/people/person_profile_page.dart';
 import '../features/relationships/add_relationship_page.dart';
 import '../features/settings/settings_page.dart';
 import '../features/tree/family_fan_chart_page.dart';
+import '../features/tree/family_charts_pages.dart';
+import '../features/tree/family_group_sheet_page.dart';
 import '../features/tree/family_tree_page.dart';
+import '../features/tree/genogram_page.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
@@ -169,6 +172,54 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) {
         final rootPersonId = state.pathParameters['rootPersonId'];
         return FamilyFanChartPage(rootPersonId: rootPersonId);
+      },
+    ),
+    GoRoute(
+      path: '/pedigree/:rootPersonId',
+      name: 'pedigree-root',
+      builder: (context, state) {
+        final rootPersonId = state.pathParameters['rootPersonId']!;
+        return PedigreeChartPage(personId: rootPersonId);
+      },
+    ),
+    GoRoute(
+      path: '/descendant-chart/:rootPersonId',
+      name: 'descendant-chart-root',
+      builder: (context, state) {
+        final rootPersonId = state.pathParameters['rootPersonId']!;
+        return DescendantChartPage(personId: rootPersonId);
+      },
+    ),
+    GoRoute(
+      path: '/hourglass/:rootPersonId',
+      name: 'hourglass-root',
+      builder: (context, state) {
+        final rootPersonId = state.pathParameters['rootPersonId']!;
+        return HourglassChartPage(personId: rootPersonId);
+      },
+    ),
+    GoRoute(
+      path: '/bow-tie/:rootPersonId',
+      name: 'bow-tie-root',
+      builder: (context, state) {
+        final rootPersonId = state.pathParameters['rootPersonId']!;
+        return BowTieChartPage(personId: rootPersonId);
+      },
+    ),
+    GoRoute(
+      path: '/genogram/:rootPersonId',
+      name: 'genogram-root',
+      builder: (context, state) {
+        final rootPersonId = state.pathParameters['rootPersonId']!;
+        return GenogramChartPage(personId: rootPersonId);
+      },
+    ),
+    GoRoute(
+      path: '/family-sheet/:rootPersonId',
+      name: 'family-sheet-root',
+      builder: (context, state) {
+        final rootPersonId = state.pathParameters['rootPersonId']!;
+        return FamilyGroupSheetPage(personId: rootPersonId);
       },
     ),
     GoRoute(

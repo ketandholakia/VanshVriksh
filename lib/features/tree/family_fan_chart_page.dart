@@ -8,6 +8,7 @@ import '../../core/extensions/genealogy_person_extensions.dart';
 import '../../data/database/app_database.dart';
 import '../people/people_providers.dart';
 import '../settings/app_settings_provider.dart';
+import 'family_charts_pages.dart';
 import 'tree_models.dart';
 import 'tree_providers.dart';
 import 'tree_view_mode_toggle.dart';
@@ -95,6 +96,13 @@ class _FamilyFanChartPageState extends ConsumerState<FamilyFanChartPage> {
               },
               onFanSelected: () {},
             ),
+          ),
+          IconButton(
+            tooltip: 'Chart types',
+            onPressed: rootId == null
+                ? null
+                : () => showChartPicker(context, rootId),
+            icon: const Icon(Icons.grid_view_outlined),
           ),
           IconButton(
             tooltip: 'People',

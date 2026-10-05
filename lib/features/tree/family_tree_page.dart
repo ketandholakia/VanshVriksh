@@ -11,6 +11,7 @@ import '../../data/database/app_database.dart';
 import '../people/people_providers.dart';
 import '../settings/app_settings_provider.dart';
 import '../settings/display_formatters.dart';
+import 'family_charts_pages.dart';
 import 'generation_tree_layout.dart';
 import 'tree_models.dart';
 import 'tree_providers.dart';
@@ -99,6 +100,13 @@ class _FamilyTreePageState extends ConsumerState<FamilyTreePage> {
                 context.push('/fan-tree/$rootId');
               },
             ),
+          ),
+          IconButton(
+            tooltip: 'Chart types',
+            onPressed: rootId == null
+                ? null
+                : () => showChartPicker(context, rootId),
+            icon: const Icon(Icons.grid_view_outlined),
           ),
           IconButton(
             tooltip: 'People',
