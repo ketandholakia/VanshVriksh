@@ -3,9 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/brand_background.dart';
+import '../../core/constants/app_constants.dart';
 import '../../core/widgets/person_avatar.dart';
 import '../../data/database/app_database.dart';
 import '../../data/providers/genealogy_repository_provider.dart';
+import '../../data/providers/relationship_repository_provider.dart';
+import '../../data/repositories/relationship_repository.dart';
 import '../settings/app_settings_provider.dart';
 import '../settings/display_formatters.dart';
 import '../../core/extensions/genealogy_person_extensions.dart';
@@ -932,9 +935,10 @@ class _FamilyRelationsCard extends ConsumerWidget {
           subtitle: _relationSubtitle(parentsAsync),
           details: _relationDetails(
             parentsAsync,
-            context: context,
             relationKind: _RelationRowKind.parents,
           ),
+          onRemoveDetail: (detail) =>
+              _removeRelation(context, ref, detail, _RelationRowKind.parents),
           canAdd: relationAvailability.hasMissingParentRelations,
           onAdd: relationAvailability.hasMissingParentRelations
               ? () => _showRelationChoiceSheet(
@@ -953,9 +957,10 @@ class _FamilyRelationsCard extends ConsumerWidget {
           subtitle: _relationSubtitle(spousesAsync),
           details: _relationDetails(
             spousesAsync,
-            context: context,
             relationKind: _RelationRowKind.spouse,
           ),
+          onRemoveDetail: (detail) =>
+              _removeRelation(context, ref, detail, _RelationRowKind.spouse),
           canAdd: relationAvailability.canAddSpouse,
           onAdd: relationAvailability.canAddSpouse
               ? () => _showRelationChoiceSheet(
@@ -972,9 +977,10 @@ class _FamilyRelationsCard extends ConsumerWidget {
           subtitle: _relationSubtitle(childrenAsync),
           details: _relationDetails(
             childrenAsync,
-            context: context,
             relationKind: _RelationRowKind.children,
           ),
+          onRemoveDetail: (detail) =>
+              _removeRelation(context, ref, detail, _RelationRowKind.children),
           canAdd: relationAvailability.canAddChild,
           onAdd: relationAvailability.canAddChild
               ? () => _showRelationChoiceSheet(
@@ -991,9 +997,10 @@ class _FamilyRelationsCard extends ConsumerWidget {
           subtitle: _relationSubtitle(siblingsAsync),
           details: _relationDetails(
             siblingsAsync,
-            context: context,
             relationKind: _RelationRowKind.siblings,
           ),
+          onRemoveDetail: (detail) =>
+              _removeRelation(context, ref, detail, _RelationRowKind.siblings),
           canAdd: relationAvailability.canAddSibling,
           onAdd: relationAvailability.canAddSibling
               ? () => _showRelationChoiceSheet(
@@ -1015,7 +1022,6 @@ class _FamilyRelationsCard extends ConsumerWidget {
 
   List<_RelationDetail> _relationDetails(
     AsyncValue<List<PersonRelationItem>> itemsAsync, {
-    required BuildContext context,
     required _RelationRowKind relationKind,
   }) {
     final items = itemsAsync.asData?.value ?? const <PersonRelationItem>[];
@@ -1045,12 +1051,205 @@ class _FamilyRelationsCard extends ConsumerWidget {
         },
       };
 
+      // Non-biological parentage is labelled, so an adoptive or step link
+      // never masquerades as a biological one.
+      final type = item.relationshipType;
+      final labelled =
+          type == null ||
+              type == 'biological' ||
+              relationKind == _RelationRowKind.spouse ||
+              relationKind == _RelationRowKind.siblings
+          ? label
+          : '$label · $type';
+
       return _RelationDetail(
-        label: label,
+        label: labelled,
         displayName: _displayName(item.person),
         personId: item.person.id,
+        removable: relationKind == _RelationRowKind.siblings || item.canRemove,
       );
     }).toList();
+  }
+
+  Future<void> _removeRelation(
+    BuildContext context,
+    WidgetRef ref,
+    _RelationDetail detail,
+    _RelationRowKind kind,
+  ) async {
+    final person = detail.displayName;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Remove relationship?'),
+        content: Text(switch (kind) {
+          _RelationRowKind.parents =>
+            'Remove ${detail.label.toLowerCase()} $person? $person stays in the tree.',
+          _RelationRowKind.spouse =>
+            'End the partnership with $person? $person stays in the tree.',
+          _RelationRowKind.children =>
+            'Remove $person as this person\'s child? $person stays in the tree.',
+          _RelationRowKind.siblings =>
+            'Remove $person as a sibling? This deletes $person\'s links to '
+                'the parents shared with this person; any other parentage '
+                'stays. $person stays in the tree.',
+        }),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final repository = ref.read(relationshipRepositoryProvider);
+    const treeId = AppConstants.defaultTreeId;
+    try {
+      switch (kind) {
+        case _RelationRowKind.spouse:
+          try {
+            await repository.removeSpouseRelationship(
+              treeId: treeId,
+              personAId: personId,
+              personBId: detail.personId,
+            );
+          } on StateError {
+            // The partnership has children linked through it — ending it
+            // removes those parent-child links too. Say so before doing it.
+            if (!context.mounted) return;
+            final removeChildren = await showDialog<bool>(
+              context: context,
+              builder: (dialogContext) => AlertDialog(
+                title: const Text('Children are linked'),
+                content: const Text(
+                  'This partnership records parent-child links. Ending it '
+                  'removes those links as well; the children stay in the '
+                  'tree and can be re-linked to a parent afterwards.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.error,
+                    ),
+                    onPressed: () => Navigator.of(dialogContext).pop(true),
+                    child: const Text('Remove all links'),
+                  ),
+                ],
+              ),
+            );
+            if (removeChildren != true || !context.mounted) return;
+            await repository.removeSpouseRelationship(
+              treeId: treeId,
+              personAId: personId,
+              personBId: detail.personId,
+              removeChildRelationships: true,
+            );
+          }
+          break;
+        case _RelationRowKind.parents:
+          await _removeParentLink(
+            context,
+            repository,
+            treeId,
+            detail.personId,
+            personId,
+          );
+          break;
+        case _RelationRowKind.children:
+          await _removeParentLink(
+            context,
+            repository,
+            treeId,
+            personId,
+            detail.personId,
+          );
+          break;
+        case _RelationRowKind.siblings:
+          await repository.removeSiblingRelationship(
+            treeId: treeId,
+            personId: personId,
+            siblingId: detail.personId,
+          );
+          break;
+      }
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Relationship removed.')));
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not remove relationship: $e')),
+      );
+    }
+  }
+
+  /// Removes a parent→child link, escalating once when the family has a
+  /// co-parent whose parentage would drop with it.
+  Future<void> _removeParentLink(
+    BuildContext context,
+    RelationshipRepository repository,
+    String treeId,
+    String parentId,
+    String childId,
+  ) async {
+    try {
+      await repository.removeParentChildRelationship(
+        treeId: treeId,
+        parentId: parentId,
+        childId: childId,
+      );
+      return;
+    } on StateError {
+      // A co-parent is recorded in the same family.
+    }
+    if (!context.mounted) return;
+
+    final removeBoth = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('The other parent is linked too'),
+        content: const Text(
+          'Both parents are recorded in the same family, so removing this '
+          'link also removes the other parent\'s link. The child stays in '
+          'the tree and can be re-linked afterwards.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Remove both'),
+          ),
+        ],
+      ),
+    );
+    if (removeBoth != true) return;
+
+    await repository.removeParentChildRelationship(
+      treeId: treeId,
+      parentId: parentId,
+      childId: childId,
+      removeCoParent: true,
+    );
   }
 
   String _displayName(GenealogyPerson person) {
@@ -1087,6 +1286,7 @@ class _FamilyRow extends StatelessWidget {
     required this.details,
     required this.canAdd,
     required this.onAdd,
+    this.onRemoveDetail,
   });
 
   final IconData icon;
@@ -1095,6 +1295,7 @@ class _FamilyRow extends StatelessWidget {
   final List<_RelationDetail> details;
   final bool canAdd;
   final VoidCallback? onAdd;
+  final void Function(_RelationDetail detail)? onRemoveDetail;
 
   @override
   Widget build(BuildContext context) {
@@ -1153,47 +1354,80 @@ class _FamilyRow extends StatelessWidget {
                         spacing: 8,
                         runSpacing: 8,
                         children: details.map((detail) {
-                          return InkWell(
-                            onTap: () =>
-                                context.push('/people/${detail.personId}'),
-                            borderRadius: BorderRadius.circular(999),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 7,
+                          final removable =
+                              detail.removable && onRemoveDetail != null;
+                          return Container(
+                            padding: const EdgeInsets.only(
+                              left: 10,
+                              top: 7,
+                              bottom: 7,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surface,
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.outlineVariant,
                               ),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.surface,
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.outlineVariant,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                InkWell(
+                                  onTap: () => context.push(
+                                    '/people/${detail.personId}',
+                                  ),
+                                  borderRadius: BorderRadius.circular(999),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        '${detail.label} : ${detail.displayName}',
+                                        style: TextStyle(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.primary,
+                                          fontSize: compact ? 11.0 : 11.6,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Icon(
+                                        Icons.chevron_right,
+                                        size: 15,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    '${detail.label} : ${detail.displayName}',
-                                    style: TextStyle(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary,
-                                      fontSize: compact ? 11.0 : 11.6,
-                                      fontWeight: FontWeight.w700,
+                                if (removable)
+                                  Tooltip(
+                                    message: 'Remove relationship',
+                                    child: InkWell(
+                                      onTap: () => onRemoveDetail!(detail),
+                                      borderRadius: BorderRadius.circular(999),
+                                      child: Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          6,
+                                          2,
+                                          6,
+                                          2,
+                                        ),
+                                        child: Icon(
+                                          Icons.close,
+                                          size: 14,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.outline,
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                  const SizedBox(width: 4),
-                                  Icon(
-                                    Icons.chevron_right,
-                                    size: 15,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                  ),
-                                ],
-                              ),
+                                if (!removable) const SizedBox(width: 10),
+                              ],
                             ),
                           );
                         }).toList(),
@@ -1248,11 +1482,17 @@ class _RelationDetail {
     required this.label,
     required this.displayName,
     required this.personId,
+    this.removable = false,
   });
 
   final String label;
   final String displayName;
   final String personId;
+
+  /// Whether the UI offers unlinking for this row. Siblings are always
+  /// removable (unlinking deletes the shared parentage); the other kinds are
+  /// removable when the item carries the row that ties them together.
+  final bool removable;
 }
 
 enum _RelationRowKind { parents, spouse, children, siblings }
@@ -1300,7 +1540,9 @@ class _RelationAvailability {
     final canAddFather = parents.length < 2 && !hasFather;
     final canAddMother = parents.length < 2 && !hasMother;
     final canAddChild = true;
-    final canAddSpouse = spousesAsync.asData?.value.isEmpty ?? false;
+    // Multiple partnerships are part of the domain (remarriage), so a spouse
+    // can always be added.
+    final canAddSpouse = true;
     // One recorded parent is enough to establish a sibling: the sibling is
     // attached to every family the profile person is a child of.
     final canAddSibling = parents.isNotEmpty;

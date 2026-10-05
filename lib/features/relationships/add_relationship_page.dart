@@ -29,7 +29,20 @@ class _AddRelationshipPageState extends ConsumerState<AddRelationshipPage> {
   late String _selectedRelation;
   String? _selectedPersonId;
   String _personSelectionMode = 'existing';
+  String _relationshipType = 'biological';
   bool _isSaving = false;
+
+  static const List<(String, String)> _parentageTypes = [
+    ('biological', 'Biological'),
+    ('adopted', 'Adopted'),
+    ('foster', 'Foster'),
+    ('step', 'Step'),
+  ];
+
+  bool get _usesParentageType =>
+      _selectedRelation == 'father' ||
+      _selectedRelation == 'mother' ||
+      _selectedRelation == 'child';
 
   @override
   void initState() {
@@ -70,6 +83,7 @@ class _AddRelationshipPageState extends ConsumerState<AddRelationshipPage> {
             treeId: AppConstants.defaultTreeId,
             parentId: relatedPersonId,
             childId: currentPerson.id,
+            relationshipType: _relationshipType,
           );
           break;
         case 'child':
@@ -83,6 +97,7 @@ class _AddRelationshipPageState extends ConsumerState<AddRelationshipPage> {
                 parentId: currentPerson.id,
                 childId: relatedPersonId,
                 includeParentSpouses: true,
+                relationshipType: _relationshipType,
               );
           break;
         case 'spouse':
@@ -307,6 +322,30 @@ class _AddRelationshipPageState extends ConsumerState<AddRelationshipPage> {
                     _relationHelpText(),
                     style: const TextStyle(fontStyle: FontStyle.italic),
                   ),
+                  if (_usesParentageType) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: _relationshipType,
+                      decoration: const InputDecoration(
+                        labelText: 'How is this person related?',
+                        prefixIcon: Icon(Icons.diversity_1_outlined),
+                      ),
+                      items: _parentageTypes
+                          .map(
+                            (type) => DropdownMenuItem(
+                              value: type.$1,
+                              child: Text(type.$2),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() {
+                          _relationshipType = value;
+                        });
+                      },
+                    ),
+                  ],
                   const SizedBox(height: 20),
                   SegmentedButton<String>(
                     segments: const [

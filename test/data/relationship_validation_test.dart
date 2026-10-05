@@ -443,4 +443,80 @@ void main() {
       },
     );
   });
+
+  group('removeSiblingRelationship', () {
+    test('deletes only the shared parentage; other parents stay', () async {
+      final mother = await addPerson(firstName: 'Mother', gender: 'F');
+      final father = await addPerson(firstName: 'Father', gender: 'M');
+      final person = await saves.createPersonAsChild(
+        treeId: treeId,
+        person: PersonSaveData(firstName: 'Person', gender: 'M'),
+        parentId: mother,
+        coParentIds: [father],
+      );
+      final sibling = await addPerson(firstName: 'Sibling', gender: 'F');
+      await saves.addExistingSibling(
+        treeId: treeId,
+        personId: person,
+        siblingId: sibling,
+      );
+      // The sibling also has a parent the profile person does not share —
+      // a half-sibling relationship on the other side.
+      final otherParent = await addPerson(firstName: 'Other Parent');
+      await relationships.addParentChildRelationship(
+        treeId: treeId,
+        parentId: otherParent,
+        childId: sibling,
+      );
+
+      final removed = await relationships.removeSiblingRelationship(
+        treeId: treeId,
+        personId: person,
+        siblingId: sibling,
+      );
+
+      expect(removed, greaterThanOrEqualTo(1));
+      // The shared parents are gone from the sibling…
+      final siblingParents = (await relationships.getParents(
+        sibling,
+      )).map((p) => p.id).toSet();
+      expect(siblingParents, {otherParent});
+      // …the profile person's parentage is untouched…
+      final personParents = (await relationships.getParents(
+        person,
+      )).map((p) => p.id).toSet();
+      expect(personParents, {mother, father});
+      // …and nobody was deleted.
+      for (final id in [person, sibling, mother, father, otherParent]) {
+        final row = await people.getPersonById(id);
+        expect(row!.isDeleted, isFalse, reason: 'person $id must survive');
+      }
+    });
+
+    test('is a no-op for people who share no parents', () async {
+      final a = await addPerson(firstName: 'A');
+      final b = await addPerson(firstName: 'B');
+
+      final removed = await relationships.removeSiblingRelationship(
+        treeId: treeId,
+        personId: a,
+        siblingId: b,
+      );
+      expect(removed, 0);
+    });
+
+    test('refuses removing a person as their own sibling', () async {
+      final a = await addPerson(firstName: 'A');
+
+      // The guard throws synchronously, before a future exists.
+      expect(
+        () => relationships.removeSiblingRelationship(
+          treeId: treeId,
+          personId: a,
+          siblingId: a,
+        ),
+        throwsArgumentError,
+      );
+    });
+  });
 }

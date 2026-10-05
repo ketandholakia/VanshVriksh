@@ -7,6 +7,7 @@ class PersonRelationItem {
     required this.person,
     required this.groupType,
     required this.relationshipId,
+    this.relationshipType,
   });
 
   final GenealogyPerson person;
@@ -14,6 +15,10 @@ class PersonRelationItem {
 
   /// For siblings this can be empty because sibling is calculated from parents.
   final String relationshipId;
+
+  /// How the parentage is recorded (`biological`, `adopted`, `foster`, `step`)
+  /// for parent and child items; null for spouses and siblings.
+  final String? relationshipType;
 
   bool get canRemove => relationshipId.isNotEmpty;
 }

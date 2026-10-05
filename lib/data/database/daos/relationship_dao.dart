@@ -96,7 +96,11 @@ class RelationshipDao {
   }
 
   /// Live parents of [childId], each paired with the link that connects them.
-  Future<List<({GenealogyPerson person, String relationshipId})>>
+  Future<
+    List<
+      ({GenealogyPerson person, String relationshipId, String relationshipType})
+    >
+  >
   getParentPersonItemsOfChild(String childId) async {
     if (!await _personIsLive(childId)) return const [];
 
@@ -126,12 +130,20 @@ class RelationshipDao {
         (l) => familyIdsForPerson.contains(l.familyId),
         orElse: () => familyLinks.first,
       );
-      return (person: person, relationshipId: link.id);
+      return (
+        person: person,
+        relationshipId: link.id,
+        relationshipType: link.relationshipType,
+      );
     }).toList();
   }
 
   /// Live children of [parentId], each paired with their link.
-  Future<List<({GenealogyPerson person, String relationshipId})>>
+  Future<
+    List<
+      ({GenealogyPerson person, String relationshipId, String relationshipType})
+    >
+  >
   getChildPersonItemsOfParent(String parentId) async {
     if (!await _personIsLive(parentId)) return const [];
 
@@ -162,7 +174,11 @@ class RelationshipDao {
             familyById[l.familyId]?.wifeId == parentId,
         orElse: () => candidates.first,
       );
-      return (person: person, relationshipId: link.id);
+      return (
+        person: person,
+        relationshipId: link.id,
+        relationshipType: link.relationshipType,
+      );
     }).toList();
   }
 

@@ -428,6 +428,27 @@ class RelationshipRepository {
     required String parentId,
     required String childId,
     bool removeCoParent = false,
+  }) {
+    return _database.transaction(() async {
+      return removeParentChildRelationshipInTransaction(
+        treeId: treeId,
+        parentId: parentId,
+        childId: childId,
+        removeCoParent: removeCoParent,
+      );
+    });
+  }
+
+  /// Transaction-aware primitive behind [removeParentChildRelationship].
+  ///
+  /// Same contract: joins the caller's transaction instead of starting its
+  /// own, so composite operations (see [removeSiblingRelationship]) can remove
+  /// several links atomically.
+  Future<int> removeParentChildRelationshipInTransaction({
+    required String treeId,
+    required String parentId,
+    required String childId,
+    bool removeCoParent = false,
   }) async {
     if (parentId == childId) {
       throw ArgumentError(
@@ -435,32 +456,73 @@ class RelationshipRepository {
       );
     }
 
-    return _database.transaction(() async {
-      final families = await _personDao.getFamiliesForPerson(parentId);
-      final matched = <({FamiliesV2Data family, FamilyChildrenV2Data link})>[];
-      for (final family in families) {
-        final link = await _personDao.getFamilyChildLink(family.id, childId);
-        if (link != null && !link.isDeleted) {
-          matched.add((family: family, link: link));
-        }
+    final families = await _personDao.getFamiliesForPerson(parentId);
+    final matched = <({FamiliesV2Data family, FamilyChildrenV2Data link})>[];
+    for (final family in families) {
+      final link = await _personDao.getFamilyChildLink(family.id, childId);
+      if (link != null && !link.isDeleted) {
+        matched.add((family: family, link: link));
       }
-      if (matched.isEmpty) return 0;
+    }
+    if (matched.isEmpty) return 0;
+
+    final now = DateTime.now();
+    var removed = 0;
+    for (final entry in matched) {
+      final coParentId = entry.family.husbandId == parentId
+          ? entry.family.wifeId
+          : entry.family.husbandId;
+      if (coParentId != null && !removeCoParent) {
+        throw StateError(
+          '$childId is recorded as a child of $parentId and $coParentId in '
+          'the same family, so removing this relationship would also drop '
+          '$coParentId as a parent. Pass removeCoParent: true to do that, or '
+          'end the partnership instead.',
+        );
+      }
+      removed += await _personDao.markFamilyChildDeleted(entry.link.id, now);
+    }
+    return removed;
+  }
+
+  /// Unlinks [siblingId] as a sibling of [personId]. Returns the number of
+  /// shared child links removed (0 when they share none).
+  ///
+  /// Siblinghood is derived, not stored: two people are siblings exactly when
+  /// a family has both as children. Unlinking therefore means soft-deleting
+  /// [siblingId]'s child links in the families they share with [personId] —
+  /// which removes their parentage through those families. Any parentage
+  /// [siblingId] has outside the shared families (a half-sibling's other
+  /// parent) is untouched, and neither person is deleted.
+  Future<int> removeSiblingRelationship({
+    required String treeId,
+    required String personId,
+    required String siblingId,
+  }) {
+    if (personId == siblingId) {
+      throw ArgumentError('A person cannot be their own sibling.');
+    }
+
+    return _database.transaction(() async {
+      final myLinks =
+          await (_database.select(_database.familyChildrenV2)..where(
+                (t) => t.childId.equals(personId) & t.isDeleted.equals(false),
+              ))
+              .get();
 
       final now = DateTime.now();
       var removed = 0;
-      for (final entry in matched) {
-        final coParentId = entry.family.husbandId == parentId
-            ? entry.family.wifeId
-            : entry.family.husbandId;
-        if (coParentId != null && !removeCoParent) {
-          throw StateError(
-            '$childId is recorded as a child of $parentId and $coParentId in '
-            'the same family, so removing this relationship would also drop '
-            '$coParentId as a parent. Pass removeCoParent: true to do that, or '
-            'end the partnership instead.',
-          );
+      for (final myLink in myLinks) {
+        final family = await _personDao.getFamilyById(myLink.familyId);
+        if (family == null || family.isDeleted || family.treeId != treeId) {
+          continue;
         }
-        removed += await _personDao.markFamilyChildDeleted(entry.link.id, now);
+        final siblingLink = await _personDao.getFamilyChildLink(
+          family.id,
+          siblingId,
+        );
+        if (siblingLink == null || siblingLink.isDeleted) continue;
+        removed += await _personDao.markFamilyChildDeleted(siblingLink.id, now);
       }
       return removed;
     });
@@ -764,6 +826,7 @@ class RelationshipRepository {
             person: item.person,
             groupType: PersonRelationGroupType.parents,
             relationshipId: item.relationshipId,
+            relationshipType: item.relationshipType,
           ),
         )
         .toList();
@@ -777,6 +840,7 @@ class RelationshipRepository {
             person: item.person,
             groupType: PersonRelationGroupType.children,
             relationshipId: item.relationshipId,
+            relationshipType: item.relationshipType,
           ),
         )
         .toList();
