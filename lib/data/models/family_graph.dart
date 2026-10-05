@@ -35,6 +35,11 @@ class FamilyGraph {
 
   bool contains(String id) => people.containsKey(id);
 
+  /// The family row for [familyId], or null. Exporters and callers that need
+  /// the raw partnership fields (marriage date, place) beyond the grouping
+  /// use this.
+  FamiliesV2Data? familyById(String familyId) => _familiesById[familyId];
+
   /// The recorded parents of [personId], resolved to people.
   List<GenealogyPerson> parentsOf(String personId) {
     final result = <String, GenealogyPerson>{};

@@ -6,13 +6,18 @@ import '../../app/brand_background.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/extensions/genealogy_person_extensions.dart';
 import '../people/people_providers.dart';
+import '../gedcom/gedcom_exporter.dart';
 import '../gedcom/gedcom_import_providers.dart';
 import '../gedcom/gedcom_importer.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'dart:io';
 
 import 'app_settings_provider.dart';
 import 'fan_chart_settings_provider.dart';
+import '../../data/providers/database_provider.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -271,18 +276,12 @@ class SettingsPage extends ConsumerWidget {
               Card(
                 child: ListTile(
                   leading: const Icon(Icons.file_download_outlined),
-                  title: const Text('GEDCOM Export'),
+                  title: const Text('Export GEDCOM 5.5.1'),
                   subtitle: const Text(
-                    'Coming soon: export your family tree as .ged file.',
+                    'Export your family tree as a .ged file.',
                   ),
-                  trailing: const Chip(label: Text('Soon')),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('GEDCOM export will be added later.'),
-                      ),
-                    );
-                  },
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _exportGedcom(context, ref),
                 ),
               ),
               const SizedBox(height: 16),
@@ -1209,6 +1208,56 @@ class _AppInfoCard extends StatelessWidget {
     );
   }
 }
+
+Future<void> _exportGedcom(BuildContext context, WidgetRef ref) async {
+  try {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    final db = ref.read(databaseProvider);
+    final gedcom = await GedcomExporter().exportTree(
+      db,
+      AppConstants.defaultTreeId,
+    );
+
+    final docs = await getApplicationDocumentsDirectory();
+    final exportDir = Directory(p.join(docs.path, 'exports'));
+    if (!await exportDir.exists()) {
+      await exportDir.create(recursive: true);
+    }
+    final now = DateTime.now();
+    final fileName =
+        'vanshvriksh_export_${now.year}_${_two(now.month)}_${_two(now.day)}.ged';
+    final file = File(p.join(exportDir.path, fileName));
+    await file.writeAsString(gedcom, flush: true);
+
+    if (!context.mounted) return;
+    Navigator.of(context).pop();
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Export created: ${file.path}')));
+
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path)],
+        text: 'VanshVriksh family tree export (GEDCOM 5.5.1)',
+      ),
+    );
+  } catch (e) {
+    if (context.mounted) Navigator.of(context).pop();
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to export GEDCOM: $e')));
+    }
+  }
+}
+
+String _two(int value) => value.toString().padLeft(2, '0');
 
 Future<void> _importGedcom(BuildContext context, WidgetRef ref) async {
   try {
