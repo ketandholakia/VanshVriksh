@@ -23,6 +23,13 @@ class RelationshipRepository {
   /// Domain rules:
   ///  * a person cannot be their own parent;
   ///  * both people must exist and be live (not deleted);
+  ///  * both people must belong to [treeId];
+  ///  * the link must not create an ancestry cycle ([childId] already being an
+  ///    ancestor of [parentId] is refused — see
+  ///    [assertParentageCreatesNoCycleInTransaction]);
+  ///  * a `biological` parentage must be chronologically plausible: a known
+  ///    birth date of the parent has to precede the child's (other
+  ///    relationship types are exempt — a step-parent can be younger);
   ///  * a child cannot be linked twice into the same family (the existing row is
   ///    restored instead of duplicated — `UNIQUE(family_id, child_id)`);
   ///  * a child cannot acquire the same parent through a second family.
@@ -80,6 +87,22 @@ class RelationshipRepository {
     if (child == null || child.isDeleted) {
       throw ArgumentError('Child person not found: $childId');
     }
+    if (parent.treeId != treeId || child.treeId != treeId) {
+      throw ArgumentError(
+        'Both people must belong to tree $treeId '
+        '(parent: ${parent.treeId}, child: ${child.treeId}).',
+      );
+    }
+
+    await assertParentageCreatesNoCycleInTransaction(
+      treeId: treeId,
+      parentId: parentId,
+      childId: childId,
+    );
+
+    if (relationshipType == 'biological') {
+      _assertPlausibleBiologicalParentage(parent, child);
+    }
 
     final targetFamilyId = familyId ?? await _familyForNewChild(treeId, parent);
     final targetFamily = await _personDao.getFamilyById(targetFamilyId);
@@ -120,6 +143,95 @@ class RelationshipRepository {
         updatedAt: Value(now),
       ),
     );
+  }
+
+  /// Refuses a parentage that would make [childId] their own ancestor.
+  ///
+  /// Adding [parentId] as a parent of [childId] creates a cycle exactly when
+  /// [childId] already is an ancestor of [parentId]. The check walks the live
+  /// parentage edges of [treeId] upward from [parentId] and fails when it
+  /// reaches [childId]. Runs against the caller's transaction so it sees the
+  /// links written earlier in the same composite operation.
+  Future<void> assertParentageCreatesNoCycleInTransaction({
+    required String treeId,
+    required String parentId,
+    required String childId,
+  }) async {
+    if (parentId == childId) {
+      throw ArgumentError('A person cannot be their own parent.');
+    }
+
+    final families = await (_database.select(
+      _database.familiesV2,
+    )..where((t) => t.treeId.equals(treeId) & t.isDeleted.equals(false))).get();
+    if (families.isEmpty) return;
+
+    final parentIdsByFamily = <String, List<String>>{
+      for (final family in families)
+        family.id: [
+          if (family.husbandId != null) family.husbandId!,
+          if (family.wifeId != null) family.wifeId!,
+        ],
+    };
+    final childLinks =
+        await (_database.select(_database.familyChildrenV2)..where(
+              (t) =>
+                  t.familyId.isIn(families.map((f) => f.id).toList()) &
+                  t.isDeleted.equals(false),
+            ))
+            .get();
+
+    final parentIdsByChild = <String, Set<String>>{};
+    for (final link in childLinks) {
+      final parents = parentIdsByFamily[link.familyId];
+      if (parents == null || parents.isEmpty) continue;
+      parentIdsByChild
+          .putIfAbsent(link.childId, () => <String>{})
+          .addAll(parents);
+    }
+
+    final visited = <String>{parentId};
+    final queue = <String>[parentId];
+    while (queue.isNotEmpty) {
+      final current = queue.removeAt(0);
+      for (final ancestor in parentIdsByChild[current] ?? const <String>{}) {
+        if (ancestor == childId) {
+          throw StateError(
+            'Cannot add $parentId as a parent of $childId: $childId is '
+            'already an ancestor of $parentId, so this link would create a '
+            'cycle in the family graph.',
+          );
+        }
+        if (visited.add(ancestor)) queue.add(ancestor);
+      }
+    }
+  }
+
+  /// A biological parent must be born before the child. Unknown dates pass —
+  /// the check only guards against recordable contradictions.
+  void _assertPlausibleBiologicalParentage(
+    GenealogyPerson parent,
+    GenealogyPerson child,
+  ) {
+    final parentBirth = parent.birthDate;
+    final childBirth = child.birthDate;
+    if (parentBirth == null || childBirth == null) return;
+    if (!parentBirth.isBefore(childBirth)) {
+      throw ArgumentError(
+        'Cannot record ${parent.firstName} as a biological parent of '
+        '${child.firstName}: the parent\'s birth date '
+        '(${_formatDay(parentBirth)}) is not before the child\'s '
+        '(${_formatDay(childBirth)}). Record the parentage with a different '
+        'relationship type if this is a step, foster or adoptive link.',
+      );
+    }
+  }
+
+  static String _formatDay(DateTime date) {
+    final y = date.year.toString().padLeft(4, '0');
+    final m = date.month.toString().padLeft(2, '0');
+    final d = date.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
   }
 
   /// Refuses a parentage that already exists through a different family, so the

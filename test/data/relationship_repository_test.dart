@@ -411,10 +411,20 @@ void main() {
           );
       final dad = await addPerson(firstName: 'Dad');
       final kid = await addPerson(firstName: 'Kid');
-      final foreignFamilyId = await people.createFamily(
-        treeId: 'other-tree',
-        husbandId: dad,
-      );
+      // Built directly on the DAO: createFamily now refuses cross-tree
+      // partners itself, and this test is about the parentage path.
+      const foreignFamilyId = 'foreign-family';
+      await db
+          .into(db.familiesV2)
+          .insert(
+            FamiliesV2Companion.insert(
+              id: foreignFamilyId,
+              treeId: 'other-tree',
+              husbandId: Value(dad),
+              createdAt: Value(now),
+              updatedAt: Value(now),
+            ),
+          );
 
       await expectLater(
         relationships.addParentChildRelationship(

@@ -1,3 +1,5 @@
+import 'package:drift/drift.dart';
+
 import '../database/app_database.dart';
 import '../models/person_save_data.dart';
 import '../repositories/genealogy_repository.dart';
@@ -179,6 +181,61 @@ class PersonSaveService {
         includeParentSpouses: includeParentSpouses,
         relationshipType: relationshipType,
       );
+    });
+  }
+
+  /// Links [siblingId] as a sibling of [personId], in one transaction.
+  ///
+  /// A sibling relationship is not stored directly: the sibling is attached as
+  /// a child of every family in which [personId] is recorded as a child, so
+  /// they share exactly the same parentage. [personId] must therefore have at
+  /// least one recorded parent — a sibling of a person with no parents cannot
+  /// be established, and the operation fails before anything is written.
+  ///
+  /// Cycle and cross-tree rules come from the relationship primitive, so a
+  /// sibling who is an ancestor of [personId] (or belongs to another tree)
+  /// rolls the whole operation back.
+  Future<void> addExistingSibling({
+    required String treeId,
+    required String personId,
+    required String siblingId,
+  }) {
+    return _database.transaction(() async {
+      if (personId == siblingId) {
+        throw ArgumentError('A person cannot be their own sibling.');
+      }
+
+      final personLinks =
+          await (_database.select(_database.familyChildrenV2)..where(
+                (t) => t.childId.equals(personId) & t.isDeleted.equals(false),
+              ))
+              .get();
+      if (personLinks.isEmpty) {
+        throw ArgumentError(
+          'This person has no recorded parents, so a sibling relationship '
+          'cannot be established. Add a parent first.',
+        );
+      }
+
+      for (final link in personLinks) {
+        final family = await _database.genealogyPersonDao.getFamilyById(
+          link.familyId,
+        );
+        if (family == null || family.isDeleted) continue;
+        if (family.treeId != treeId) continue;
+
+        for (final partnerId in [
+          if (family.husbandId != null) family.husbandId!,
+          if (family.wifeId != null) family.wifeId!,
+        ]) {
+          await _relationships.addParentChildRelationshipInTransaction(
+            treeId: treeId,
+            parentId: partnerId,
+            childId: siblingId,
+            familyId: family.id,
+          );
+        }
+      }
     });
   }
 

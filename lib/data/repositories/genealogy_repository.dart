@@ -5,6 +5,7 @@ import '../database/app_database.dart';
 import '../database/daos/genealogy_person_dao.dart';
 import '../models/person_save_data.dart';
 import '../models/relationship_edges.dart';
+import '../repositories/relationship_repository.dart';
 import '../../features/duplicates/duplicate_detection_providers.dart';
 
 /// The schema default for `genealogy_persons.display_name_format`, used by the
@@ -1077,6 +1078,18 @@ class GenealogyRepository {
   Future<List<FamilyChildrenV2Data>> getChildrenForFamily(String familyId) =>
       _personDao.getChildrenForFamily(familyId);
 
+  /// Creates a partnership family.
+  ///
+  /// Validates the partners (exist, live, same tree, not each other) and stores
+  /// the pair **canonically** via [canonicalPartnerSlots], so the stored pair is
+  /// independent of argument order and `UNIQUE(husband_id, wife_id)` really
+  /// means "this couple exists once". A couple that is already partnered is
+  /// refused instead of silently duplicated.
+  ///
+  /// Either partner may be omitted (single-parent family record); passing both
+  /// as null creates a childless, partnerless family, which is allowed only for
+  /// internal data repair — prefer the relationship repository for real
+  /// partnerships.
   Future<String> createFamily({
     required String treeId,
     String? husbandId,
@@ -1099,14 +1112,62 @@ class GenealogyRepository {
     String? notes,
     String? privateNotes,
   }) async {
+    GenealogyPerson? husband;
+    if (husbandId != null) {
+      husband = await _personDao.getPersonById(husbandId);
+      if (husband == null || husband.isDeleted) {
+        throw ArgumentError('Family partner not found: $husbandId');
+      }
+      if (husband.treeId != treeId) {
+        throw ArgumentError(
+          'Partner $husbandId belongs to tree ${husband.treeId}, not to '
+          '$treeId.',
+        );
+      }
+    }
+    GenealogyPerson? wife;
+    if (wifeId != null) {
+      wife = await _personDao.getPersonById(wifeId);
+      if (wife == null || wife.isDeleted) {
+        throw ArgumentError('Family partner not found: $wifeId');
+      }
+      if (wife.treeId != treeId) {
+        throw ArgumentError(
+          'Partner $wifeId belongs to tree ${wife.treeId}, not to $treeId.',
+        );
+      }
+    }
+    if (husbandId != null && husbandId == wifeId) {
+      throw ArgumentError('A person cannot be partnered with themselves.');
+    }
+
+    var storedHusbandId = husbandId;
+    var storedWifeId = wifeId;
+    if (husbandId != null && wifeId != null) {
+      if (await _existingFamilyForPair(husbandId, wifeId) != null) {
+        throw StateError(
+          '$husbandId and $wifeId are already recorded as partners. Reuse the '
+          'existing family instead of creating a second one.',
+        );
+      }
+      final slots = canonicalPartnerSlots(
+        firstId: husbandId,
+        firstGender: husband!.gender,
+        secondId: wifeId,
+        secondGender: wife!.gender,
+      );
+      storedHusbandId = slots.husbandId;
+      storedWifeId = slots.wifeId;
+    }
+
     final id = IdGenerator.newId();
     final now = DateTime.now();
     await _personDao.createFamily(
       FamiliesV2Companion.insert(
         id: id,
         treeId: treeId,
-        husbandId: Value(husbandId),
-        wifeId: Value(wifeId),
+        husbandId: Value(storedHusbandId),
+        wifeId: Value(storedWifeId),
         marriageDate: Value(marriageDate),
         marriageDateQualifier: Value(marriageDateQualifier?.trim()),
         marriagePlace: Value(marriagePlace?.trim()),
@@ -1132,6 +1193,12 @@ class GenealogyRepository {
     return id;
   }
 
+  /// Adds [childId] to [familyId] with full domain validation: the family and
+  /// child must exist and be live, the child must belong to the family's tree,
+  /// the link must not create an ancestry cycle through any of the family's
+  /// partners, and the child must not already have the same parentage through a
+  /// different family. An existing soft-deleted link for this exact family is
+  /// restored instead of duplicated.
   Future<String> addChildToFamily({
     required String familyId,
     required String childId,
@@ -1142,8 +1209,52 @@ class GenealogyRepository {
     String? maternalRelationship,
     String? notes,
   }) async {
-    final id = IdGenerator.newId();
+    final family = await _personDao.getFamilyById(familyId);
+    if (family == null || family.isDeleted) {
+      throw ArgumentError('Family not found: $familyId');
+    }
+    final child = await _personDao.getPersonById(childId);
+    if (child == null || child.isDeleted) {
+      throw ArgumentError('Child person not found: $childId');
+    }
+    if (child.treeId != family.treeId) {
+      throw ArgumentError(
+        'Child $childId belongs to tree ${child.treeId}, but family '
+        '$familyId belongs to ${family.treeId}.',
+      );
+    }
+
+    final cycleCheck = RelationshipRepository(_database);
+    for (final partnerId in [
+      if (family.husbandId != null) family.husbandId!,
+      if (family.wifeId != null) family.wifeId!,
+    ]) {
+      await cycleCheck.assertParentageCreatesNoCycleInTransaction(
+        treeId: family.treeId,
+        parentId: partnerId,
+        childId: childId,
+      );
+    }
+    if (await _childAlreadyLinkedViaAnotherFamily(
+      childId: childId,
+      family: family,
+    )) {
+      throw StateError(
+        '$childId already has the same parentage through another family. '
+        'A second link would duplicate it.',
+      );
+    }
+
+    final existing = await _personDao.getFamilyChildLink(familyId, childId);
     final now = DateTime.now();
+    if (existing != null) {
+      if (existing.isDeleted) {
+        await _personDao.restoreFamilyChild(existing.id, now);
+      }
+      return existing.id;
+    }
+
+    final id = IdGenerator.newId();
     await _personDao.createFamilyChild(
       FamilyChildrenV2Companion.insert(
         id: id,
@@ -1161,5 +1272,20 @@ class GenealogyRepository {
     );
 
     return id;
+  }
+
+  /// The live family partnership of the pair regardless of slot order, or
+  /// null. Complements `UNIQUE(husband_id, wife_id)`, which cannot catch a
+  /// couple recorded once in each slot order.
+  Future<FamiliesV2Data?> _existingFamilyForPair(
+    String personAId,
+    String personBId,
+  ) async {
+    for (final family in await _personDao.getFamiliesForPerson(personAId)) {
+      if (family.husbandId == personBId || family.wifeId == personBId) {
+        return family;
+      }
+    }
+    return null;
   }
 }
